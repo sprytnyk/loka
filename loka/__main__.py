@@ -123,6 +123,48 @@ def make_archive(paths, target, cancel=None):
                 archive_file.write(path, name)
 
 
+def choose_destination():
+    if sys.platform.startswith("linux"):
+        for executable, arguments in (
+            (
+                "zenity",
+                ["--file-selection", "--directory", "--title=Choose destination"],
+            ),
+            ("kdialog", ["--getexistingdirectory"]),
+        ):
+            if not shutil.which(executable):
+                continue
+            try:
+                result = subprocess.run(
+                    [executable, *arguments],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except OSError:
+                continue
+            if result.returncode == 0:
+                return result.stdout.strip()
+            if result.returncode == 1:
+                return ""
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import tkinter as tk; from tkinter import filedialog; "
+                "root = tk.Tk(); root.withdraw(); "
+                "print(filedialog.askdirectory()); root.destroy()"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
 class State:
     def __init__(self, port):
         self.id = uuid.uuid4().hex
@@ -444,25 +486,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         data = self.body()
         if path == "/api/choose-destination":
             try:
-                result = subprocess.run(
-                    [
-                        sys.executable,
-                        "-c",
-                        (
-                            "import tkinter as tk; from tkinter import filedialog; "
-                            "root = tk.Tk(); root.withdraw(); "
-                            "print(filedialog.askdirectory()); root.destroy()"
-                        ),
-                    ],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
+                destination = choose_destination()
             except (OSError, subprocess.CalledProcessError) as exc:
                 raise ValueError(
-                    "Folder picker unavailable; enter a path instead"
+                    "Directory picker unavailable; enter a path instead"
                 ) from exc
-            return self.respond(200, {"destination": result.stdout.strip()})
+            return self.respond(200, {"destination": destination})
         if path == "/api/accept":
             entry = self.state.transfers[data["id"]]
             if entry["status"] != "waiting":

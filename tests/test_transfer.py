@@ -162,6 +162,29 @@ class TransferTests(unittest.TestCase):
         )
         self.assertEqual(status["status"], "cancelled")
 
+    def test_linux_destination_picker_uses_desktop_dialog(self):
+        self.start_server()
+        headers = {"Content-Type": "application/json", "X-Loka-Key": self.state.ui_key}
+        result = subprocess.CompletedProcess([], 0, stdout="/tmp/example\n", stderr="")
+        with (
+            patch("loka.__main__.sys.platform", "linux"),
+            patch(
+                "loka.__main__.shutil.which",
+                side_effect=lambda name: name if name == "zenity" else None,
+            ),
+            patch("loka.__main__.subprocess.run", return_value=result) as run,
+        ):
+            response = request(
+                "127.0.0.1",
+                self.server.server_port,
+                "POST",
+                "/api/choose-destination",
+                "{}",
+                headers,
+            )
+        self.assertEqual(response["destination"], "/tmp/example")
+        self.assertEqual(run.call_args.args[0][0], "zenity")
+
     def test_cli_share_serves_file_until_stopped(self):
         source = self.root / "shared.txt"
         source.write_text("hello")
