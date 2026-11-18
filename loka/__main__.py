@@ -9,6 +9,7 @@ import secrets
 import shutil
 import socket
 import socketserver
+import subprocess
 import sys
 import tempfile
 import threading
@@ -131,6 +132,7 @@ class State:
         self.peers = {}
         self.transfers = {}
         self.shares = {}
+        self.destination = ""
         self.discovery_error = ""
         self.discovery_send_error = ""
         self.lock = threading.RLock()
@@ -302,6 +304,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "peers": peers,
                     "transfers": transfers,
                     "addresses": local_addresses(),
+                    "destination": self.state.destination,
                     "discovery_error": self.state.discovery_error
                     or self.state.discovery_send_error,
                 },
@@ -439,6 +442,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self.local():
             return self.respond(403, {"error": "Local access only"})
         data = self.body()
+        if path == "/api/choose-destination":
+            try:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        (
+                            "import tkinter as tk; from tkinter import filedialog; "
+                            "root = tk.Tk(); root.withdraw(); "
+                            "print(filedialog.askdirectory()); root.destroy()"
+                        ),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+            except (OSError, subprocess.CalledProcessError) as exc:
+                raise ValueError(
+                    "Folder picker unavailable; enter a path instead"
+                ) from exc
+            return self.respond(200, {"destination": result.stdout.strip()})
         if path == "/api/accept":
             entry = self.state.transfers[data["id"]]
             if entry["status"] != "waiting":
@@ -447,6 +471,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not dest.is_dir():
                 raise ValueError("Destination must be an existing directory")
             entry["destination"] = str(dest)
+            self.state.destination = str(dest)
             entry["status"] = "accepted"
             return self.respond(200, {"ok": True})
         if path == "/api/cancel":
