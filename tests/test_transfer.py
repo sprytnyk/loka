@@ -9,6 +9,7 @@ import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import urlsplit
 
 from loka.__main__ import (
     Handler,
@@ -139,6 +140,63 @@ class TransferTests(unittest.TestCase):
         self.assertEqual((destination / "source (1)" / "file").read_text(), "new")
         self.assertTrue((destination / "source (1)" / "empty").is_dir())
 
+    def test_archive_keeps_distinct_items_with_the_same_name(self):
+        first = self.root / "first"
+        second = self.root / "second"
+        third = self.root / "third"
+        (first / "report.txt").mkdir(parents=True)
+        (first / "report.txt" / "empty").mkdir()
+        second.mkdir()
+        (second / "report.txt").write_bytes(b"second")
+        third.mkdir()
+        (third / "report (1).txt").write_bytes(b"third")
+        archive = self.root / "transfer.zip"
+
+        make_archive(
+            [first / "report.txt", second / "report.txt", third / "report (1).txt"],
+            archive,
+        )
+
+        with zipfile.ZipFile(archive) as transfer:
+            self.assertIn("report.txt/empty/", transfer.namelist())
+            self.assertEqual(transfer.read("report (2).txt"), b"second")
+            self.assertEqual(transfer.read("report (1).txt"), b"third")
+
+    def test_upload_keeps_empty_directories_and_does_not_overwrite(self):
+        self.start_server()
+        headers = {
+            "X-Loka-Key": self.state.ui_key,
+            "X-Upload-Session": "test",
+            "X-File-Path": "parent/empty",
+            "X-Entry-Type": "directory",
+        }
+        result = request(
+            "127.0.0.1", self.server.server_port, "POST", "/api/upload", b"", headers
+        )
+        staged = Path(result["path"])
+        self.assertTrue((staged / "empty").is_dir())
+
+        del headers["X-Entry-Type"]
+        headers["X-File-Path"] = "parent/report.txt"
+        request(
+            "127.0.0.1",
+            self.server.server_port,
+            "POST",
+            "/api/upload",
+            b"first",
+            headers,
+        )
+        with self.assertRaises(RuntimeError):
+            request(
+                "127.0.0.1",
+                self.server.server_port,
+                "POST",
+                "/api/upload",
+                b"second",
+                headers,
+            )
+        self.assertEqual((staged / "report.txt").read_bytes(), b"first")
+
     def test_archive_cannot_escape_destination(self):
         archive = self.root / "bad.zip"
         with zipfile.ZipFile(archive, "w") as z:
@@ -222,8 +280,6 @@ class TransferTests(unittest.TestCase):
             self.assertTrue(
                 line.startswith("http://127.0.0.1:"), line or process.stderr.read()
             )
-            from urllib.parse import urlsplit
-
             url = urlsplit(line)
             connection = http.client.HTTPConnection(url.hostname, url.port, timeout=5)
             connection.request("GET", url.path)

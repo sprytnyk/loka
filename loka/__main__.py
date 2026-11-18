@@ -87,38 +87,38 @@ def extract(archive, destination):
 
 
 def make_archive(paths, target, cancel=None):
-    used = set()
+    paths = [Path(path) for path in paths]
+    original_names = {path.name for path in paths}
+    used_names = set()
     with zipfile.ZipFile(
         target, "w", compression=zipfile.ZIP_STORED, allowZip64=True
     ) as archive_file:
-        for item in paths:
-            path = Path(item)
+        for path in paths:
             if path.is_symlink() or not path.exists():
                 raise ValueError(f"Cannot share {path}: missing or symbolic link")
             name = path.name
-            if name in used:
-                raise ValueError(f"Duplicate name: {name}")
-            used.add(name)
+            if name in used_names:
+                index = 1
+                while name in used_names or name in original_names:
+                    name = f"{path.stem} ({index}){path.suffix}"
+                    index += 1
+            used_names.add(name)
             if path.is_dir():
                 archive_file.writestr(name + "/", b"")
                 for root, dirs, files in os.walk(path, followlinks=False):
                     root_path = Path(root)
                     dirs[:] = [d for d in dirs if not (root_path / d).is_symlink()]
                     for directory in dirs:
-                        archive_file.writestr(
-                            (root_path / directory).relative_to(path.parent).as_posix()
-                            + "/",
-                            b"",
-                        )
+                        relative = (root_path / directory).relative_to(path).as_posix()
+                        archive_file.writestr(f"{name}/{relative}/", b"")
                     for file in files:
                         child = root_path / file
                         if child.is_symlink():
                             raise ValueError("Symbolic links are not supported")
                         if cancel and cancel.is_set():
                             raise RuntimeError("Cancelled")
-                        archive_file.write(
-                            child, child.relative_to(path.parent).as_posix()
-                        )
+                        relative = child.relative_to(path).as_posix()
+                        archive_file.write(child, f"{name}/{relative}")
             else:
                 archive_file.write(path, name)
 
@@ -181,8 +181,10 @@ class State:
         self.stop = threading.Event()
         self.temp = tempfile.TemporaryDirectory(prefix="loka-")
 
-    def transfer(self, **kw):
-        entry = dict(id=uuid.uuid4().hex, progress=0, cancel=threading.Event(), **kw)
+    def transfer(self, **fields):
+        entry = dict(
+            id=uuid.uuid4().hex, progress=0, cancel=threading.Event(), **fields
+        )
         entry.setdefault("status", "preparing")
         with self.lock:
             self.transfers[entry["id"]] = entry
@@ -381,12 +383,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             self.post()
-        except (
-            ValueError,
-            KeyError,
-            OSError,
-            RuntimeError,
-        ) as exc:
+        except (ValueError, KeyError, OSError, RuntimeError) as exc:
             self.respond(400, {"error": str(exc)})
 
     def post(self):
@@ -394,11 +391,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/upload" and self.local():
             session = self.headers.get("X-Upload-Session", "")
             name = urllib.parse.unquote(self.headers.get("X-File-Path", ""))
-            parts = PurePosixPath(name).parts
+            upload_path = PurePosixPath(name)
+            parts = upload_path.parts
             if (
                 not session.isalnum()
                 or not parts
-                or PurePosixPath(name).is_absolute()
+                or upload_path.is_absolute()
                 or any(part in (".", "..") for part in parts)
                 or "\\" in name
                 or ":" in parts[0]
@@ -406,15 +404,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise ValueError("Invalid upload path")
             destination = Path(self.state.temp.name) / "uploads" / session
             target = destination.joinpath(*parts)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            remaining = int(self.headers.get("Content-Length", "0"))
-            with target.open("wb") as output:
-                while remaining:
-                    chunk = self.rfile.read(min(CHUNK, remaining))
-                    if not chunk:
-                        raise ValueError("Upload interrupted")
-                    output.write(chunk)
-                    remaining -= len(chunk)
+            if self.headers.get("X-Entry-Type") == "directory":
+                target.mkdir(parents=True, exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                remaining = int(self.headers.get("Content-Length", "0"))
+                with target.open("xb") as output:
+                    while remaining:
+                        chunk = self.rfile.read(min(CHUNK, remaining))
+                        if not chunk:
+                            raise ValueError("Upload interrupted")
+                        output.write(chunk)
+                        remaining -= len(chunk)
             return self.respond(200, {"path": str(destination / parts[0])})
         if path.startswith("/peer/cancel/"):
             entry = self.state.transfers.get(path.split("/")[-1])

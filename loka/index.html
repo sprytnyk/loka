@@ -31,15 +31,92 @@ const $=id=>document.getElementById(id);
 const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function message(s){$('message').textContent=s||''}
 async function api(path,data){let r=await fetch(path,{method:data?'POST':'GET',headers:{'X-Loka-Key':key,...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});let v=await r.json();if(!r.ok)throw Error(v.error||'Request failed');return v}
-function updateSelection(){ $('selection').textContent=selected.length?`${selected.length} item(s) selected`:'Nothing selected';$('selected').innerHTML=selected.map((x,i)=>`<li>${escapeHtml(x.label)} <button class="secondary" data-remove="${i}">Remove</button></li>`).join(''); }
-function addFiles(files){for(const file of files){let path=file.webkitRelativePath||file.relativePath||file.name;selected.push({file,path,label:path})}updateSelection()}
-$('files').onchange=e=>addFiles(e.target.files);$('directory').onchange=e=>addFiles(e.target.files);
+function updateSelection(){ $('selection').textContent=selected.length?`${selected.length} ${selected.length===1?'item':'items'} selected`:'Nothing selected';$('selected').innerHTML=selected.map((x,i)=>`<li>${escapeHtml(x.label)} <button class="secondary" data-remove="${i}">Remove</button></li>`).join(''); }
+function addFiles(files){
+  const groups = new Map();
+  for (const file of files) {
+    const path = file.webkitRelativePath || file.name;
+    if (!file.webkitRelativePath) {
+      selected.push({file, path, label: path});
+      continue;
+    }
+    const root = path.split('/')[0];
+    if (!groups.has(root)) groups.set(root, {});
+    selected.push({file, path, label: path, group: groups.get(root)});
+  }
+  updateSelection();
+}
+for (const id of ['files', 'directory']) {
+  $(id).onchange = e => {
+    addFiles(e.target.files);
+    e.target.value = '';
+  };
+}
 $('add-path').onclick=()=>{let path=$('paths').value.trim();if(path){selected.push({path,label:path});$('paths').value='';updateSelection()}};
 $('selected').onclick=e=>{if(e.target.dataset.remove!==undefined){selected.splice(Number(e.target.dataset.remove),1);updateSelection()}};
 const drop=$('drop');for(const event of ['dragenter','dragover'])drop.addEventListener(event,e=>{e.preventDefault();drop.classList.add('over')});for(const event of ['dragleave','drop'])drop.addEventListener(event,e=>{e.preventDefault();drop.classList.remove('over')});
-async function readEntry(entry,prefix=''){if(entry.isFile)return new Promise((resolve,reject)=>entry.file(f=>{f.relativePath=prefix+f.name;resolve([f])},reject));if(entry.isDirectory){let reader=entry.createReader(),all=[];while(true){let entries=await new Promise((resolve,reject)=>reader.readEntries(resolve,reject));if(!entries.length)break;for(const e of entries)all.push(...await readEntry(e,prefix+entry.name+'/'))}return all}return []}
-drop.addEventListener('drop',async e=>{try{let items=[...e.dataTransfer.items],files=[];if(items.some(x=>x.webkitGetAsEntry)){for(const item of items){let entry=item.webkitGetAsEntry();if(entry)files.push(...await readEntry(entry))}}else files=[...e.dataTransfer.files];addFiles(files)}catch(error){message(error.message)}});
-async function paths(items=selected){const session=crypto.randomUUID().replaceAll('-','');if(!items.length)throw Error('Choose files or directories first.');let result=[];for(const item of items){if(!item.file){result.push(item.path);continue}message(`Preparing ${item.label}…`);let response=await fetch('/api/upload',{method:'POST',headers:{'X-Loka-Key':key,'X-Upload-Session':session,'X-File-Path':encodeURIComponent(item.path)},body:item.file});let data=await response.json();if(!response.ok)throw Error(data.error);if(!result.includes(data.path))result.push(data.path)}message('');return result}
+async function readEntry(entry, group, prefix = '') {
+  const path = prefix + entry.name;
+  if (entry.isFile) {
+    const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+    return [{file, path, label: path, group}];
+  }
+  if (!entry.isDirectory) return [];
+  const reader = entry.createReader();
+  const items = [];
+  while (true) {
+    const children = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+    if (!children.length) break;
+    for (const child of children) {
+      for (const item of await readEntry(child, group, path + '/')) items.push(item);
+    }
+  }
+  return items.length ? items : [{directory: true, path, label: path, group}];
+}
+drop.addEventListener('drop', async e => {
+  try {
+    const entries = Array.from(e.dataTransfer.items || [], item => item.webkitGetAsEntry?.()).filter(Boolean);
+    if (!entries.length) {
+      addFiles(e.dataTransfer.files);
+      return;
+    }
+    const items = [];
+    for (const entry of entries) {
+      for (const item of await readEntry(entry, {})) items.push(item);
+    }
+    selected = selected.concat(items);
+    updateSelection();
+  } catch (error) {
+    message(error.message);
+  }
+});
+async function paths(items = selected) {
+  if (!items.length) throw Error('Choose files or directories first.');
+  const sessions = new Map();
+  const result = [];
+  for (const item of items) {
+    if (!item.file && !item.directory) {
+      result.push(item.path);
+      continue;
+    }
+    const group = item.group ?? item;
+    const first = !sessions.has(group);
+    if (first) sessions.set(group, crypto.randomUUID().replaceAll('-', ''));
+    message(`Preparing ${item.label}…`);
+    const headers = {
+      'X-Loka-Key': key,
+      'X-Upload-Session': sessions.get(group),
+      'X-File-Path': encodeURIComponent(item.path),
+    };
+    if (item.directory) headers['X-Entry-Type'] = 'directory';
+    const response = await fetch('/api/upload', {method: 'POST', headers, body: item.file});
+    const data = await response.json();
+    if (!response.ok) throw Error(data.error);
+    if (first) result.push(data.path);
+  }
+  message('');
+  return result;
+}
 async function run(button,fn){button.disabled=true;message('');try{await fn()}catch(e){message(e.message)}finally{button.disabled=false}}
 async function send(host,port,button){await run(button,async()=>{let items=[...selected];let result=await api('/api/send',{paths:await paths(items),host,port:Number(port)});pendingSelections.set(result.id,items);await refresh()})}
 $('send').onclick=e=>send($('address').value.trim(),$('port').value,e.target);
