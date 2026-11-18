@@ -8,6 +8,7 @@ import secrets
 import shutil
 import socket
 import socketserver
+import sys
 import tempfile
 import threading
 import time
@@ -549,11 +550,12 @@ def main():
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["serve", "send", "receive", "devices"],
+        choices=["serve", "send", "receive", "devices", "share"],
         default="serve",
     )
     parser.add_argument("paths", nargs="*", help="files or directories to send")
     parser.add_argument("--to", help="receiver address for send")
+    parser.add_argument("--address", help="local address to use in a share link")
     parser.add_argument("--peer-port", type=int, default=PORT, help="receiver port")
     parser.add_argument(
         "--port", type=int, default=PORT, help="listening port (default: %(default)s)"
@@ -562,6 +564,35 @@ def main():
         "--no-browser", action="store_true", help="do not open the browser"
     )
     args = parser.parse_intermixed_args()
+    if args.command == "share":
+        if not args.paths:
+            parser.error("share requires one or more paths")
+        state = State(args.port)
+        server = Server(("", args.port), Handler)
+        server.state = state
+        state.port = server.server_address[1]
+        addresses = local_addresses()
+        address = args.address or (addresses[0] if addresses else None)
+        if not address:
+            server.server_close()
+            state.temp.cleanup()
+            parser.error("could not detect a local address; supply --address")
+        entry = state.transfer(direction="outgoing", name="Link", items=[], size=0)
+        outgoing(state, entry, args.paths, None)
+        if entry["status"] != "shared":
+            print(entry.get("error", "Could not create link"), file=sys.stderr)
+            server.server_close()
+            state.temp.cleanup()
+            return 1
+        print(f"http://{address}:{state.port}/download/{entry['token']}", flush=True)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.server_close()
+            state.temp.cleanup()
+        return 0
     if args.command == "send":
         if not args.paths or not args.to:
             parser.error("send requires --to ADDRESS and one or more paths")

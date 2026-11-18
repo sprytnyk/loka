@@ -1,4 +1,7 @@
+import http.client
 import json
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -146,6 +149,43 @@ class TransferTests(unittest.TestCase):
             headers={"X-Transfer-Secret": offer["secret"]},
         )
         self.assertEqual(status["status"], "cancelled")
+
+    def test_cli_share_serves_file_until_stopped(self):
+        source = self.root / "shared.txt"
+        source.write_text("hello")
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "loka",
+                "share",
+                "--address",
+                "127.0.0.1",
+                "--port",
+                "0",
+                str(source),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            line = process.stdout.readline().strip()
+            self.assertTrue(
+                line.startswith("http://127.0.0.1:"), line or process.stderr.read()
+            )
+            from urllib.parse import urlsplit
+
+            url = urlsplit(line)
+            connection = http.client.HTTPConnection(url.hostname, url.port, timeout=5)
+            connection.request("GET", url.path)
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.read(), b"hello")
+            connection.close()
+        finally:
+            process.terminate()
+            process.communicate(timeout=5)
 
 
 if __name__ == "__main__":

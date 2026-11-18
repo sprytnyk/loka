@@ -23,10 +23,13 @@ multiple files download as a ZIP archive.
 uv run python -m loka receive
 uv run python -m loka devices
 uv run python -m loka send --to 192.0.2.10 /path/to/file /path/to/directory
+uv run python -m loka share --address 192.0.2.10 /path/to/file
 ```
 
-Run `python -m loka --help` for port options. When receiving, enter a destination
-directory or leave it empty to decline. Press Ctrl+C to stop.
+Run `python -m loka --help` for port options. For `share`, use this computer's
+local address in place of the example, or omit `--address` to use a detected
+address. The link remains available until you press Ctrl+C. When receiving,
+enter a destination directory or leave it empty to decline.
 
 Transfers are not encrypted. Anyone with a download link can use it while the
 link is active. Use Loka only on a network you trust. Restart interrupted
