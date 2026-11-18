@@ -16,12 +16,25 @@ from loka.__main__ import (
     State,
     extract,
     make_archive,
+    order_local_addresses,
     outgoing,
     request,
 )
 
 
 class TransferTests(unittest.TestCase):
+    def test_share_address_prefers_system_route_over_docker_bridge(self):
+        with patch("loka.__main__.socket.socket") as socket_factory:
+            socket_context = socket_factory.return_value.__enter__.return_value
+            socket_context.getsockname.return_value = ("192.168.1.10", 12345)
+            addresses = order_local_addresses({"172.17.0.1", "192.168.1.10"})
+        self.assertEqual(addresses, ["192.168.1.10", "172.17.0.1"])
+
+    def test_share_addresses_remain_available_without_a_default_route(self):
+        with patch("loka.__main__.socket.socket", side_effect=OSError("no route")):
+            addresses = order_local_addresses({"172.17.0.1", "192.168.1.10"})
+        self.assertEqual(addresses, ["172.17.0.1", "192.168.1.10"])
+
     def test_discovery_reports_socket_failure(self):
         state = State(0)
         try:

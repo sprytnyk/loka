@@ -630,6 +630,20 @@ def outgoing(state, entry, paths, peer):
             archive.unlink(missing_ok=True)
 
 
+def order_local_addresses(addresses):
+    addresses = sorted(addresses)
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("192.0.2.1", 9))
+            preferred = sock.getsockname()[0]
+    except OSError:
+        return addresses
+    if preferred in addresses:
+        addresses.remove(preferred)
+        addresses.insert(0, preferred)
+    return addresses
+
+
 def local_addresses():
     """Find IPv4 addresses on local interfaces without relying on host DNS."""
     addresses = set()
@@ -715,7 +729,7 @@ def local_addresses():
                 libc.freeifaddrs(first)
     except (AttributeError, OSError, ValueError):
         return []
-    return sorted(
+    return order_local_addresses(
         address
         for address in addresses
         if not address.startswith("127.") and address != "0.0.0.0"
