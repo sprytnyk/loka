@@ -3,14 +3,17 @@
 Share files and directories with computers on the same local network. Loka
 requires Python 3.10 or later and has no runtime dependencies.
 
+![Loka showing selected files, nearby devices, and transfer progress](docs/loka.png)
+
 ## Start
 
 Run `uv run python -m loka` on each computer. The command opens the browser
 interface. Choose files or a directory, then select the receiving device. The
-receiver accepts the transfer and enters an existing destination directory.
+receiver chooses an existing destination directory and accepts the transfer.
+Loka remembers the destination until it stops.
 
 If a device does not appear, enter its address and port. Some Wi-Fi networks
-prevent devices from communicating with each other.
+block connections between devices.
 
 To share with someone who does not have Loka, choose the items, enter your
 local address if needed, and select **Create link**. The link works until you
