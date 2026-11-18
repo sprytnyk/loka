@@ -1,4 +1,5 @@
 import http.client
+import io
 import json
 import subprocess
 import sys
@@ -7,9 +8,10 @@ import threading
 import time
 import unittest
 import zipfile
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from loka.__main__ import (
     Handler,
@@ -196,6 +198,56 @@ class TransferTests(unittest.TestCase):
                 headers,
             )
         self.assertEqual((staged / "report.txt").read_bytes(), b"first")
+
+    def test_upload_can_share_1200_separate_unicode_files(self):
+        self.start_server()
+        port = self.server.server_port
+        headers = {"X-Loka-Key": self.state.ui_key}
+        expected_files = {}
+        staged_paths = []
+        for index in range(1200):
+            name = f"Збірка – 音楽 – 🎵 e\u0301 100% #{index}.mp3"
+            content = str(index).encode()
+            expected_files[name] = content
+            staged = request(
+                "127.0.0.1",
+                port,
+                "POST",
+                "/api/upload",
+                content,
+                {
+                    **headers,
+                    "X-Upload-Session": str(index),
+                    "X-File-Path": quote(name, safe=""),
+                },
+            )
+            staged_paths.append(staged["path"])
+
+        result = request(
+            "127.0.0.1",
+            port,
+            "POST",
+            "/api/share",
+            json.dumps({"paths": staged_paths}, ensure_ascii=False).encode(),
+            {**headers, "Content-Type": "application/json"},
+        )
+        entry = self.state.transfers[result["id"]]
+        deadline = time.monotonic() + 5
+        while entry["status"] == "preparing" and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertEqual(entry["status"], "shared", entry.get("error"))
+
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        with closing(connection):
+            connection.request("GET", "/download/" + entry["token"])
+            with connection.getresponse() as response:
+                self.assertEqual(response.status, 200)
+                archive = io.BytesIO(response.read())
+        with zipfile.ZipFile(archive) as downloaded:
+            names = downloaded.namelist()
+            self.assertCountEqual(names, expected_files)
+            for name in names:
+                self.assertEqual(downloaded.read(name), expected_files[name], name)
 
     def test_archive_cannot_escape_destination(self):
         archive = self.root / "bad.zip"

@@ -23,6 +23,7 @@ from pathlib import Path, PurePosixPath
 PORT = 45873
 GROUP = "239.255.45.87"
 CHUNK = 1024 * 256
+MAX_OFFER_ITEMS = 100
 
 
 def request(host, port, method, path, data=None, headers=None, timeout=10):
@@ -439,7 +440,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 entry = self.state.transfer(
                     direction="incoming",
                     name=str(data["name"])[:255],
-                    items=data["items"][:100],
+                    items=data["items"][:MAX_OFFER_ITEMS],
                     size=int(data["size"]),
                     status="waiting",
                     secret=secrets.token_urlsafe(24),
@@ -512,7 +513,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.respond(200, {"ok": True})
         if path in ("/api/send", "/api/share"):
             paths = data["paths"]
-            if not isinstance(paths, list) or not paths or len(paths) > 100:
+            if not isinstance(paths, list) or not paths:
                 raise ValueError("Choose one or more paths")
             entry = self.state.transfer(
                 direction="outgoing",
@@ -568,14 +569,17 @@ def outgoing(state, entry, paths, peer):
             entry.update(status="shared", token=token, progress=100)
             return
         host, port = peer["host"], int(peer.get("port", PORT))
+        offer_details = {
+            "name": state.name,
+            "items": entry["items"][:MAX_OFFER_ITEMS],
+            "size": entry["size"],
+        }
         offer = request(
             host,
             port,
             "POST",
             "/peer/offer",
-            json.dumps(
-                {"name": state.name, "items": entry["items"], "size": entry["size"]}
-            ),
+            json.dumps(offer_details),
             {"Content-Type": "application/json"},
         )
         entry["status"] = "waiting"
