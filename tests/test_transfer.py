@@ -249,6 +249,32 @@ class TransferTests(unittest.TestCase):
             for name in names:
                 self.assertEqual(downloaded.read(name), expected_files[name], name)
 
+    def test_progress_page_uses_utf8_with_windows_default_encoding(self):
+        self.start_server()
+        open_path = Path.open
+
+        def open_with_cp1252(path, mode="r", buffering=-1, encoding=None, **kwargs):
+            if "b" not in mode and encoding in (None, "locale"):
+                encoding = "cp1252"
+            return open_path(path, mode, buffering, encoding, **kwargs)
+
+        port = self.server.server_port
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        with (
+            patch.object(Path, "open", open_with_cp1252),
+            closing(connection),
+        ):
+            connection.request("GET", "/")
+            with connection.getresponse() as response:
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.headers.get_content_charset(), "utf-8")
+                page = response.read().decode("utf-8")
+
+        self.assertTrue("Preparing ${item.label}…" in page, "Upload status is garbled")
+        self.assertTrue(
+            " · ${transfer.progress}%" in page, "Transfer status is garbled"
+        )
+
     def test_archive_cannot_escape_destination(self):
         archive = self.root / "bad.zip"
         with zipfile.ZipFile(archive, "w") as z:

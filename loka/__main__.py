@@ -320,13 +320,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlsplit(self.path)
         if parsed.path == "/" and self.client_address[0] in ("127.0.0.1", "::1"):
-            data = (
-                Path(__file__)
-                .with_name("index.html")
-                .read_text()
-                .replace("__LOKA_KEY__", self.state.ui_key)
-                .encode()
-            )
+            page = Path(__file__).with_name("index.html").read_text(encoding="utf-8")
+            data = page.replace("__LOKA_KEY__", self.state.ui_key).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
