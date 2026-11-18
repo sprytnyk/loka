@@ -8,6 +8,7 @@ import time
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from loka.__main__ import (
     Handler,
@@ -21,6 +22,17 @@ from loka.__main__ import (
 
 
 class TransferTests(unittest.TestCase):
+    def test_discovery_reports_socket_failure(self):
+        state = State(0)
+        try:
+            with patch(
+                "loka.__main__.socket.socket", side_effect=PermissionError("blocked")
+            ):
+                state._listen()
+            self.assertIn("blocked", state.discovery_error)
+        finally:
+            state.temp.cleanup()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

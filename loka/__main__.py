@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+import ctypes
 import http.client
 import http.server
 import json
@@ -130,6 +131,8 @@ class State:
         self.peers = {}
         self.transfers = {}
         self.shares = {}
+        self.discovery_error = ""
+        self.discovery_send_error = ""
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.temp = tempfile.TemporaryDirectory(prefix="loka-")
@@ -153,15 +156,25 @@ class State:
         threading.Thread(target=self._announce, daemon=True).start()
 
     def _listen(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock = None
         try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(("", PORT))
-            sock.setsockopt(
-                socket.IPPROTO_IP,
-                socket.IP_ADD_MEMBERSHIP,
-                socket.inet_aton(GROUP) + socket.inet_aton("0.0.0.0"),
-            )
+            interfaces = local_addresses() or ["0.0.0.0"]
+            joined = 0
+            for address in interfaces:
+                try:
+                    sock.setsockopt(
+                        socket.IPPROTO_IP,
+                        socket.IP_ADD_MEMBERSHIP,
+                        socket.inet_aton(GROUP) + socket.inet_aton(address),
+                    )
+                    joined += 1
+                except OSError:
+                    continue
+            if not joined:
+                raise OSError("Could not join discovery on any network interface")
             sock.settimeout(1)
             while not self.stop.is_set():
                 try:
@@ -178,20 +191,46 @@ class State:
                             self.peers[peer["id"]] = peer
                 except (TimeoutError, ValueError, KeyError, TypeError):
                     continue
-        except OSError:
-            pass
+        except OSError as exc:
+            self.discovery_error = (
+                f"Discovery could not start: {exc}. "
+                "Check your firewall and network connection."
+            )
         finally:
-            sock.close()
+            if sock:
+                sock.close()
 
     def _announce(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+        sock = None
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+        except OSError as exc:
+            if sock:
+                sock.close()
+            self.discovery_send_error = f"Could not start device announcements: {exc}"
+            return
         payload = json.dumps(
             {"service": "loka", "id": self.id, "name": self.name, "port": self.port}
         ).encode()
         while not self.stop.is_set():
-            with contextlib.suppress(OSError):
-                sock.sendto(payload, (GROUP, PORT))
+            sent = False
+            for address in local_addresses() or ["0.0.0.0"]:
+                try:
+                    sock.setsockopt(
+                        socket.IPPROTO_IP,
+                        socket.IP_MULTICAST_IF,
+                        socket.inet_aton(address),
+                    )
+                    sock.sendto(payload, (GROUP, PORT))
+                    sent = True
+                except OSError:
+                    continue
+            self.discovery_send_error = (
+                ""
+                if sent
+                else "Could not announce this device. Check your firewall and network connection."
+            )
             self.stop.wait(3)
         sock.close()
 
@@ -263,6 +302,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "peers": peers,
                     "transfers": transfers,
                     "addresses": local_addresses(),
+                    "discovery_error": self.state.discovery_error
+                    or self.state.discovery_send_error,
                 },
             )
         elif parsed.path.startswith("/download/"):
@@ -536,13 +577,95 @@ def outgoing(state, entry, paths, peer):
 
 
 def local_addresses():
+    """Find IPv4 addresses on local interfaces without relying on host DNS."""
+    addresses = set()
     try:
-        addresses = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
-        return sorted(
-            {item[4][0] for item in addresses if not item[4][0].startswith("127.")}
-        )
-    except OSError:
+        if sys.platform == "win32":
+            from ctypes import wintypes
+
+            class SocketAddress(ctypes.Structure):
+                _fields_ = [("address", ctypes.c_void_p), ("length", ctypes.c_int)]
+
+            class Unicast(ctypes.Structure):
+                pass
+
+            Unicast._fields_ = [
+                ("alignment", ctypes.c_uint64),
+                ("next", ctypes.POINTER(Unicast)),
+                ("socket", SocketAddress),
+            ]
+
+            class Adapter(ctypes.Structure):
+                pass
+
+            Adapter._fields_ = [
+                ("alignment", ctypes.c_uint64),
+                ("next", ctypes.POINTER(Adapter)),
+                ("name", ctypes.c_char_p),
+                ("unicast", ctypes.POINTER(Unicast)),
+            ]
+            size = wintypes.ULONG(0)
+            get_adapters = ctypes.windll.iphlpapi.GetAdaptersAddresses
+            get_adapters(socket.AF_INET, 0, None, None, ctypes.byref(size))
+            buffer = ctypes.create_string_buffer(size.value)
+            if get_adapters(socket.AF_INET, 0, None, buffer, ctypes.byref(size)) != 0:
+                return []
+            adapter = ctypes.cast(buffer, ctypes.POINTER(Adapter))
+            while adapter:
+                unicast = adapter.contents.unicast
+                while unicast:
+                    sockaddr = unicast.contents.socket
+                    if sockaddr.address and sockaddr.length >= 8:
+                        raw = ctypes.string_at(sockaddr.address, sockaddr.length)
+                        if int.from_bytes(raw[:2], sys.byteorder) == socket.AF_INET:
+                            addresses.add(socket.inet_ntoa(raw[4:8]))
+                    unicast = unicast.contents.next
+                adapter = adapter.contents.next
+        else:
+
+            class Interface(ctypes.Structure):
+                pass
+
+            Interface._fields_ = [
+                ("next", ctypes.POINTER(Interface)),
+                ("name", ctypes.c_char_p),
+                ("flags", ctypes.c_uint),
+                ("address", ctypes.c_void_p),
+                ("netmask", ctypes.c_void_p),
+                ("union", ctypes.c_void_p),
+                ("data", ctypes.c_void_p),
+            ]
+            first = ctypes.POINTER(Interface)()
+            libc = ctypes.CDLL(None)
+            if libc.getifaddrs(ctypes.byref(first)) != 0:
+                return []
+            try:
+                current = first
+                while current:
+                    interface = current.contents
+                    if (
+                        interface.address
+                        and interface.flags & 1
+                        and not interface.flags & 8
+                    ):
+                        raw = ctypes.string_at(interface.address, 8)
+                        family = (
+                            raw[1]
+                            if sys.platform == "darwin"
+                            else int.from_bytes(raw[:2], sys.byteorder)
+                        )
+                        if family == socket.AF_INET:
+                            addresses.add(socket.inet_ntoa(raw[4:8]))
+                    current = interface.next
+            finally:
+                libc.freeifaddrs(first)
+    except (AttributeError, OSError, ValueError):
         return []
+    return sorted(
+        address
+        for address in addresses
+        if not address.startswith("127.") and address != "0.0.0.0"
+    )
 
 
 def main():
