@@ -1,0 +1,667 @@
+import argparse
+import contextlib
+import http.client
+import http.server
+import json
+import os
+import secrets
+import shutil
+import socket
+import socketserver
+import tempfile
+import threading
+import time
+import urllib.parse
+import uuid
+import webbrowser
+import zipfile
+from pathlib import Path, PurePosixPath
+
+PORT = 45873
+GROUP = "239.255.45.87"
+CHUNK = 1024 * 256
+
+
+def request(host, port, method, path, data=None, headers=None, timeout=10):
+    connection = http.client.HTTPConnection(host, port, timeout=timeout)
+    connection.request(method, path, body=data, headers=headers or {})
+    response = connection.getresponse()
+    body = response.read()
+    connection.close()
+    if response.status >= 400:
+        raise RuntimeError(body.decode("utf-8", "replace"))
+    return json.loads(body) if body else None
+
+
+def unique_path(path):
+    if not path.exists():
+        return path
+    index = 1
+    while True:
+        candidate = path.with_name(f"{path.stem} ({index}){path.suffix}")
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+def extract(archive, destination):
+    """Extract each top-level item separately, never overwriting existing items."""
+    destination = Path(destination).expanduser().resolve()
+    if not destination.is_dir():
+        raise ValueError("Destination must be an existing directory")
+    with zipfile.ZipFile(archive) as archive_file:
+        members = archive_file.infolist()
+        roots = {}
+        for info in members:
+            path = PurePosixPath(info.filename)
+            if (
+                not path.parts
+                or path.is_absolute()
+                or any(p in (".", "..") for p in path.parts)
+                or "\\" in info.filename
+                or ":" in path.parts[0]
+            ):
+                raise ValueError("Invalid path in transfer")
+            if (info.external_attr >> 16) & 0o170000 == 0o120000:
+                raise ValueError("Symbolic links are not supported")
+            roots.setdefault(path.parts[0], None)
+        staging = Path(tempfile.mkdtemp(prefix=".loka-", dir=destination))
+        try:
+            for info in members:
+                path = PurePosixPath(info.filename)
+                target = staging.joinpath(*path.parts)
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                else:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with archive_file.open(info) as source, target.open("wb") as output:
+                        shutil.copyfileobj(source, output, CHUNK)
+            for name in roots:
+                source = staging / name
+                source.rename(unique_path(destination / name))
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+
+
+def make_archive(paths, target, cancel=None):
+    used = set()
+    with zipfile.ZipFile(
+        target, "w", compression=zipfile.ZIP_STORED, allowZip64=True
+    ) as archive_file:
+        for item in paths:
+            path = Path(item)
+            if path.is_symlink() or not path.exists():
+                raise ValueError(f"Cannot share {path}: missing or symbolic link")
+            name = path.name
+            if name in used:
+                raise ValueError(f"Duplicate name: {name}")
+            used.add(name)
+            if path.is_dir():
+                archive_file.writestr(name + "/", b"")
+                for root, dirs, files in os.walk(path, followlinks=False):
+                    root_path = Path(root)
+                    dirs[:] = [d for d in dirs if not (root_path / d).is_symlink()]
+                    for directory in dirs:
+                        archive_file.writestr(
+                            (root_path / directory).relative_to(path.parent).as_posix()
+                            + "/",
+                            b"",
+                        )
+                    for file in files:
+                        child = root_path / file
+                        if child.is_symlink():
+                            raise ValueError("Symbolic links are not supported")
+                        if cancel and cancel.is_set():
+                            raise RuntimeError("Cancelled")
+                        archive_file.write(
+                            child, child.relative_to(path.parent).as_posix()
+                        )
+            else:
+                archive_file.write(path, name)
+
+
+class State:
+    def __init__(self, port):
+        self.id = uuid.uuid4().hex
+        self.name = socket.gethostname()
+        self.port = port
+        self.ui_key = secrets.token_urlsafe(24)
+        self.peers = {}
+        self.transfers = {}
+        self.shares = {}
+        self.lock = threading.RLock()
+        self.stop = threading.Event()
+        self.temp = tempfile.TemporaryDirectory(prefix="loka-")
+
+    def transfer(self, **kw):
+        entry = dict(id=uuid.uuid4().hex, progress=0, cancel=threading.Event(), **kw)
+        entry.setdefault("status", "preparing")
+        with self.lock:
+            self.transfers[entry["id"]] = entry
+        return entry
+
+    def public(self, entry):
+        return {
+            key: value
+            for key, value in entry.items()
+            if key not in ("cancel", "archive", "secret")
+        }
+
+    def discover(self):
+        threading.Thread(target=self._listen, daemon=True).start()
+        threading.Thread(target=self._announce, daemon=True).start()
+
+    def _listen(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("", PORT))
+            sock.setsockopt(
+                socket.IPPROTO_IP,
+                socket.IP_ADD_MEMBERSHIP,
+                socket.inet_aton(GROUP) + socket.inet_aton("0.0.0.0"),
+            )
+            sock.settimeout(1)
+            while not self.stop.is_set():
+                try:
+                    data, address = sock.recvfrom(4096)
+                    peer = json.loads(data)
+                    if (
+                        peer.get("service") == "loka"
+                        and peer.get("id") != self.id
+                        and isinstance(peer.get("port"), int)
+                        and 0 < peer["port"] < 65536
+                    ):
+                        peer.update(host=address[0], seen=time.monotonic())
+                        with self.lock:
+                            self.peers[peer["id"]] = peer
+                except (TimeoutError, ValueError, KeyError, TypeError):
+                    continue
+        except OSError:
+            pass
+        finally:
+            sock.close()
+
+    def _announce(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+        payload = json.dumps(
+            {"service": "loka", "id": self.id, "name": self.name, "port": self.port}
+        ).encode()
+        while not self.stop.is_set():
+            with contextlib.suppress(OSError):
+                sock.sendto(payload, (GROUP, PORT))
+            self.stop.wait(3)
+        sock.close()
+
+
+class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    server_version = "Loka/0.1"
+
+    def log_message(self, *args):
+        pass
+
+    @property
+    def state(self):
+        return self.server.state
+
+    def respond(self, status, value):
+        data = json.dumps(value).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def body(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        if length > 1024 * 1024:
+            raise ValueError("Request too large")
+        return json.loads(self.rfile.read(length) or b"{}")
+
+    def local(self):
+        return (
+            self.client_address[0] in ("127.0.0.1", "::1")
+            and self.headers.get("X-Loka-Key") == self.state.ui_key
+        )
+
+    def do_GET(self):
+        parsed = urllib.parse.urlsplit(self.path)
+        if parsed.path == "/" and self.client_address[0] in ("127.0.0.1", "::1"):
+            data = (
+                Path(__file__)
+                .with_name("index.html")
+                .read_text()
+                .replace("__LOKA_KEY__", self.state.ui_key)
+                .encode()
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        elif parsed.path == "/api/state" and self.local():
+            with self.state.lock:
+                peers = [
+                    p
+                    for p in self.state.peers.values()
+                    if time.monotonic() - p["seen"] < 12
+                ]
+                transfers = [
+                    self.state.public(t) for t in self.state.transfers.values()
+                ]
+            self.respond(
+                200,
+                {
+                    "name": self.state.name,
+                    "peers": peers,
+                    "transfers": transfers,
+                    "addresses": local_addresses(),
+                },
+            )
+        elif parsed.path.startswith("/download/"):
+            token = parsed.path.split("/")[-1]
+            share = self.state.shares.get(token)
+            if not share:
+                return self.respond(404, {"error": "Link expired"})
+            path = Path(share["archive"])
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header(
+                "Content-Disposition",
+                "attachment; filename*=UTF-8''"
+                + urllib.parse.quote(share["filename"], safe=""),
+            )
+            self.send_header("Content-Length", str(path.stat().st_size))
+            self.end_headers()
+            with path.open("rb") as f:
+                shutil.copyfileobj(f, self.wfile, CHUNK)
+        elif parsed.path.startswith("/peer/status/"):
+            transfer = self.state.transfers.get(parsed.path.split("/")[-1])
+            if not transfer or self.headers.get("X-Transfer-Secret") != transfer.get(
+                "secret"
+            ):
+                return self.respond(404, {"error": "Not found"})
+            self.respond(200, {"status": transfer["status"]})
+        else:
+            self.respond(404, {"error": "Not found"})
+
+    def do_POST(self):
+        try:
+            self.post()
+        except (
+            ValueError,
+            KeyError,
+            OSError,
+            RuntimeError,
+        ) as exc:
+            self.respond(400, {"error": str(exc)})
+
+    def post(self):
+        path = urllib.parse.urlsplit(self.path).path
+        if path == "/api/upload" and self.local():
+            session = self.headers.get("X-Upload-Session", "")
+            name = urllib.parse.unquote(self.headers.get("X-File-Path", ""))
+            parts = PurePosixPath(name).parts
+            if (
+                not session.isalnum()
+                or not parts
+                or PurePosixPath(name).is_absolute()
+                or any(part in (".", "..") for part in parts)
+                or "\\" in name
+                or ":" in parts[0]
+            ):
+                raise ValueError("Invalid upload path")
+            destination = Path(self.state.temp.name) / "uploads" / session
+            target = destination.joinpath(*parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            remaining = int(self.headers.get("Content-Length", "0"))
+            with target.open("wb") as output:
+                while remaining:
+                    chunk = self.rfile.read(min(CHUNK, remaining))
+                    if not chunk:
+                        raise ValueError("Upload interrupted")
+                    output.write(chunk)
+                    remaining -= len(chunk)
+            return self.respond(200, {"path": str(destination / parts[0])})
+        if path.startswith("/peer/cancel/"):
+            entry = self.state.transfers.get(path.split("/")[-1])
+            if not entry or self.headers.get("X-Transfer-Secret") != entry.get(
+                "secret"
+            ):
+                return self.respond(404, {"error": "Not found"})
+            entry["cancel"].set()
+            if entry["status"] in ("waiting", "accepted"):
+                entry["status"] = "cancelled"
+            return self.respond(200, {"ok": True})
+        if path == "/peer/offer":
+            data = self.body()
+            with self.state.lock:
+                if any(
+                    t["direction"] == "incoming"
+                    and t["status"] in ("waiting", "accepted", "receiving")
+                    for t in self.state.transfers.values()
+                ):
+                    return self.respond(409, {"error": "Receiver is busy"})
+                entry = self.state.transfer(
+                    direction="incoming",
+                    name=str(data["name"])[:255],
+                    items=data["items"][:100],
+                    size=int(data["size"]),
+                    status="waiting",
+                    secret=secrets.token_urlsafe(24),
+                )
+            return self.respond(200, {"id": entry["id"], "secret": entry["secret"]})
+        if path.startswith("/peer/upload/"):
+            entry = self.state.transfers.get(path.split("/")[-1])
+            if not entry or self.headers.get("X-Transfer-Secret") != entry.get(
+                "secret"
+            ):
+                return self.respond(404, {"error": "Not found"})
+            with self.state.lock:
+                if entry["status"] != "accepted":
+                    return self.respond(409, {"error": "Transfer is not accepted"})
+                entry["status"] = "receiving"
+            size = int(self.headers.get("Content-Length", "0"))
+            if size != entry["size"]:
+                entry["status"] = "failed"
+                return self.respond(400, {"error": "Transfer size does not match"})
+            tmp = Path(self.state.temp.name) / (entry["id"] + ".zip")
+            try:
+                with tmp.open("wb") as f:
+                    remaining = size
+                    while remaining:
+                        if entry["cancel"].is_set():
+                            raise RuntimeError("Cancelled")
+                        chunk = self.rfile.read(min(CHUNK, remaining))
+                        if not chunk:
+                            raise RuntimeError("Connection interrupted")
+                        f.write(chunk)
+                        remaining -= len(chunk)
+                        entry["progress"] = (
+                            int((size - remaining) * 100 / size) if size else 100
+                        )
+                extract(tmp, entry["destination"])
+                entry["status"] = "complete"
+            except Exception:
+                entry["status"] = "cancelled" if entry["cancel"].is_set() else "failed"
+                raise
+            finally:
+                tmp.unlink(missing_ok=True)
+            return self.respond(200, {"status": entry["status"]})
+        if not self.local():
+            return self.respond(403, {"error": "Local access only"})
+        data = self.body()
+        if path == "/api/accept":
+            entry = self.state.transfers[data["id"]]
+            if entry["status"] != "waiting":
+                raise ValueError("Transfer is no longer waiting")
+            dest = Path(data["destination"]).expanduser().resolve()
+            if not dest.is_dir():
+                raise ValueError("Destination must be an existing directory")
+            entry["destination"] = str(dest)
+            entry["status"] = "accepted"
+            return self.respond(200, {"ok": True})
+        if path == "/api/cancel":
+            entry = self.state.transfers[data["id"]]
+            entry["cancel"].set()
+            if entry["status"] in ("waiting", "accepted", "preparing"):
+                entry["status"] = "cancelled"
+            return self.respond(200, {"ok": True})
+        if path in ("/api/send", "/api/share"):
+            paths = data["paths"]
+            if not isinstance(paths, list) or not paths or len(paths) > 100:
+                raise ValueError("Choose one or more paths")
+            entry = self.state.transfer(
+                direction="outgoing",
+                name="Link" if path.endswith("share") else data["host"],
+                items=[Path(p).name for p in paths],
+                size=0,
+            )
+            thread = threading.Thread(
+                target=outgoing,
+                args=(
+                    self.state,
+                    entry,
+                    paths,
+                    data if path.endswith("send") else None,
+                ),
+                daemon=True,
+            )
+            thread.start()
+            return self.respond(200, {"id": entry["id"]})
+        if path == "/api/unshare":
+            share = self.state.shares.pop(data["token"], None)
+            if share:
+                Path(share["archive"]).unlink(missing_ok=True)
+                for entry in self.state.transfers.values():
+                    if entry.get("token") == data["token"]:
+                        entry["status"] = "stopped"
+            return self.respond(200, {"ok": True})
+        self.respond(404, {"error": "Not found"})
+
+
+def outgoing(state, entry, paths, peer):
+    archive = Path(state.temp.name) / (entry["id"] + ".zip")
+    try:
+        single_file = (
+            peer is None
+            and len(paths) == 1
+            and Path(paths[0]).is_file()
+            and not Path(paths[0]).is_symlink()
+        )
+        if single_file:
+            shutil.copyfile(paths[0], archive)
+        else:
+            make_archive(paths, archive, entry["cancel"])
+        if entry["cancel"].is_set():
+            raise RuntimeError("Cancelled")
+        entry["size"] = archive.stat().st_size
+        if peer is None:
+            token = secrets.token_urlsafe(24)
+            state.shares[token] = {
+                "archive": str(archive),
+                "filename": Path(paths[0]).name if single_file else "loka-share.zip",
+            }
+            entry.update(status="shared", token=token, progress=100)
+            return
+        host, port = peer["host"], int(peer.get("port", PORT))
+        offer = request(
+            host,
+            port,
+            "POST",
+            "/peer/offer",
+            json.dumps(
+                {"name": state.name, "items": entry["items"], "size": entry["size"]}
+            ),
+            {"Content-Type": "application/json"},
+        )
+        entry["status"] = "waiting"
+        headers = {"X-Transfer-Secret": offer["secret"]}
+        while not entry["cancel"].wait(1):
+            status = request(
+                host, port, "GET", "/peer/status/" + offer["id"], headers=headers
+            )["status"]
+            if status == "accepted":
+                break
+            if status != "waiting":
+                raise RuntimeError("Receiver declined or cancelled")
+        if entry["cancel"].is_set():
+            with contextlib.suppress(Exception):
+                request(
+                    host, port, "POST", "/peer/cancel/" + offer["id"], headers=headers
+                )
+            raise RuntimeError("Cancelled")
+        entry["status"] = "sending"
+        connection = http.client.HTTPConnection(host, port, timeout=30)
+        try:
+            connection.putrequest("POST", "/peer/upload/" + offer["id"])
+            connection.putheader("Content-Length", str(entry["size"]))
+            connection.putheader("X-Transfer-Secret", offer["secret"])
+            connection.endheaders()
+            sent = 0
+            with archive.open("rb") as f:
+                while chunk := f.read(CHUNK):
+                    if entry["cancel"].is_set():
+                        raise RuntimeError("Cancelled")
+                    connection.send(chunk)
+                    sent += len(chunk)
+                    entry["progress"] = int(sent * 100 / entry["size"])
+            response = connection.getresponse()
+            body = response.read()
+            if response.status != 200:
+                raise RuntimeError(body.decode("utf-8", "replace"))
+        finally:
+            connection.close()
+        entry["status"] = "complete"
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        RuntimeError,
+        http.client.HTTPException,
+    ) as exc:
+        entry["status"] = "cancelled" if entry["cancel"].is_set() else "failed"
+        entry["error"] = str(exc)
+    finally:
+        if entry["status"] != "shared":
+            archive.unlink(missing_ok=True)
+
+
+def local_addresses():
+    try:
+        addresses = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
+        return sorted(
+            {item[4][0] for item in addresses if not item[4][0].startswith("127.")}
+        )
+    except OSError:
+        return []
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Share files on your local network")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=["serve", "send", "receive", "devices"],
+        default="serve",
+    )
+    parser.add_argument("paths", nargs="*", help="files or directories to send")
+    parser.add_argument("--to", help="receiver address for send")
+    parser.add_argument("--peer-port", type=int, default=PORT, help="receiver port")
+    parser.add_argument(
+        "--port", type=int, default=PORT, help="listening port (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--no-browser", action="store_true", help="do not open the browser"
+    )
+    args = parser.parse_intermixed_args()
+    if args.command == "send":
+        if not args.paths or not args.to:
+            parser.error("send requires --to ADDRESS and one or more paths")
+        state = State(0)
+        entry = state.transfer(
+            direction="outgoing",
+            name=args.to,
+            items=[Path(p).name for p in args.paths],
+            size=0,
+        )
+        thread = threading.Thread(
+            target=outgoing,
+            args=(state, entry, args.paths, {"host": args.to, "port": args.peer_port}),
+        )
+        thread.start()
+        try:
+            while thread.is_alive():
+                print(
+                    f"\r{entry['status']}: {entry['progress']}%   ", end="", flush=True
+                )
+                thread.join(0.5)
+        except KeyboardInterrupt:
+            entry["cancel"].set()
+            thread.join()
+        print(f"\r{entry['status']}: {entry['progress']}%   ")
+        if entry.get("error"):
+            print(entry["error"])
+        state.temp.cleanup()
+        return 0 if entry["status"] == "complete" else 1
+    state = State(args.port)
+    server = Server(("", args.port), Handler)
+    server.state = state
+    state.port = server.server_address[1]
+    state.discover()
+    url = f"http://127.0.0.1:{state.port}/"
+    print(f"Loka is running at {url} (Ctrl+C to stop)", flush=True)
+    if args.command == "devices":
+        try:
+            time.sleep(5)
+            with state.lock:
+                for peer in state.peers.values():
+                    print(f"{peer['name']}  {peer['host']}:{peer['port']}")
+        finally:
+            state.stop.set()
+            server.server_close()
+            state.temp.cleanup()
+        return 0
+    if args.command == "receive":
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        print("Waiting for transfers. Press Ctrl+C to stop.")
+        try:
+            while True:
+                waiting = next(
+                    (
+                        e
+                        for e in list(state.transfers.values())
+                        if e["direction"] == "incoming" and e["status"] == "waiting"
+                    ),
+                    None,
+                )
+                if waiting:
+                    print(
+                        f"\n{waiting['name']} wants to send: {', '.join(waiting['items'])}"
+                    )
+                    destination = input(
+                        "Destination directory (empty to decline): "
+                    ).strip()
+                    if destination and Path(destination).expanduser().is_dir():
+                        waiting["destination"] = str(
+                            Path(destination).expanduser().resolve()
+                        )
+                        waiting["status"] = "accepted"
+                        while waiting["status"] in ("accepted", "receiving"):
+                            print(
+                                f"\r{waiting['status']}: {waiting['progress']}%   ",
+                                end="",
+                                flush=True,
+                            )
+                            time.sleep(0.5)
+                        print(f"\r{waiting['status']}: {waiting['progress']}%   ")
+                    else:
+                        waiting["status"] = "cancelled"
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            server.shutdown()
+            state.stop.set()
+            server.server_close()
+            state.temp.cleanup()
+            return 0
+    if not args.no_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        state.stop.set()
+        server.server_close()
+        state.temp.cleanup()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
