@@ -31,6 +31,13 @@ for target in $TARGETS; do
 
   GOOS=$os GOARCH=$arch go build -trimpath -buildvcs=false \
     -ldflags "-w -s -X main.version=$VERSION" -o "$dir/$bin" .
+  # run the build that suits this computer before packing it
+  if [ "$target" = "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" ]; then
+    got=$("$dir/$bin" --version)
+    [ "$got" = "loka $VERSION" ] || { echo "$name: --version printed '$got'" >&2; exit 1; }
+    "$dir/$bin" -h 2> /dev/null || { echo "$name: -h failed" >&2; exit 1; }
+    echo "$name: --version and -h work"
+  fi
   # shellcheck disable=SC2086
   cp $FILES "$dir/"
   # the same modes and dates whatever the umask and checkout time
