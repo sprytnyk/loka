@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sprytnyk/loka/internal/transfer"
 )
@@ -42,7 +44,7 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	// Stopping the link also stops downloads in progress.
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	defer context.AfterFunc(t.Context(), cancel)()
+	defer stopWriting(w, t.Context(), cancel)()
 
 	if t.SharesOneFile() {
 		serveFile(w, r.WithContext(ctx), t)
@@ -59,6 +61,31 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 		// Abort the response, so the download fails instead of ending
 		// with a broken archive that looks complete.
 		panic(http.ErrAbortHandler)
+	}
+}
+
+// stopWriting calls cancel when ctx ends, and also ends any write to w
+// then, so a download whose client has stopped reading can't keep the
+// handler waiting. Calling the returned func, before the handler returns,
+// stops it from touching w afterwards, when the connection may already be
+// serving another request.
+func stopWriting(w http.ResponseWriter, ctx context.Context, cancel func()) (stop func()) {
+	rc := http.NewResponseController(w)
+	var mu sync.Mutex
+	done := false
+	stopAfter := context.AfterFunc(ctx, func() {
+		cancel()
+		mu.Lock()
+		defer mu.Unlock()
+		if !done {
+			rc.SetWriteDeadline(time.Now())
+		}
+	})
+	return func() {
+		stopAfter()
+		mu.Lock()
+		defer mu.Unlock()
+		done = true
 	}
 }
 

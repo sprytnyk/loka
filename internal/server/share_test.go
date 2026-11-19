@@ -9,12 +9,14 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sprytnyk/loka/internal/transfer"
 	"github.com/sprytnyk/loka/internal/treetest"
@@ -231,5 +233,46 @@ func TestStoppingALinkEndsADownloadOfOneFile(t *testing.T) {
 	n, err := io.Copy(io.Discard, resp.Body)
 	if err == nil {
 		t.Fatalf("the download finished after the link stopped, %d more bytes", n)
+	}
+}
+
+// TestStoppingALinkEndsAStalledDownload stops a link while its client has
+// stopped reading, so the server is waiting to write. The download must
+// still end, and close the file.
+func TestStoppingALinkEndsAStalledDownload(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		paths func(dir string) []string
+	}{
+		{"one file", func(dir string) []string { return []string{filepath.Join(dir, "big")} }},
+		{"zip", func(dir string) []string { return []string{dir} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := New("receiver", "test")
+			ended := make(chan struct{}, 1)
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer func() { ended <- struct{}{} }()
+				s.Handler().ServeHTTP(w, r)
+			}))
+			t.Cleanup(ts.Close)
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "big"), make([]byte, 64<<20), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			link := addLink(t, s, tc.paths(dir)...)
+			resp := get(t, ts.URL+"/download/"+link.Token)
+			if _, err := io.ReadFull(resp.Body, make([]byte, 1)); err != nil {
+				t.Fatal(err)
+			}
+			// Let the connection's buffers fill, so the server waits on
+			// the write.
+			time.Sleep(300 * time.Millisecond)
+			link.Stop()
+			select {
+			case <-ended:
+			case <-time.After(5 * time.Second):
+				t.Fatal("the download still runs after the link stopped")
+			}
+		})
 	}
 }
