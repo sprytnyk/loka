@@ -357,7 +357,7 @@ class TransferTests(unittest.TestCase):
                 self.assertEqual(response.headers.get_content_charset(), "utf-8")
                 page = response.read().decode("utf-8")
 
-        self.assertTrue("Preparing ${item.label}…" in page, "Upload status is garbled")
+        self.assertTrue("Copying ${item.label}…" in page, "Upload status is garbled")
         self.assertTrue(
             " · ${transfer.progress}%" in page, "Transfer status is garbled"
         )
