@@ -51,7 +51,8 @@ To share with someone who does not have Loka, choose the items, enter your
 local address if needed, and select **Create link**. The link works until you
 stop sharing or stop Loka. A single file downloads directly, and an
 interrupted download can resume. Directories and multiple files download as a
-ZIP archive.
+ZIP archive. Each download has the current contents of what you shared. If a
+shared file or directory is removed or replaced, the link stops working.
 
 ## Command line
 

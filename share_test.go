@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -98,6 +100,78 @@ func TestLinkServesASingleFileAsItself(t *testing.T) {
 	body, _ = io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusPartialContent || string(body) != "world" {
 		t.Fatalf("resume answered %d %q", resp.StatusCode, body)
+	}
+}
+
+// zipNames downloads a ZIP link and returns the names inside it.
+func zipNames(t *testing.T, url string) []string {
+	t.Helper()
+	resp := get(t, url)
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("link answered %d %s", resp.StatusCode, body)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range zr.File {
+		names = append(names, f.Name)
+	}
+	return names
+}
+
+func TestLinkServesCurrentContents(t *testing.T) {
+	s, base := startServer(t)
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{"dir/a": "a", "file": "old"})
+	files, _ := newLink([]string{filepath.Join(root, "file")})
+	dir, _ := newLink([]string{filepath.Join(root, "dir")})
+	s.transfers.add(files)
+	s.transfers.add(dir)
+
+	writeTree(t, root, map[string]string{"dir/b": "b"})
+	if got := zipNames(t, base+"/download/"+dir.token); !slices.Equal(got, []string{"dir/", "dir/a", "dir/b"}) {
+		t.Fatalf("zip has %q", got)
+	}
+	f, err := os.OpenFile(filepath.Join(root, "file"), os.O_WRONLY|os.O_TRUNC, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("edited")
+	f.Close()
+	if body, _ := io.ReadAll(get(t, base+"/download/"+files.token).Body); string(body) != "edited" {
+		t.Fatalf("got %q", body)
+	}
+}
+
+func TestLinkRefusesReplacedItems(t *testing.T) {
+	s, base := startServer(t)
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{"dir/a": "a", "file": "old"})
+	file, _ := newLink([]string{filepath.Join(root, "file")})
+	dir, _ := newLink([]string{filepath.Join(root, "dir")})
+	s.transfers.add(file)
+	s.transfers.add(dir)
+
+	// Write the replacements first and move them into place, the way
+	// editors save, so they cannot reuse the old items' inode numbers.
+	writeTree(t, root, map[string]string{"new dir/a": "other", "new file": "other"})
+	for _, name := range []string{"file", "dir"} {
+		if err := os.RemoveAll(filepath.Join(root, name)); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(filepath.Join(root, "new "+name), filepath.Join(root, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, link := range []*Transfer{file, dir} {
+		resp := get(t, base+"/download/"+link.token)
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusNotFound || !strings.Contains(string(body), "no longer available") {
+			t.Fatalf("replaced %v answered %d %s", link.Items, resp.StatusCode, body)
+		}
 	}
 }
 

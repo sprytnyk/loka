@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 )
@@ -15,16 +16,55 @@ import (
 // shareArchiveName is the download name when a link serves several items.
 const shareArchiveName = "loka-share.zip"
 
+// errLinkGone means a shared item was removed or replaced.
+var errLinkGone = errors.New("The shared items are no longer available")
+
+// sharedItem is a path chosen for a link and what it was when the link was
+// made, so a download can tell when something else took its place.
+type sharedItem struct {
+	path string
+	info os.FileInfo
+}
+
+// sameAs reports whether info is still the item that was shared.
+func (it sharedItem) sameAs(info os.FileInfo) bool {
+	return os.SameFile(it.info, info) && info.Mode().Type() == it.info.Mode().Type()
+}
+
 // newLink makes a download link for the chosen paths.
 func newLink(paths []string) (*Transfer, error) {
-	entries, items, size, err := collect(paths)
+	_, items, size, err := collect(paths)
 	if err != nil {
 		return nil, err
 	}
 	t := newTransfer(outgoing, "Link", items, size, statusShared)
 	t.token = randomToken(24)
-	t.entries = entries
+	for _, p := range paths {
+		info, err := os.Lstat(p)
+		if err != nil {
+			return nil, err
+		}
+		t.shared = append(t.shared, sharedItem{filepath.Clean(p), info})
+	}
 	return t, nil
+}
+
+// sharedEntries lists what a link serves now, so each download has the
+// current contents of the shared directories.
+func sharedEntries(shared []sharedItem) ([]entry, error) {
+	paths := make([]string, len(shared))
+	for i, it := range shared {
+		info, err := os.Lstat(it.path)
+		if err != nil || !it.sameAs(info) {
+			return nil, errLinkGone
+		}
+		paths[i] = it.path
+	}
+	entries, _, _, err := collect(paths)
+	if err != nil {
+		return nil, errLinkGone
+	}
+	return entries, nil
 }
 
 func (s *server) share(w http.ResponseWriter, r *http.Request) {
@@ -57,33 +97,40 @@ func (s *server) download(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	defer context.AfterFunc(t.ctx, cancel)()
 
-	if len(t.entries) == 1 && !t.entries[0].dir {
-		serveFile(w, r.WithContext(ctx), t.entries[0])
+	if len(t.shared) == 1 && !t.shared[0].info.IsDir() {
+		serveFile(w, r.WithContext(ctx), t.shared[0])
+		return
+	}
+	entries, err := sharedEntries(t.shared)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", attachment(shareArchiveName))
-	if err := writeZip(ctx, w, t.entries); err != nil {
+	if err := writeZip(ctx, w, entries); err != nil {
 		// Abort the response, so the download fails instead of ending
 		// with a broken archive that looks complete.
 		panic(http.ErrAbortHandler)
 	}
 }
 
-func serveFile(w http.ResponseWriter, r *http.Request, e entry) {
-	f, err := os.Open(e.src)
+// serveFile serves the shared file as it is now, and only while it is
+// still the file that was shared.
+func serveFile(w http.ResponseWriter, r *http.Request, it sharedItem) {
+	f, err := os.Open(it.path)
 	if err != nil {
-		writeError(w, http.StatusNotFound, errors.New("The shared file is no longer available"))
+		writeError(w, http.StatusNotFound, errLinkGone)
 		return
 	}
 	defer f.Close()
 	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		writeError(w, http.StatusNotFound, errors.New("The shared file is no longer available"))
+	if err != nil || !it.sameAs(info) {
+		writeError(w, http.StatusNotFound, errLinkGone)
 		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", attachment(e.name))
+	w.Header().Set("Content-Disposition", attachment(filepath.Base(it.path)))
 	http.ServeContent(w, r, "", info.ModTime(), f)
 }
 
