@@ -269,7 +269,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 	defer s.Close()
 	served := make(chan error, 1)
 	go func() { served <- serveUntil(ctx, ln, s.Handler()) }()
-	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d. Press Ctrl+C to stop.\n", version, port)
+	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d (Ctrl+C to stop)\n", version, port)
 
 	answers := make(chan string)
 	go func() {

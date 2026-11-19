@@ -1,7 +1,7 @@
 # Loka
 
-Share files and directories with computers on the same local network. Loka is
-a single program with nothing else to install.
+Share files and directories with computers on your local network. Loka is one
+program with nothing else to install.
 
 ![Loka showing selected files, nearby devices, and transfer progress](docs/loka.png)
 
@@ -31,37 +31,43 @@ gpg --verify SHA256SUMS.asc SHA256SUMS && sha256sum --ignore-missing -c SHA256SU
 With Go installed, you can instead run
 `go install github.com/sprytnyk/loka@latest`.
 
-## Start
+## Send and receive
 
-Run `loka` on both computers. Loka opens in your browser.
+Run `loka` on both computers. It opens in your browser.
 
-Choose or drop files or a directory, then choose the receiving device. If it
-does not appear, enter its address and port. Some Wi-Fi networks block
-connections between devices. On Windows, allow Loka through the firewall when
-asked. On the receiver, choose an existing destination directory and accept the
-transfer. Loka remembers your destination until it stops. Several transfers can
-arrive at the same time, and each shows its speed while it runs.
+1. Add what to send: choose files or a directory, drop them on the page, or
+   enter a path.
+2. Select the receiving device. If it doesn't show up, enter its address and
+   port.
+3. On the receiver, choose an existing directory and accept.
 
-When you send or share dropped files, Loka keeps a temporary copy until it
-stops. **Choose files**, **Choose directory**, and **Add by path** let Loka read
-the originals. The pickers use zenity or kdialog on Linux, Finder on macOS, and
-the usual dialog on Windows. You can type the destination directory when
-receiving a transfer.
+Several transfers can arrive at once, and each shows its speed. Loka remembers
+the last destination until it stops.
 
-Loka puts incoming files in a hidden directory inside the destination and moves
-them into place when the transfer finishes, so nothing is overwritten and a
-failed transfer leaves nothing behind.
+The pickers use zenity or kdialog on Linux, Finder on macOS, and the usual
+dialog on Windows. Without one, drop files or enter paths instead.
+
+Dropped files are copied first, because the browser doesn't tell Loka where
+they are. Loka deletes the copies when it stops. Chosen files and paths are
+read where they are.
+
+Incoming files go to a hidden directory inside the destination and move into
+place when the transfer finishes. Nothing is overwritten, and a failed transfer
+leaves nothing behind.
+
+If the computers can't see each other, the Wi-Fi network may block connections
+between devices. On Windows, allow Loka through the firewall when asked.
 
 ## Download links
 
-Choose what to share and select **Create link**. Enter your local address if
-Loka cannot find it. The recipient can open the link in a browser while you're
-sharing.
+For someone without Loka, add what to share and select **Create link**. Enter
+your local address if Loka can't find it. The link works in any browser while
+you're sharing.
 
-Loka sends a single file as-is, and an interrupted download can resume. It
-builds a ZIP as you download a directory or multiple files. Each download reads
-the current contents. If a shared file or directory goes missing or gets
-replaced, the link stops working.
+A single file downloads as itself, and an interrupted download can resume.
+Directories and several files download as a ZIP that Loka builds during the
+download. Each download has the current contents. If a shared file or
+directory is deleted or replaced, the link stops working.
 
 ## Command line
 
@@ -72,21 +78,23 @@ loka send --to 192.0.2.10 /path/to/file /path/to/directory
 loka share --address 192.0.2.10 /path/to/file
 ```
 
-Use your receiver's address with `send`. For `share`, use your own address or
-omit `--address` to let Loka choose it. Press Ctrl+C to stop sharing. Leave the
-destination empty to decline an incoming transfer.
+`send` takes the receiver's address. `receive` asks where to put each
+transfer; leave the answer empty to decline. `share` prints a link that works
+until you press Ctrl+C. Without `--address`, it uses this computer's address.
 
-Run `loka -h` for all options and `loka --version` for the version. If the
-listening port is busy, use `--port 0` to pick a free port.
+Run `loka -h` for all options and `loka --version` for the version. If the port
+is busy, add `--port 0` to use a free one.
 
-Use Loka on networks you trust. Transfers are unencrypted, and anyone with the
-link can download while you're sharing. Restart interrupted transfers from the
-beginning. Loka leaves symbolic links out of the directories you choose, so
-choose the original files and directories instead.
+## Safety
+
+Transfers aren't encrypted, so use Loka only on networks you trust. Anyone with
+a link can download while you're sharing. An interrupted transfer between
+devices starts over. Loka skips symbolic links inside the directories you
+choose.
 
 ## Development
 
 Run `make check` for gofmt, go vet and the tests, and `make format` to format
-the code. `make build` builds `dist/loka` for this computer, and
-`make release` builds the release archives for every system into `dist/`. The
-release script checks `--version` and `-h` before it creates the archives.
+the code. `make build` builds `dist/loka` for this computer. `make release`
+builds the archives for every system into `dist/`, after checking that the
+build for this computer runs.
