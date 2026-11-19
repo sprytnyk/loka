@@ -3,40 +3,37 @@ package main
 import (
 	"errors"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
-// pickWithSystem shows the Finder picker through AppleScript.
-func pickWithSystem(folder bool) ([]string, error) {
-	script := []string{
-		`set picked to choose file with prompt "Choose files" with multiple selections allowed`,
-		`set out to ""`,
-		`repeat with f in picked`,
-		`set out to out & POSIX path of f & linefeed`,
-		`end repeat`,
-		`return out`,
+// pickWithSystem shows the Finder picker through JavaScript for
+// Automation. It brings the picker to the front and answers in JSON, so
+// any file name survives.
+func pickWithSystem(kind pickKind) ([]string, error) {
+	prompt := strconv.Quote(kind.title())
+	choose := `app.chooseFile({withPrompt: ` + prompt + `, multipleSelectionsAllowed: true})`
+	if kind != pickFiles {
+		choose = `[app.chooseFolder({withPrompt: ` + prompt + `})]`
 	}
-	if folder {
-		script = []string{`return POSIX path of (choose folder with prompt "Choose a directory")`}
-	}
-	var args []string
-	for _, line := range script {
-		args = append(args, "-e", line)
-	}
-	out, err := exec.Command("osascript", args...).Output()
+	script := `const app = Application.currentApplication();
+app.includeStandardAdditions = true;
+app.activate();
+JSON.stringify(` + choose + `.map(p => p.toString()));`
+	out, err := exec.Command("osascript", "-l", "JavaScript", "-e", script).Output()
 	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && strings.Contains(string(exitErr.Stderr), "-128") {
 		return nil, nil // cancelled
 	}
 	if err != nil {
 		return nil, err
 	}
-	paths := lines(string(out))
+	paths, err := decodePaths(out)
 	for i, p := range paths {
 		if len(p) > 1 {
-			paths[i] = strings.TrimSuffix(p, "/") // folders end with a slash
+			paths[i] = strings.TrimSuffix(p, "/")
 		}
 	}
-	return paths, nil
+	return paths, err
 }
 
 // openBrowser opens url in the default web browser.

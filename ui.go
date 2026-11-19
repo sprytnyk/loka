@@ -34,17 +34,22 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, body)
 }
 
-// pickPaths opens the system's picker for files or for a folder and
-// returns the chosen paths, or none when the person cancels.
+// pickPaths opens the system's picker for files, a directory or a
+// destination and returns the chosen paths, or none when the person
+// cancels.
 func (s *server) pickPaths(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Kind string `json:"kind"`
+		Kind pickKind `json:"kind"`
 	}
 	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	paths, err := s.pick(req.Kind == "folder")
+	if req.Kind != pickFiles && req.Kind != pickDirectory && req.Kind != pickDestination {
+		writeError(w, http.StatusBadRequest, errors.New("Choose files, a directory or a destination"))
+		return
+	}
+	paths, err := s.pick(req.Kind)
 	if err != nil {
 		if !errors.Is(err, errNoPicker) {
 			err = errors.Join(errNoPicker, err)

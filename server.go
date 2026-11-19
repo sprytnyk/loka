@@ -20,7 +20,7 @@ type server struct {
 	version   string
 	key       string // proves a request comes from this device's page
 	localName func(string) string
-	pick      func(folder bool) ([]string, error)
+	pick      func(kind pickKind) ([]string, error)
 	temp      string // holds files dropped on the page, made when needed
 
 	transfers   registry

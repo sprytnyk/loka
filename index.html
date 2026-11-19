@@ -40,7 +40,7 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 <div id="message" role="status"></div>
 <div class="layout"><div class="column">
 <section class="card choose-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><div><h2>Choose files</h2><p>Start by adding what you want to share.</p></div></div>
-<div class="drop" id="drop"><span class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></span><p class="drop-title">Drop files or a directory here</p><p class="drop-help">Or choose what to share from your device</p><div class="row"><button class="secondary" id="pick-files">Choose files</button><button class="secondary" id="pick-folder">Choose directory</button></div><p id="selection">Nothing selected</p></div>
+<div class="drop" id="drop"><span class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></span><p class="drop-title">Drop files or a directory here</p><p class="drop-help">Or choose what to share from your device</p><div class="row"><button class="secondary" id="pick-files">Choose files</button><button class="secondary" id="pick-directory">Choose directory</button></div><p id="selection">Nothing selected</p></div>
 <label class="field-label" for="paths">Add by path</label><div class="row action-row"><input id="paths" placeholder="File or directory path"><button class="secondary" id="add-path">Add path</button></div><ul id="selected"></ul></section>
 <section class="card link-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></svg></span><div><h2>Share a download link</h2><p>For someone who doesn't have Loka. The link works while Loka is running.</p></div></div><label class="field-label" for="link-address">Your local address</label><div class="row action-row"><input id="link-address" placeholder="Your local address"><button id="share">Create link</button></div><div id="links"></div></section>
 </div><div class="column">
@@ -104,7 +104,7 @@ async function pick(kind) {
   const result = await api('/api/pick', {kind});
   return result.paths;
 }
-for (const [id, kind] of [['pick-files', 'files'], ['pick-folder', 'folder']]) {
+for (const [id, kind] of [['pick-files', 'files'], ['pick-directory', 'directory']]) {
   $(id).onclick = e => run(e.target, async () => {
     for (const path of await pick(kind)) selected.push({path, label: path});
     updateSelection();
@@ -186,7 +186,7 @@ $('peers').onclick=e=>{let button=e.target.closest('button[data-host]');if(butto
 $('transfers').onclick=e=>{let button=e.target.closest('button[data-cancel]');if(button)run(button,async()=>{await api('/api/cancel',{id:button.dataset.cancel});await refresh()})};
 $('incoming').addEventListener('cancel',e=>e.preventDefault());
 async function incomingAction(button,action){button.disabled=true;$('incoming-error').textContent='';try{await action();await refresh()}catch(e){$('incoming-error').textContent=e.message}finally{button.disabled=false}}
-$('choose-destination').onclick=e=>incomingAction(e.target,async()=>{let [destination]=await pick('folder');if(destination)$('destination').value=destination});
+$('choose-destination').onclick=e=>incomingAction(e.target,async()=>{let [destination]=await pick('destination');if(destination)$('destination').value=destination});
 $('accept-incoming').onclick=e=>incomingAction(e.target,async()=>{let destination=$('destination').value.trim();if(!destination)throw Error('Choose or enter a destination directory.');await api('/api/accept',{id:incomingId,destination})});
 $('decline-incoming').onclick=e=>incomingAction(e.target,()=>api('/api/cancel',{id:incomingId}));
 $('links').onclick=e=>{let button=e.target.closest('button[data-unshare]');if(button)run(button,async()=>{await api('/api/cancel',{id:button.dataset.unshare});button.closest('.item').remove()})};

@@ -14,6 +14,22 @@ import (
 	"testing"
 )
 
+func TestDecodePaths(t *testing.T) {
+	a := filepath.Join(t.TempDir(), "line\nbreak ")
+	out, _ := json.Marshal([]string{a})
+	if got, err := decodePaths(append(out, "\r\n"...)); err != nil || !slices.Equal(got, []string{a}) {
+		t.Fatalf("got %q %v", got, err)
+	}
+	if got, err := decodePaths([]byte("[]")); err != nil || len(got) != 0 {
+		t.Fatalf("empty answer gave %q %v", got, err)
+	}
+	for _, bad := range []string{`["relative"]`, "not json"} {
+		if _, err := decodePaths([]byte(bad)); err == nil {
+			t.Fatalf("accepted %s", bad)
+		}
+	}
+}
+
 func TestPageCarriesKeyAndVersion(t *testing.T) {
 	s, base := startServer(t)
 	s.version = "1.2.3"
@@ -92,29 +108,34 @@ func TestUploadKeepsEmptyDirectoriesAndDoesNotOverwrite(t *testing.T) {
 
 func TestPickReturnsChosenPaths(t *testing.T) {
 	s, base := startServer(t)
-	var asked []bool
-	s.pick = func(folder bool) ([]string, error) {
-		asked = append(asked, folder)
-		if folder {
+	var asked []pickKind
+	s.pick = func(kind pickKind) ([]string, error) {
+		asked = append(asked, kind)
+		if kind == pickDirectory {
 			return []string{"/home/me/Music"}, nil
 		}
 		return nil, nil
 	}
 	var reply struct{ Paths []string }
-	api(t, s, base, "/api/pick", map[string]string{"kind": "folder"}, &reply)
+	api(t, s, base, "/api/pick", map[string]string{"kind": "directory"}, &reply)
 	if !slices.Equal(reply.Paths, []string{"/home/me/Music"}) {
-		t.Fatalf("folder pick returned %v", reply.Paths)
+		t.Fatalf("directory pick returned %v", reply.Paths)
 	}
-	api(t, s, base, "/api/pick", map[string]string{"kind": "files"}, &reply)
-	if reply.Paths == nil || len(reply.Paths) != 0 {
-		t.Fatalf("a cancelled pick returned %#v", reply.Paths)
+	for _, kind := range []string{"files", "destination"} {
+		api(t, s, base, "/api/pick", map[string]string{"kind": kind}, &reply)
+		if reply.Paths == nil || len(reply.Paths) != 0 {
+			t.Fatalf("a cancelled pick returned %#v", reply.Paths)
+		}
 	}
-	s.pick = func(bool) ([]string, error) { return nil, errNoPicker }
 	var failure struct{ Error string }
+	if code := api(t, s, base, "/api/pick", map[string]string{"kind": "folder"}, &failure); code != http.StatusBadRequest {
+		t.Fatalf("an unknown kind answered %d", code)
+	}
+	s.pick = func(pickKind) ([]string, error) { return nil, errNoPicker }
 	if code := api(t, s, base, "/api/pick", map[string]string{"kind": "files"}, &failure); code != http.StatusBadRequest || !strings.Contains(failure.Error, "Enter a path") {
 		t.Fatalf("missing picker answered %d %q", code, failure.Error)
 	}
-	if !slices.Equal(asked, []bool{true, false}) {
+	if !slices.Equal(asked, []pickKind{pickDirectory, pickFiles, pickDestination}) {
 		t.Fatalf("asked for %v", asked)
 	}
 }
