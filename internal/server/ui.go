@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	_ "embed"
@@ -20,7 +20,7 @@ var page string
 
 // index serves the page, with the key it uses for the API, only to this
 // device.
-func (s *server) index(w http.ResponseWriter, r *http.Request) {
+func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	if !fromThisDevice(r) {
 		writeError(w, http.StatusForbidden, errors.New("Local access only"))
 		return
@@ -38,7 +38,7 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) {
 // pickPaths opens the system's picker for files, a directory or a
 // destination and returns the chosen paths, or none when the person
 // cancels.
-func (s *server) pickPaths(w http.ResponseWriter, r *http.Request) {
+func (s *Server) pickPaths(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Kind desktop.Kind `json:"kind"`
 	}
@@ -68,7 +68,7 @@ func (s *server) pickPaths(w http.ResponseWriter, r *http.Request) {
 // does not tell the page where dropped files live, so they are copied
 // into this run's temporary directory, grouped by session. The reply names
 // the top-level item to send.
-func (s *server) upload(w http.ResponseWriter, r *http.Request) {
+func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	session := r.Header.Get("X-Upload-Session")
 	name, err := url.PathUnescape(r.Header.Get("X-File-Path"))
 	parts, perr := transfer.SplitName(name)
@@ -97,7 +97,7 @@ func (s *server) upload(w http.ResponseWriter, r *http.Request) {
 }
 
 // store writes a new file, refusing to replace one.
-func (s *server) store(target string, body io.Reader) error {
+func (s *Server) store(target string, body io.Reader) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 		return err
 	}

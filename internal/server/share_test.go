@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"archive/zip"
@@ -89,7 +89,7 @@ func TestLinkServesASingleFileAsItself(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.transfers.Add(link)
+	s.Transfers.Add(link)
 
 	resp := get(t, base+"/download/"+link.Token)
 	body, _ := io.ReadAll(resp.Body)
@@ -131,8 +131,8 @@ func TestLinkServesCurrentContents(t *testing.T) {
 	treetest.Write(t, root, map[string]string{"dir/a": "a", "file": "old"})
 	files, _ := transfer.NewLink([]string{filepath.Join(root, "file")})
 	dir, _ := transfer.NewLink([]string{filepath.Join(root, "dir")})
-	s.transfers.Add(files)
-	s.transfers.Add(dir)
+	s.Transfers.Add(files)
+	s.Transfers.Add(dir)
 
 	treetest.Write(t, root, map[string]string{"dir/b": "b"})
 	if got := zipNames(t, base+"/download/"+dir.Token); !slices.Equal(got, []string{"dir/", "dir/a", "dir/b"}) {
@@ -155,8 +155,8 @@ func TestLinkRefusesReplacedItems(t *testing.T) {
 	treetest.Write(t, root, map[string]string{"dir/a": "a", "file": "old"})
 	file, _ := transfer.NewLink([]string{filepath.Join(root, "file")})
 	dir, _ := transfer.NewLink([]string{filepath.Join(root, "dir")})
-	s.transfers.Add(file)
-	s.transfers.Add(dir)
+	s.Transfers.Add(file)
+	s.Transfers.Add(dir)
 
 	// Write the replacements first and move them into place, the way
 	// editors save, so they cannot reuse the old items' inode numbers.
@@ -183,7 +183,7 @@ func TestStoppedLinkExpires(t *testing.T) {
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"file": "x"})
 	link, _ := transfer.NewLink([]string{filepath.Join(root, "file")})
-	s.transfers.Add(link)
+	s.Transfers.Add(link)
 	api(t, s, base, "/api/cancel", map[string]string{"id": link.ID}, nil)
 	if resp := get(t, base+"/download/"+link.Token); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("stopped link answered %d", resp.StatusCode)

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 // shareArchiveName is the download name when a link serves several items.
 const shareArchiveName = "loka-share.zip"
 
-func (s *server) share(w http.ResponseWriter, r *http.Request) {
+func (s *Server) share(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Paths []string `json:"paths"`
 	}
@@ -26,14 +26,14 @@ func (s *server) share(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	s.transfers.Add(t)
+	s.Transfers.Add(t)
 	writeJSON(w, http.StatusOK, map[string]string{"id": t.ID, "token": t.Token})
 }
 
 // download serves a link: a single file as itself, so browsers can resume
 // it, and anything else as a ZIP archive built while it downloads.
-func (s *server) download(w http.ResponseWriter, r *http.Request) {
-	t := s.transfers.Link(r.PathValue("token"))
+func (s *Server) download(w http.ResponseWriter, r *http.Request) {
+	t := s.Transfers.Link(r.PathValue("token"))
 	if t == nil || t.Status() != transfer.Shared {
 		writeError(w, http.StatusNotFound, errors.New("This link has expired"))
 		return

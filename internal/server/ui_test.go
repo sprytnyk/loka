@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -39,7 +39,7 @@ func TestPageCarriesKeyAndVersion(t *testing.T) {
 	}
 }
 
-func uploadItem(t *testing.T, s *server, base, session, path, body string, dir bool) (string, int) {
+func uploadItem(t *testing.T, s *Server, base, session, path, body string, dir bool) (string, int) {
 	t.Helper()
 	req, _ := http.NewRequest(http.MethodPost, base+"/api/upload", bytes.NewBufferString(body))
 	req.Header.Set("X-Loka-Key", s.key)
@@ -60,7 +60,7 @@ func uploadItem(t *testing.T, s *server, base, session, path, body string, dir b
 
 func TestUploadKeepsEmptyDirectoriesAndDoesNotOverwrite(t *testing.T) {
 	s, base := startServer(t)
-	t.Cleanup(s.close)
+	t.Cleanup(s.Close)
 	staged, code := uploadItem(t, s, base, "abc123", "parent/empty", "", true)
 	if code != http.StatusOK {
 		t.Fatalf("directory upload answered %d", code)
@@ -86,7 +86,7 @@ func TestUploadKeepsEmptyDirectoriesAndDoesNotOverwrite(t *testing.T) {
 	if _, code := uploadItem(t, s, base, "../x", "file", "x", false); code != http.StatusBadRequest {
 		t.Errorf("a bad session answered %d", code)
 	}
-	s.close()
+	s.Close()
 	if _, err := os.Stat(s.temp); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("closing kept the uploaded files")
 	}

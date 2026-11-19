@@ -14,8 +14,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
-	"github.com/sprytnyk/loka/internal/transfer"
 	"github.com/sprytnyk/loka/internal/treetest"
 )
 
@@ -41,12 +41,24 @@ func (o *output) String() string {
 func (o *output) wait(t *testing.T, pattern string) []string {
 	t.Helper()
 	re := regexp.MustCompile(pattern)
-	var match []string
-	waitFor(t, "output matching "+pattern, func() bool {
-		match = re.FindStringSubmatch(o.String())
-		return match != nil
-	})
-	return match
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if match := re.FindStringSubmatch(o.String()); match != nil {
+			return match
+		}
+	}
+	t.Fatalf("timed out waiting for output matching %s, got %q", pattern, o.String())
+	return nil
+}
+
+// get fetches url and returns the response, closed when the test ends.
+func get(t *testing.T, url string) *http.Response {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	return resp
 }
 
 // runLoka runs the command line in the background and returns its output,
@@ -141,48 +153,29 @@ func TestServeCommandServesThePage(t *testing.T) {
 	}
 }
 
-func TestSendCommand(t *testing.T) {
-	receiver, receiverURL := startServer(t)
-	host, port := hostPort(t, receiverURL)
-	source, destination := t.TempDir(), t.TempDir()
-	treetest.Write(t, source, map[string]string{"dir/a.txt": "a", "dir/sub/b.txt": "b"})
-
-	out, _, code := runLoka(t, nil, "send", filepath.Join(source, "dir"), "--to", host, "--peer-port", strconv.Itoa(port))
-	in := waitForIncoming(t, receiver)
-	api(t, receiver, receiverURL, "/api/accept", map[string]string{"id": in.ID, "destination": destination}, nil)
-	if c := <-code; c != 0 {
-		t.Fatalf("exit code %d, output %q", c, out.String())
-	}
-	if !strings.Contains(out.String(), "complete: 100%") {
-		t.Fatalf("output %q", out.String())
-	}
-	treetest.Same(t, treetest.Read(t, destination), treetest.Read(t, source))
-}
-
-func TestReceiveCommand(t *testing.T) {
+// TestSendAndReceiveCommands sends a directory from loka send to loka
+// receive, answering the receiver's prompt the way a person would.
+func TestSendAndReceiveCommands(t *testing.T) {
 	stdin, answer := io.Pipe()
 	defer answer.Close()
-	out, stop, code := runLoka(t, stdin, "receive", "--port", "0")
-	port, _ := strconv.Atoi(out.wait(t, `on port (\d+)`)[1])
+	received, stopReceiving, receiveCode := runLoka(t, stdin, "receive", "--port", "0")
+	port := received.wait(t, `on port (\d+)`)[1]
 
 	source, destination := t.TempDir(), t.TempDir()
-	treetest.Write(t, source, map[string]string{"song.mp3": "la la"})
-	entries, items, size, _ := transfer.Collect([]string{filepath.Join(source, "song.mp3")})
-	sent := transfer.New(transfer.Outgoing, "127.0.0.1", items, size, transfer.Waiting)
-	go func() { sent.Finish(sendTo(sent, entries, "laptop", "127.0.0.1", port)) }()
+	treetest.Write(t, source, map[string]string{"dir/a.txt": "a", "dir/sub/b.txt": "b"})
+	sent, _, sendCode := runLoka(t, nil, "send", filepath.Join(source, "dir"), "--to", "127.0.0.1", "--peer-port", port)
 
-	out.wait(t, `laptop wants to send: song\.mp3\nDestination directory`)
+	received.wait(t, `wants to send: dir\nDestination directory`)
 	io.WriteString(answer, filepath.Join(destination, "missing")+"\n")
-	out.wait(t, `must be an existing directory\nDestination directory`)
+	received.wait(t, `must be an existing directory\nDestination directory`)
 	io.WriteString(answer, destination+"\n")
-	if v := waitForEnd(t, sent); v.Status != transfer.Complete {
-		t.Fatalf("sender ended %+v", v)
+	if c := <-sendCode; c != 0 || !strings.Contains(sent.String(), "complete: 100%") {
+		t.Fatalf("send exited %d, output %q", c, sent.String())
 	}
-	if data, _ := os.ReadFile(filepath.Join(destination, "song.mp3")); string(data) != "la la" {
-		t.Fatalf("got %q", data)
-	}
-	stop()
-	if c := <-code; c != 0 {
-		t.Fatalf("exit code %d, output %q", c, out.String())
+	treetest.Same(t, treetest.Read(t, destination), treetest.Read(t, source))
+
+	stopReceiving()
+	if c := <-receiveCode; c != 0 {
+		t.Fatalf("receive exited %d, output %q", c, received.String())
 	}
 }

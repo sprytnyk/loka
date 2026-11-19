@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -21,10 +21,10 @@ import (
 // pollEvery is how often a sender asks whether the receiver has answered.
 var pollEvery = time.Second
 
-// sendTo offers entries to the device at host and port, waits for it to
+// SendTo offers entries to the device at host and port, waits for it to
 // accept, then streams them. It returns why the transfer ended, if not
 // complete.
-func sendTo(t *transfer.Transfer, entries []transfer.Entry, from, host string, port int) error {
+func SendTo(t *transfer.Transfer, entries []transfer.Entry, from, host string, port int) error {
 	base := "http://" + net.JoinHostPort(host, strconv.Itoa(port))
 	var reply offerReply
 	o := offer{Name: from, Items: t.Items[:min(len(t.Items), transfer.MaxOfferItems)], Size: t.Size}

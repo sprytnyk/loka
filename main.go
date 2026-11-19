@@ -22,6 +22,7 @@ import (
 
 	"github.com/sprytnyk/loka/internal/desktop"
 	"github.com/sprytnyk/loka/internal/network"
+	"github.com/sprytnyk/loka/internal/server"
 	"github.com/sprytnyk/loka/internal/transfer"
 )
 
@@ -196,15 +197,16 @@ func serveUntil(ctx context.Context, ln net.Listener, handler http.Handler) erro
 }
 
 // startDevice runs the server with discovery, as serve and receive do.
-func startDevice(ctx context.Context, port int) (*server, net.Listener, int, error) {
+func startDevice(ctx context.Context, port int) (*server.Server, net.Listener, int, error) {
 	ln, port, err := listenOn(port)
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	s := newServer(hostname(), version)
-	s.devices = network.New(network.Announcement{ID: transfer.RandomToken(16), Name: s.name, Port: port})
-	go s.devices.Listen(ctx)
-	go s.devices.Announce(ctx)
+	name := hostname()
+	s := server.New(name, version)
+	s.Devices = network.New(network.Announcement{ID: transfer.RandomToken(16), Name: name, Port: port})
+	go s.Devices.Listen(ctx)
+	go s.Devices.Announce(ctx)
 	return s, ln, port, nil
 }
 
@@ -213,7 +215,7 @@ func serve(ctx context.Context, o options, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer s.close()
+	defer s.Close()
 	url := fmt.Sprintf("http://127.0.0.1:%d/", port)
 	fmt.Fprintf(stdout, "Loka %s is running at %s (Ctrl+C to stop)\n", version, url)
 	if !o.noBrowser {
@@ -221,7 +223,7 @@ func serve(ctx context.Context, o options, stdout io.Writer) error {
 			fmt.Fprintf(stdout, "Open %s in your browser.\n", url)
 		}
 	}
-	return serveUntil(ctx, ln, s.handler())
+	return serveUntil(ctx, ln, s.Handler())
 }
 
 func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
@@ -230,7 +232,7 @@ func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
 		return err
 	}
 	t := transfer.New(transfer.Outgoing, o.to, items, size, transfer.Waiting)
-	go func() { t.Finish(sendTo(t, entries, hostname(), o.to, o.peerPort)) }()
+	go func() { t.Finish(server.SendTo(t, entries, hostname(), o.to, o.peerPort)) }()
 	stop := context.AfterFunc(ctx, t.Stop)
 	defer stop()
 	v := follow(t, stdout)
@@ -264,9 +266,9 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 	if err != nil {
 		return err
 	}
-	defer s.close()
+	defer s.Close()
 	served := make(chan error, 1)
-	go func() { served <- serveUntil(ctx, ln, s.handler()) }()
+	go func() { served <- serveUntil(ctx, ln, s.Handler()) }()
 	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d. Press Ctrl+C to stop.\n", version, port)
 
 	answers := make(chan string)
@@ -307,24 +309,23 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 				fmt.Fprintln(stdout, "Declined.")
 				break
 			}
-			destination, err := existingDir(strings.TrimSpace(answer))
+			destination, err := server.ExistingDir(strings.TrimSpace(answer))
 			if err != nil {
 				fmt.Fprintln(stdout, err)
 				continue
 			}
-			if !t.Accept(destination) {
+			if !s.Accept(t, destination) {
 				fmt.Fprintln(stdout, "The sender cancelled.")
 				break
 			}
-			s.destination.Store(&destination)
 			follow(t, stdout)
 			break
 		}
 	}
 }
 
-func firstWaiting(s *server) *transfer.Transfer {
-	for _, t := range s.transfers.All() {
+func firstWaiting(s *server.Server) *transfer.Transfer {
+	for _, t := range s.Transfers.All() {
 		if t.Direction == transfer.Incoming && t.Status() == transfer.Waiting {
 			return t
 		}
@@ -367,8 +368,8 @@ func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	s := newServer(hostname(), version)
-	s.transfers.Add(link)
+	s := server.New(hostname(), version)
+	s.Transfers.Add(link)
 	fmt.Fprintf(stdout, "http://%s/download/%s\n", net.JoinHostPort(address, strconv.Itoa(port)), link.Token)
-	return serveUntil(ctx, ln, s.handler())
+	return serveUntil(ctx, ln, s.Handler())
 }
