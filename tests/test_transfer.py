@@ -24,6 +24,7 @@ from loka.__main__ import (
     order_local_addresses,
     outgoing,
     request,
+    transfer_progress,
 )
 from loka.transfers import (
     MANIFEST_LENGTH,
@@ -107,6 +108,30 @@ class TransferTests(unittest.TestCase):
         if self.state:
             self.state.temp.cleanup()
         self.temp.cleanup()
+
+    def test_transfer_speed_uses_recent_bytes_and_expires_during_a_stall(self):
+        self.state = State(0)
+        entry = self.state.transfer(size=1_000_000, status="waiting")
+        with patch("loka.__main__.time.monotonic", return_value=10) as clock:
+            self.assertIsNone(self.state.public(entry)["speed_mbps"])
+            entry["status"] = "sending"
+            advance = transfer_progress(entry)
+            clock.return_value = 10.25
+            advance(125_000)
+            clock.return_value = 10.5
+            advance(125_000)
+            snapshot = self.state.public(entry)
+            self.assertEqual(snapshot["progress"], 25)
+            self.assertEqual(snapshot["speed_mbps"], 4.0)
+            self.assertNotIn("speed_sample", snapshot)
+
+            clock.return_value = 11.5
+            advance(125_000)
+            self.assertEqual(self.state.public(entry)["speed_mbps"], 1.0)
+            clock.return_value = 13.5
+            self.assertEqual(self.state.public(entry)["speed_mbps"], 0.0)
+            entry["status"] = "complete"
+            self.assertIsNone(self.state.public(entry)["speed_mbps"])
 
     def test_send_after_receiver_accepts_and_preserve_existing_file(self):
         self.start_server()

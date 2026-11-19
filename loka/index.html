@@ -67,6 +67,7 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 </dialog>
 <script>
 const key='__LOKA_KEY__';
+const activeTransferStatuses = ['waiting', 'accepted', 'receiving', 'sending', 'preparing'];
 let selected=[], addressEdited=false, incomingId=null, pendingSelections=new Map();
 let renderedPeers;
 let actionMessage = '', connectionMessage = '';
@@ -250,8 +251,9 @@ function renderTransfers(transfers) {
     previousCard = card;
     cards.delete(transfer.id);
     const waiting = transfer.direction === 'incoming' && transfer.status === 'waiting';
-    const active = ['waiting', 'accepted', 'receiving', 'sending', 'preparing'].includes(transfer.status);
-    card.querySelector('.transfer-status').textContent = `${transfer.status} · ${transfer.progress}%`;
+    const active = activeTransferStatuses.includes(transfer.status);
+    const speed = typeof transfer.speed_mbps === 'number' ? ` · ${transfer.speed_mbps.toFixed(1)} Mbps` : '';
+    card.querySelector('.transfer-status').textContent = `${transfer.status} · ${transfer.progress}%${speed}`;
     const error = card.querySelector('.notice');
     error.textContent = transfer.error || '';
     error.hidden = !transfer.error;
@@ -303,20 +305,26 @@ async function refresh() {
     const url = `http://${address}:${location.port}/download/${transfer.token}`;
     return `<div class="item"><a href="${escapeHtml(url)}">${escapeHtml(url)}</a><div><button class="secondary" data-unshare="${transfer.token}">Stop sharing</button></div></div>`;
   }).join('');
+  return data.transfers.some(transfer => activeTransferStatuses.includes(transfer.status));
 }
 async function poll() {
+  let active = false;
   try {
-    await refresh();
+    active = await refresh();
     connectionMessage = '';
   } catch (error) {
     connectionMessage = error.message;
   }
   renderMessage();
+  return active;
+}
+async function pollPeriodically() {
+  const active = await poll();
+  setTimeout(pollPeriodically, active ? 1000 : 3000);
 }
 $('link-address').oninput=()=>{
   addressEdited = true;
   poll();
 };
-poll();
-setInterval(poll, 3000);
+pollPeriodically();
 </script></body></html>

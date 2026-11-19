@@ -57,16 +57,43 @@ def request(host, port, method, path, data=None, headers=None, timeout=10):
 def transfer_progress(entry):
     total = entry["size"]
     copied = 0
+    sampled_bytes = 0
+    sampled_at = time.monotonic()
 
     def advance(size):
-        nonlocal copied
+        nonlocal copied, sampled_bytes, sampled_at
         if entry["cancel"].is_set():
             raise RuntimeError("Cancelled")
+        if not size:
+            return
         copied += size
         if total:
             entry["progress"] = copied * 100 // total
+        now = time.monotonic()
+        elapsed = now - sampled_at
+        if elapsed >= 0.5:
+            mbps = (copied - sampled_bytes) * 8 / (elapsed * 1_000_000)
+            entry["speed_sample"] = (mbps, now)
+            sampled_bytes = copied
+            sampled_at = now
 
     return advance
+
+
+def transfer_speed(entry):
+    if entry["status"] not in ("sending", "receiving"):
+        return None
+    speed, sampled_at = entry["speed_sample"]
+    return speed if time.monotonic() - sampled_at < 2 else 0.0
+
+
+def print_transfer_progress(entry, *, end="\n"):
+    entry = entry.copy()
+    label = f"{entry['status']}: {entry['progress']}%"
+    speed = transfer_speed(entry)
+    if speed is not None:
+        label += f" at {speed:.1f} Mbps"
+    print(f"\r{label:40}", end=end, flush=True)
 
 
 class ZipResponse:
@@ -109,7 +136,11 @@ class State:
 
     def transfer(self, **fields):
         entry = dict(
-            id=uuid.uuid4().hex, progress=0, cancel=threading.Event(), **fields
+            id=uuid.uuid4().hex,
+            progress=0,
+            speed_sample=(0.0, 0.0),
+            cancel=threading.Event(),
+            **fields,
         )
         entry.setdefault("status", "preparing")
         with self.lock:
@@ -117,11 +148,12 @@ class State:
         return entry
 
     def public(self, entry):
-        return {
-            key: value
-            for key, value in entry.items()
-            if key not in ("cancel", "secret")
-        }
+        result = entry.copy()
+        result.pop("cancel")
+        result.pop("secret", None)
+        result["speed_mbps"] = transfer_speed(result)
+        result.pop("speed_sample")
+        return result
 
     def discover(self):
         threading.Thread(target=self._listen, daemon=True).start()
@@ -566,8 +598,8 @@ def outgoing(state, entry, paths, peer):
         members = selection_members(sources, entry["cancel"])
         manifest, size = stream_manifest(members)
         entry["size"] = size
-        advance = transfer_progress(entry)
-        advance(0)
+        if entry["cancel"].is_set():
+            raise RuntimeError("Cancelled")
         host, port = peer["host"], int(peer.get("port", PORT))
         offer_details = {
             "name": state.name,
@@ -596,6 +628,7 @@ def outgoing(state, entry, paths, peer):
             if status != "waiting":
                 raise RuntimeError("Receiver declined or cancelled")
 
+        advance = transfer_progress(entry)
         advance(0)
         entry["status"] = "sending"
         with contextlib.closing(
@@ -847,14 +880,12 @@ def main():
         thread.start()
         try:
             while thread.is_alive():
-                print(
-                    f"\r{entry['status']}: {entry['progress']}%   ", end="", flush=True
-                )
+                print_transfer_progress(entry, end="")
                 thread.join(0.5)
         except KeyboardInterrupt:
             entry["cancel"].set()
             thread.join()
-        print(f"\r{entry['status']}: {entry['progress']}%   ")
+        print_transfer_progress(entry)
         if entry.get("error"):
             print(entry["error"])
         state.temp.cleanup()
@@ -952,13 +983,9 @@ def main():
                         waiting["destination"] = str(target)
                         waiting["status"] = "accepted"
                     while waiting["status"] in ("accepted", "receiving"):
-                        print(
-                            f"\r{waiting['status']}: {waiting['progress']}%   ",
-                            end="",
-                            flush=True,
-                        )
+                        print_transfer_progress(waiting, end="")
                         time.sleep(0.5)
-                    print(f"\r{waiting['status']}: {waiting['progress']}%   ")
+                    print_transfer_progress(waiting)
                 time.sleep(0.5)
         except KeyboardInterrupt:
             server.shutdown()
