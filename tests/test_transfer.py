@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import quote, urlsplit
 
+from loka import pickers
 from loka.__main__ import (
     Handler,
     Server,
@@ -321,6 +322,9 @@ class TransferTests(unittest.TestCase):
         self.assertTrue(
             " · ${transfer.progress}%" in page, "Transfer status is garbled"
         )
+        self.assertEqual(page.count(">Choose files</button>"), 1)
+        self.assertEqual(page.count(">Choose directory</button>"), 1)
+        self.assertNotIn("Use browser picker", page)
 
     def test_archive_cannot_escape_destination(self):
         archive = self.root / "bad.zip"
@@ -379,14 +383,17 @@ class TransferTests(unittest.TestCase):
     def test_linux_destination_picker_uses_desktop_dialog(self):
         self.start_server()
         headers = {"Content-Type": "application/json", "X-Loka-Key": self.state.ui_key}
-        result = subprocess.CompletedProcess([], 0, stdout="/tmp/example\n", stderr="")
+        destination = self.root / "destination "
+        result = subprocess.CompletedProcess(
+            [], 0, stdout=os.fsencode(destination) + b"\n", stderr=b""
+        )
         with (
-            patch("loka.__main__.sys.platform", "linux"),
+            patch.object(pickers.sys, "platform", "linux"),
             patch(
-                "loka.__main__.shutil.which",
+                "loka.pickers.shutil.which",
                 side_effect=lambda name: name if name == "zenity" else None,
             ),
-            patch("loka.__main__.subprocess.run", return_value=result) as run,
+            patch("loka.pickers.subprocess.run", return_value=result) as run,
         ):
             response = request(
                 "127.0.0.1",
@@ -396,8 +403,35 @@ class TransferTests(unittest.TestCase):
                 "{}",
                 headers,
             )
-        self.assertEqual(response["destination"], "/tmp/example")
+        self.assertEqual(response["destination"], str(destination))
         self.assertEqual(run.call_args.args[0][0], "zenity")
+
+    def test_native_file_picker_returns_local_paths_only_to_the_page(self):
+        self.start_server()
+        paths = [str(self.root / "résumé.txt"), str(self.root / "a second file.txt")]
+        result = subprocess.CompletedProcess(
+            [], 0, stdout=os.fsencode("\x1f".join(paths)) + b"\n", stderr=b""
+        )
+        port = self.server.server_port
+        body = json.dumps({"kind": "files"})
+        with (
+            patch.object(pickers.sys, "platform", "linux"),
+            patch("loka.pickers.shutil.which", return_value="zenity"),
+            patch("loka.pickers.subprocess.run", return_value=result) as run,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Local access only"):
+                request("127.0.0.1", port, "POST", "/api/choose-paths", body)
+            run.assert_not_called()
+            response = request(
+                "127.0.0.1",
+                port,
+                "POST",
+                "/api/choose-paths",
+                body,
+                headers={"X-Loka-Key": self.state.ui_key},
+            )
+        self.assertIn("--multiple", run.call_args.args[0])
+        self.assertEqual(response, {"paths": paths})
 
     def test_cli_share_serves_file_until_stopped(self):
         source = self.root / "shared.txt"

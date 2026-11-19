@@ -17,9 +17,10 @@ import threading
 import time
 import urllib.parse
 import uuid
-import webbrowser
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
+
+from loka.pickers import choose_paths, open_browser
 
 PORT = 45873
 GROUP = "239.255.45.87"
@@ -155,48 +156,6 @@ def make_archive(paths, target, cancel=None):
                         archive_file.write(child, f"{name}/{relative}")
             else:
                 archive_file.write(path, name)
-
-
-def choose_destination():
-    if sys.platform.startswith("linux"):
-        for executable, arguments in (
-            (
-                "zenity",
-                ["--file-selection", "--directory", "--title=Choose destination"],
-            ),
-            ("kdialog", ["--getexistingdirectory"]),
-        ):
-            if not shutil.which(executable):
-                continue
-            try:
-                result = subprocess.run(
-                    [executable, *arguments],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-            except OSError:
-                continue
-            if result.returncode == 0:
-                return result.stdout.strip()
-            if result.returncode == 1:
-                return ""
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            (
-                "import tkinter as tk; from tkinter import filedialog; "
-                "root = tk.Tk(); root.withdraw(); "
-                "print(filedialog.askdirectory()); root.destroy()"
-            ),
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout.strip()
 
 
 class State:
@@ -514,14 +473,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self.local():
             return self.respond(403, {"error": "Local access only"})
         data = self.body()
-        if path == "/api/choose-destination":
+        if path in ("/api/choose-paths", "/api/choose-destination"):
+            destination = path == "/api/choose-destination"
+            if destination:
+                kind = "destination"
+            else:
+                kind = data.get("kind") if isinstance(data, dict) else None
+                if kind not in ("files", "directory"):
+                    raise ValueError("Choose files or a directory")
             try:
-                destination = choose_destination()
-            except (OSError, subprocess.CalledProcessError) as exc:
+                paths = choose_paths(kind)
+            except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+                fallback = (
+                    "enter a path"
+                    if destination
+                    else "drop files or a directory here, or enter a path"
+                )
                 raise ValueError(
-                    "Directory picker unavailable; enter a path instead"
+                    f"Desktop picker unavailable. Please {fallback}."
                 ) from exc
-            return self.respond(200, {"destination": destination})
+            if destination:
+                return self.respond(200, {"destination": paths[0] if paths else ""})
+            return self.respond(200, {"paths": paths})
         if path == "/api/accept":
             entry = self.state.transfers[data["id"]]
             if entry["status"] != "waiting":
@@ -958,7 +931,7 @@ def main():
             state.temp.cleanup()
             return 0
     if not args.no_browser:
-        webbrowser.open(url)
+        open_browser(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
