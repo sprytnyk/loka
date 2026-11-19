@@ -39,6 +39,18 @@ class TransferTests(unittest.TestCase):
             addresses = order_local_addresses({"172.17.0.1", "192.168.1.10"})
         self.assertEqual(addresses, ["172.17.0.1", "192.168.1.10"])
 
+    def test_share_address_prefers_lan_when_vpn_owns_default_route(self):
+        vpn = "10.23.0.2"
+        lan = "192.168.50.7"
+        bridge = "172.17.0.1"
+        with patch("loka.__main__.socket.socket") as socket_factory:
+            socket_context = socket_factory.return_value.__enter__.return_value
+            socket_context.getsockname.return_value = (vpn, 12345)
+            self.assertEqual(
+                order_local_addresses({lan}, {vpn, bridge}), [lan, vpn, bridge]
+            )
+            self.assertEqual(order_local_addresses(set(), {vpn, bridge}), [vpn, bridge])
+
     def test_discovery_reports_socket_failure(self):
         state = State(0)
         try:

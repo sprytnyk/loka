@@ -663,110 +663,161 @@ def outgoing(state, entry, paths, peer):
             archive.unlink(missing_ok=True)
 
 
-def order_local_addresses(addresses):
-    addresses = sorted(addresses)
+def order_local_addresses(lan_addresses, other_addresses=()):
+    lan_addresses = set(lan_addresses)
+    addresses = lan_addresses.union(other_addresses)
+    route_address = None
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.connect(("192.0.2.1", 9))
-            preferred = sock.getsockname()[0]
+            route_address = sock.getsockname()[0]
     except OSError:
-        return addresses
-    if preferred in addresses:
-        addresses.remove(preferred)
-        addresses.insert(0, preferred)
+        pass
+    return sorted(
+        (
+            address
+            for address in addresses
+            if not address.startswith("127.") and address != "0.0.0.0"
+        ),
+        key=lambda address: (
+            address not in lan_addresses,
+            address != route_address,
+            address,
+        ),
+    )
+
+
+def _windows_ipv4_addresses():
+    from ctypes import wintypes
+
+    addresses = []
+
+    class SocketAddress(ctypes.Structure):
+        _fields_ = [("address", ctypes.c_void_p), ("length", ctypes.c_int)]
+
+    class Unicast(ctypes.Structure):
+        pass
+
+    Unicast._fields_ = [
+        ("alignment", ctypes.c_uint64),
+        ("next", ctypes.POINTER(Unicast)),
+        ("socket", SocketAddress),
+    ]
+
+    class Adapter(ctypes.Structure):
+        pass
+
+    Adapter._fields_ = [
+        ("alignment", ctypes.c_uint64),
+        ("next", ctypes.POINTER(Adapter)),
+        ("name", ctypes.c_char_p),
+        ("unicast", ctypes.POINTER(Unicast)),
+        ("anycast", ctypes.c_void_p),
+        ("multicast", ctypes.c_void_p),
+        ("dns_server", ctypes.c_void_p),
+        ("dns_suffix", ctypes.c_wchar_p),
+        ("description", ctypes.c_wchar_p),
+        ("friendly_name", ctypes.c_wchar_p),
+        ("physical_address", ctypes.c_ubyte * 8),
+        ("physical_address_length", wintypes.ULONG),
+        ("flags", wintypes.ULONG),
+        ("mtu", wintypes.ULONG),
+        ("if_type", wintypes.ULONG),
+    ]
+    size = wintypes.ULONG(0)
+    get_adapters = ctypes.windll.iphlpapi.GetAdaptersAddresses
+    get_adapters(socket.AF_INET, 0, None, None, ctypes.byref(size))
+    buffer = ctypes.create_string_buffer(size.value)
+    if get_adapters(socket.AF_INET, 0, None, buffer, ctypes.byref(size)) != 0:
+        return None
+    adapter = ctypes.cast(buffer, ctypes.POINTER(Adapter))
+    while adapter:
+        interface = adapter.contents
+        description = (interface.description or "").lower()
+        vpn = any(
+            name in description
+            for name in ("openvpn", "tap-windows", "wireguard", "wintun")
+        )
+        # IF_TYPE_ETHERNET_CSMACD and IF_TYPE_IEEE80211.
+        on_lan = interface.if_type in (6, 71) and not vpn
+        unicast = interface.unicast
+        while unicast:
+            sockaddr = unicast.contents.socket
+            if sockaddr.address and sockaddr.length >= 8:
+                raw = ctypes.string_at(sockaddr.address, sockaddr.length)
+                if int.from_bytes(raw[:2], sys.byteorder) == socket.AF_INET:
+                    addresses.append((socket.inet_ntoa(raw[4:8]), on_lan))
+            unicast = unicast.contents.next
+        adapter = interface.next
+    return addresses
+
+
+def _unix_ipv4_addresses():
+    iff_up = 0x1
+    iff_loopback = 0x8
+    iff_point_to_point = 0x10
+    addresses = []
+
+    class Interface(ctypes.Structure):
+        pass
+
+    Interface._fields_ = [
+        ("next", ctypes.POINTER(Interface)),
+        ("name", ctypes.c_char_p),
+        ("flags", ctypes.c_uint),
+        ("address", ctypes.c_void_p),
+        ("netmask", ctypes.c_void_p),
+        ("union", ctypes.c_void_p),
+        ("data", ctypes.c_void_p),
+    ]
+    first = ctypes.POINTER(Interface)()
+    libc = ctypes.CDLL(None)
+    if libc.getifaddrs(ctypes.byref(first)) != 0:
+        return None
+    try:
+        current = first
+        while current:
+            interface = current.contents
+            current = interface.next
+            flags = interface.flags
+            if not interface.address or not (flags & iff_up) or flags & iff_loopback:
+                continue
+            raw = ctypes.string_at(interface.address, 8)
+            family = (
+                raw[1]
+                if sys.platform == "darwin"
+                else int.from_bytes(raw[:2], sys.byteorder)
+            )
+            if family != socket.AF_INET:
+                continue
+            point_to_point = flags & iff_point_to_point
+            virtual_bridge = interface.name.startswith(
+                (b"docker", b"br-", b"virbr", b"veth")
+            )
+            on_lan = not (point_to_point or virtual_bridge)
+            addresses.append((socket.inet_ntoa(raw[4:8]), on_lan))
+    finally:
+        libc.freeifaddrs(first)
     return addresses
 
 
 def local_addresses():
     """Find IPv4 addresses on local interfaces without relying on host DNS."""
-    addresses = set()
+    read_addresses = (
+        _windows_ipv4_addresses if sys.platform == "win32" else _unix_ipv4_addresses
+    )
     try:
-        if sys.platform == "win32":
-            from ctypes import wintypes
-
-            class SocketAddress(ctypes.Structure):
-                _fields_ = [("address", ctypes.c_void_p), ("length", ctypes.c_int)]
-
-            class Unicast(ctypes.Structure):
-                pass
-
-            Unicast._fields_ = [
-                ("alignment", ctypes.c_uint64),
-                ("next", ctypes.POINTER(Unicast)),
-                ("socket", SocketAddress),
-            ]
-
-            class Adapter(ctypes.Structure):
-                pass
-
-            Adapter._fields_ = [
-                ("alignment", ctypes.c_uint64),
-                ("next", ctypes.POINTER(Adapter)),
-                ("name", ctypes.c_char_p),
-                ("unicast", ctypes.POINTER(Unicast)),
-            ]
-            size = wintypes.ULONG(0)
-            get_adapters = ctypes.windll.iphlpapi.GetAdaptersAddresses
-            get_adapters(socket.AF_INET, 0, None, None, ctypes.byref(size))
-            buffer = ctypes.create_string_buffer(size.value)
-            if get_adapters(socket.AF_INET, 0, None, buffer, ctypes.byref(size)) != 0:
-                return []
-            adapter = ctypes.cast(buffer, ctypes.POINTER(Adapter))
-            while adapter:
-                unicast = adapter.contents.unicast
-                while unicast:
-                    sockaddr = unicast.contents.socket
-                    if sockaddr.address and sockaddr.length >= 8:
-                        raw = ctypes.string_at(sockaddr.address, sockaddr.length)
-                        if int.from_bytes(raw[:2], sys.byteorder) == socket.AF_INET:
-                            addresses.add(socket.inet_ntoa(raw[4:8]))
-                    unicast = unicast.contents.next
-                adapter = adapter.contents.next
-        else:
-
-            class Interface(ctypes.Structure):
-                pass
-
-            Interface._fields_ = [
-                ("next", ctypes.POINTER(Interface)),
-                ("name", ctypes.c_char_p),
-                ("flags", ctypes.c_uint),
-                ("address", ctypes.c_void_p),
-                ("netmask", ctypes.c_void_p),
-                ("union", ctypes.c_void_p),
-                ("data", ctypes.c_void_p),
-            ]
-            first = ctypes.POINTER(Interface)()
-            libc = ctypes.CDLL(None)
-            if libc.getifaddrs(ctypes.byref(first)) != 0:
-                return []
-            try:
-                current = first
-                while current:
-                    interface = current.contents
-                    if (
-                        interface.address
-                        and interface.flags & 1
-                        and not interface.flags & 8
-                    ):
-                        raw = ctypes.string_at(interface.address, 8)
-                        family = (
-                            raw[1]
-                            if sys.platform == "darwin"
-                            else int.from_bytes(raw[:2], sys.byteorder)
-                        )
-                        if family == socket.AF_INET:
-                            addresses.add(socket.inet_ntoa(raw[4:8]))
-                    current = interface.next
-            finally:
-                libc.freeifaddrs(first)
+        addresses = read_addresses()
     except (AttributeError, OSError, ValueError):
         return []
-    return order_local_addresses(
-        address
-        for address in addresses
-        if not address.startswith("127.") and address != "0.0.0.0"
-    )
+    if addresses is None:
+        return []
+
+    lan_addresses = set()
+    other_addresses = set()
+    for address, on_lan in addresses:
+        (lan_addresses if on_lan else other_addresses).add(address)
+    return order_local_addresses(lan_addresses, other_addresses)
 
 
 def main():

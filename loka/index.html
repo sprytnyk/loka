@@ -56,7 +56,7 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 </dialog>
 <script>
 const key='__LOKA_KEY__';
-let selected=[], addressesSet=false, incomingId=null, pendingSelections=new Map();
+let selected=[], addressEdited=false, incomingId=null, pendingSelections=new Map();
 let renderedPeers;
 let actionMessage = '', connectionMessage = '';
 const $=id=>document.getElementById(id);
@@ -263,9 +263,10 @@ async function refresh() {
     }
   }
   $('hostname').textContent = `This device: ${data.name}`;
-  if (!addressesSet && data.addresses.length) {
-    $('link-address').value = data.addresses[0];
-    addressesSet = true;
+  const addressInput = $('link-address');
+  const suggestedAddress = data.addresses[0] || '';
+  if (!addressEdited && addressInput.value !== suggestedAddress) {
+    addressInput.value = suggestedAddress;
   }
   renderPeers(data);
   const incoming = data.transfers.find(t => t.direction === 'incoming' && t.status === 'waiting');
@@ -299,7 +300,10 @@ async function poll() {
   }
   renderMessage();
 }
-$('link-address').oninput=poll;
+$('link-address').oninput=()=>{
+  addressEdited = true;
+  poll();
+};
 poll();
 setInterval(poll, 3000);
 </script></body></html>
