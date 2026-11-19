@@ -120,8 +120,8 @@ func (s *server) offer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if o.Size < 0 {
-		writeError(w, http.StatusBadRequest, errors.New("Invalid size"))
+	if o.Size < 0 || len(o.Items) == 0 {
+		writeError(w, http.StatusBadRequest, errors.New("Invalid offer"))
 		return
 	}
 	items := o.Items[:min(len(o.Items), maxOfferItems)]

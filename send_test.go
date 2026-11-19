@@ -215,6 +215,18 @@ func TestPeerRoutesNeedTheSecret(t *testing.T) {
 	}
 }
 
+func TestOffersMustNameItemsAndASize(t *testing.T) {
+	receiver, receiverURL := startServer(t)
+	for _, o := range []offer{{Name: "x", Size: 1}, {Name: "x", Items: []string{"f"}, Size: -1}} {
+		if err := call(t.Context(), http.MethodPost, receiverURL+"/peer/offer", "", o, nil); err == nil {
+			t.Errorf("accepted %+v", o)
+		}
+	}
+	if n := len(receiver.transfers.all()); n != 0 {
+		t.Fatalf("%d offers shown", n)
+	}
+}
+
 func TestPageAPIIsOnlyForThisDevicesPage(t *testing.T) {
 	s, base := startServer(t)
 	for _, c := range []struct {
