@@ -44,6 +44,10 @@ Run `loka` on both computers. It opens in your browser.
 Several transfers can arrive at once, and each shows its speed. Loka remembers
 the last destination until it stops.
 
+The page follows your system's light or dark setting and your browser's
+language, English or Ukrainian. Buttons in the header switch both, and the
+browser remembers your choice.
+
 The pickers use zenity or kdialog on Linux, Finder on macOS, and the usual
 dialog on Windows. Without one, drop files or enter paths instead.
 
