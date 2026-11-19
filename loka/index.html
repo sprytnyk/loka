@@ -18,7 +18,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:20px;pa
 .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.row>*{min-width:0}input:not([type=file]){background:#0f172a;border:1px solid #475569;border-radius:9px;color:var(--ink);padding:10px 12px;font:inherit;font-size:13px;flex:1;min-width:10rem}input::placeholder{color:#94a3b8}button,.button{border:1px solid transparent;border-radius:9px;background:var(--accent);color:#fff;padding:10px 15px;font:inherit;font-size:13px;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s}button:hover,.button:hover{background:var(--accent-hover)}button.secondary,.button.secondary{background:#334155;color:#fff;border-color:#475569}button.secondary:hover,.button.secondary:hover{background:#475569;border-color:#64748b}button:disabled{opacity:.5;cursor:wait}:focus-visible,.button:focus-within{outline:3px solid #93c5fd;outline-offset:2px}
 .drop{border:1.5px dashed #475569;border-radius:12px;background:#172337;padding:26px 16px 20px;text-align:center;margin-bottom:16px}.drop.over{border-color:#60a5fa;background:#263b5d}.drop-icon{display:grid;place-items:center;width:42px;height:42px;margin:0 auto 11px;border-radius:13px;background:var(--soft);color:#93c5fd}.drop-title{margin:0;font-weight:650;font-size:14px}.drop-help{margin:4px 0 16px;color:var(--muted);font-size:12px}.drop .row{justify-content:center}#selection{margin:14px 0 0;color:var(--muted);font-size:12px}label.button{display:inline-block}input[type=file]{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0}
 .field-label{display:block;margin:0 var(--action-inset) 7px;font-size:12px;font-weight:650;color:#cbd5e1}.manual{margin-top:17px;padding-top:16px;border-top:1px solid #334155}.manual .row{align-items:stretch}#port{flex:0 1 84px;min-width:68px}#selected{padding:0 var(--action-inset);list-style:none;overflow-wrap:anywhere}#selected:empty{display:none}#selected li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #334155;font-size:13px}#selected button{flex:none;padding:5px 9px;font-size:12px}
-#peers>p,#transfers>p{margin:0;color:var(--muted);font-size:13px}.item{background:#33415580;border:1px solid #475569;border-radius:10px;padding:var(--row-padding);margin-top:10px;overflow-wrap:anywhere}.item strong{color:#fff}.item .row{justify-content:space-between}.item small,.muted,small{color:var(--muted)}.item button{margin-top:5px}.item .row button{margin-top:0}.notice{color:#fbbf24}progress{width:100%;height:.45rem;accent-color:#3b82f6}a{color:#93c5fd;overflow-wrap:anywhere}#message:empty,#incoming-error:empty{display:none}#message{margin-top:20px;padding:12px 15px;background:#3a3020;border:1px solid #a16207;border-radius:10px;color:#fcd34d}.footer-note{margin:23px 0 0;color:#a6b5c9;font-size:12px}
+#peers>p,#transfers>p{margin:0;color:var(--muted);font-size:13px}.item{background:#33415580;border:1px solid #475569;border-radius:10px;padding:var(--row-padding);margin-top:10px;overflow-wrap:anywhere}.item strong{color:#fff}.item .row{justify-content:space-between}.item small,.muted,small{color:var(--muted)}.item button{margin-top:5px}.item .row button{margin-top:0}.notice{color:#fbbf24}progress{width:100%;height:.45rem;accent-color:#3b82f6}a{color:#93c5fd;overflow-wrap:anywhere}#message:empty,#incoming-error:empty{display:none}#message{margin-bottom:20px;padding:12px 15px;background:#3a3020;border:1px solid #a16207;border-radius:10px;color:#fcd34d;overflow-wrap:anywhere}.footer-note{margin:23px 0 0;color:#a6b5c9;font-size:12px}
 .action-row{padding-inline:var(--action-inset)}
 .action-row>button,#peers>.item>button{flex:none;margin-inline-start:auto}
 #peers>.item{flex-wrap:nowrap}#peers>.item>button{margin-top:0}
@@ -30,7 +30,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:20px;pa
 .transfer-files li{padding-block:2px}
 .footer-note{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px}.footer-note p{margin:0}
 dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);border-radius:1.5rem;background:#1e293b;color:var(--ink);padding:26px;box-shadow:0 20px 70px #0008}dialog::backdrop{background:#020617b3}dialog h2{margin:0;color:#fff;font-size:20px;letter-spacing:-.03em}dialog p{color:var(--muted);font-size:14px}dialog .row{margin-top:16px}dialog .notice{color:#fbbf24}
-@media(max-width:720px){main{padding:0 16px 40px}header{padding:19px 0}.intro{padding:34px 0 23px}.layout{grid-template-columns:1fr;gap:14px}.column{display:contents}.choose-card{order:1}.device-card{order:2}.transfers-card{order:3}.link-card{order:4}.card{padding:20px}.device-badge{max-width:55%}}
+@media(max-width:720px){main{padding:0 16px 40px}header{padding:19px 0}.intro{padding:34px 0 23px}.layout{grid-template-columns:1fr;gap:14px}#message{margin-bottom:14px}.column{display:contents}.choose-card{order:1}.device-card{order:2}.transfers-card{order:3}.link-card{order:4}.card{padding:20px}.device-badge{max-width:55%}}
 @media(max-width:400px){.device-badge{font-size:11px}}
 </style>
 </head>
@@ -58,10 +58,33 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 const key='__LOKA_KEY__';
 let selected=[], addressesSet=false, incomingId=null, pendingSelections=new Map();
 let renderedPeers;
+let actionMessage = '', connectionMessage = '';
 const $=id=>document.getElementById(id);
 const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function message(s){$('message').textContent=s||''}
-async function api(path,data){let r=await fetch(path,{method:data?'POST':'GET',headers:{'X-Loka-Key':key,...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined});let v=await r.json();if(!r.ok)throw Error(v.error||'Request failed');return v}
+function renderMessage() {
+  const notice = $('message');
+  const text = actionMessage || connectionMessage;
+  if (notice.textContent !== text) notice.textContent = text;
+}
+function message(text) {
+  actionMessage = text;
+  renderMessage();
+}
+async function request(path, options) {
+  if (location.protocol === 'file:') {
+    throw Error('This is a saved copy. Start Loka and open the address it prints.');
+  }
+  let response;
+  try {
+    response = await fetch(path, options);
+  } catch (error) {
+    throw Error('Could not reach Loka. Check that it is still running.', {cause: error});
+  }
+  const data = await response.json();
+  if (!response.ok) throw Error(data.error || 'Request failed');
+  return data;
+}
+async function api(path,data){return request(path,{method:data?'POST':'GET',headers:{'X-Loka-Key':key,...(data?{'Content-Type':'application/json'}:{})},body:data?JSON.stringify(data):undefined})}
 function updateSelection(){ $('selection').textContent=selected.length?`${selected.length} ${selected.length===1?'item':'items'} selected`:'Nothing selected';$('selected').innerHTML=selected.map((x,i)=>`<li>${escapeHtml(x.label)} <button class="secondary" data-remove="${i}">Remove</button></li>`).join(''); }
 function addFiles(files){
   const groups = new Map();
@@ -140,9 +163,12 @@ async function paths(items = selected) {
       'X-File-Path': encodeURIComponent(item.path),
     };
     if (item.directory) headers['X-Entry-Type'] = 'directory';
-    const response = await fetch('/api/upload', {method: 'POST', headers, body: item.file});
-    const data = await response.json();
-    if (!response.ok) throw Error(data.error);
+    let data;
+    try {
+      data = await request('/api/upload', {method: 'POST', headers, body: item.file});
+    } catch (error) {
+      throw Error(`Could not upload ${item.label}: ${error.message}`, {cause: error});
+    }
     if (first) result.push(data.path);
   }
   message('');
@@ -264,5 +290,16 @@ async function refresh() {
     return `<div class="item"><a href="${escapeHtml(url)}">${escapeHtml(url)}</a><div><button class="secondary" data-unshare="${transfer.token}">Stop sharing</button></div></div>`;
   }).join('');
 }
-$('link-address').oninput=()=>refresh().catch(()=>{});refresh().catch(e=>message(e.message));setInterval(()=>refresh().catch(()=>{}),3000);
+async function poll() {
+  try {
+    await refresh();
+    connectionMessage = '';
+  } catch (error) {
+    connectionMessage = error.message;
+  }
+  renderMessage();
+}
+$('link-address').oninput=poll;
+poll();
+setInterval(poll, 3000);
 </script></body></html>
