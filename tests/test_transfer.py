@@ -1,6 +1,7 @@
 import http.client
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -83,17 +84,24 @@ class TransferTests(unittest.TestCase):
         source.mkdir()
         destination.mkdir()
         (source / "file.txt").write_text("new")
+        second_name = (
+            "Set_ What’s next_.mp3" if os.name == "nt" else "Set: What’s next?.mp3"
+        )
+        (source / second_name).write_bytes(b"music")
         (destination / "file.txt").write_text("old")
         sender = State(0)
         entry = sender.transfer(
-            direction="outgoing", name="receiver", items=["file.txt"], size=0
+            direction="outgoing",
+            name="receiver",
+            items=["file.txt", second_name],
+            size=0,
         )
         thread = threading.Thread(
             target=outgoing,
             args=(
                 sender,
                 entry,
-                [str(source / "file.txt")],
+                [str(source / "file.txt"), str(source / second_name)],
                 {"host": "127.0.0.1", "port": self.server.server_port},
             ),
         )
@@ -123,6 +131,7 @@ class TransferTests(unittest.TestCase):
             self.assertEqual(entry["status"], "complete", entry.get("error"))
             self.assertEqual((destination / "file.txt").read_text(), "old")
             self.assertEqual((destination / "file (1).txt").read_text(), "new")
+            self.assertEqual((destination / second_name).read_bytes(), b"music")
         finally:
             entry["cancel"].set()
             thread.join(5)
@@ -231,6 +240,8 @@ class TransferTests(unittest.TestCase):
         staged_paths = []
         for index in range(1200):
             name = f"Збірка – 音楽 – 🎵 e\u0301 100% #{index}.mp3"
+            if index == 0 and os.name != "nt":
+                name = "Set: What’s next?.mp3"
             content = str(index).encode()
             expected_files[name] = content
             staged = request(
@@ -306,6 +317,24 @@ class TransferTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             extract(archive, self.root)
         self.assertFalse((self.root.parent / "escape").exists())
+
+    def test_extract_renames_only_incompatible_windows_names(self):
+        archive = self.root / "transfer.zip"
+        destination = self.root / "destination"
+        destination.mkdir()
+        with zipfile.ZipFile(archive, "w") as transfer:
+            transfer.writestr("Set: live?/Track?.mp3", b"renamed")
+            transfer.writestr("Set: live?/Track_.mp3", b"unchanged")
+            transfer.writestr("Set_ live_/CON.txt", b"reserved")
+        with patch("loka.__main__.os", wraps=os) as operating_system:
+            operating_system.name = "nt"
+            extract(archive, destination)
+        self.assertEqual(
+            (destination / "Set_ live_" / "_CON.txt").read_bytes(), b"reserved"
+        )
+        renamed = destination / "Set_ live_ (1)"
+        self.assertEqual((renamed / "Track_ (1).mp3").read_bytes(), b"renamed")
+        self.assertEqual((renamed / "Track_.mp3").read_bytes(), b"unchanged")
 
     def test_decline_prevents_upload(self):
         self.start_server()

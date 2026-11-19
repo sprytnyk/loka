@@ -4,6 +4,7 @@ import ctypes
 import http.client
 import http.server
 import json
+import ntpath
 import os
 import secrets
 import shutil
@@ -18,12 +19,15 @@ import urllib.parse
 import uuid
 import webbrowser
 import zipfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 PORT = 45873
 GROUP = "239.255.45.87"
 CHUNK = 1024 * 256
 MAX_OFFER_ITEMS = 100
+WINDOWS_NAME_REPLACEMENTS = str.maketrans(
+    {char: "_" for char in '<>:"|?*' + "".join(map(chr, range(32)))}
+)
 
 
 def request(host, port, method, path, data=None, headers=None, timeout=10):
@@ -46,32 +50,63 @@ def unique_path(path):
     return candidate
 
 
+def windows_name(name):
+    name = name.translate(WINDOWS_NAME_REPLACEMENTS).rstrip(" .") or "_"
+    is_reserved = (
+        ntpath.isreserved(name)
+        if hasattr(ntpath, "isreserved")
+        else PureWindowsPath(name).is_reserved()
+    )
+    return "_" + name if is_reserved else name
+
+
+def _windows_extract_path(staging, parts, staged_paths):
+    target = staging
+    for length, part in enumerate(parts, start=1):
+        original = parts[:length]
+        if original not in staged_paths:
+            staged_paths[original] = unique_path(target / windows_name(part))
+        target = staged_paths[original]
+    return target
+
+
 def extract(archive, destination):
     """Extract each top-level item separately, never overwriting existing items."""
     destination = Path(destination).expanduser().resolve()
     if not destination.is_dir():
         raise ValueError("Destination must be an existing directory")
     with zipfile.ZipFile(archive) as archive_file:
-        members = archive_file.infolist()
-        roots = {}
-        for info in members:
+        members = []
+        for info in archive_file.infolist():
             path = PurePosixPath(info.filename)
+            parts = path.parts
             if (
-                not path.parts
+                not parts
                 or path.is_absolute()
-                or any(p in (".", "..") for p in path.parts)
+                or any(part in (".", "..") for part in parts)
                 or "\\" in info.filename
-                or ":" in path.parts[0]
             ):
                 raise ValueError("Invalid path in transfer")
             if (info.external_attr >> 16) & 0o170000 == 0o120000:
                 raise ValueError("Symbolic links are not supported")
-            roots.setdefault(path.parts[0], None)
+            members.append((info, parts))
+        roots = dict.fromkeys(parts[0] for _, parts in members)
+        windows = os.name == "nt"
+        if windows:
+            # Give names Windows can already use first choice of each path.
+            members.sort(
+                key=lambda member: tuple(
+                    windows_name(part) != part for part in member[1]
+                )
+            )
         staging = Path(tempfile.mkdtemp(prefix=".loka-", dir=destination))
+        staged_paths = {}
         try:
-            for info in members:
-                path = PurePosixPath(info.filename)
-                target = staging.joinpath(*path.parts)
+            for info, parts in members:
+                if windows:
+                    target = _windows_extract_path(staging, parts, staged_paths)
+                else:
+                    target = staging.joinpath(*parts)
                 if info.is_dir():
                     target.mkdir(parents=True, exist_ok=True)
                 else:
@@ -79,8 +114,8 @@ def extract(archive, destination):
                     with archive_file.open(info) as source, target.open("wb") as output:
                         shutil.copyfileobj(source, output, CHUNK)
             for name in roots:
-                source = staging / name
-                source.rename(unique_path(destination / name))
+                source = staged_paths[(name,)] if windows else staging / name
+                source.rename(unique_path(destination / source.name))
         finally:
             shutil.rmtree(staging, ignore_errors=True)
 
@@ -393,7 +428,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 or upload_path.is_absolute()
                 or any(part in (".", "..") for part in parts)
                 or "\\" in name
-                or ":" in parts[0]
+                or (os.name == "nt" and any(":" in part for part in parts))
             ):
                 raise ValueError("Invalid upload path")
             destination = Path(self.state.temp.name) / "uploads" / session
