@@ -215,6 +215,21 @@ func TestPeerRoutesNeedTheSecret(t *testing.T) {
 	}
 }
 
+func TestDestinationKeepsSpaces(t *testing.T) {
+	spaced := filepath.Join(t.TempDir(), " spaced ")
+	if err := os.Mkdir(spaced, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := existingDir(spaced); err != nil || got != spaced {
+		t.Fatalf("got %q %v", got, err)
+	}
+	for _, bad := range []string{"", "  ", spaced + "x"} {
+		if _, err := existingDir(bad); err == nil {
+			t.Fatalf("accepted %q", bad)
+		}
+	}
+}
+
 func TestOffersMustNameItemsAndASize(t *testing.T) {
 	receiver, receiverURL := startServer(t)
 	for _, o := range []offer{{Name: "x", Size: 1}, {Name: "x", Items: []string{"f"}, Size: -1}} {

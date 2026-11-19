@@ -291,7 +291,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 				fmt.Fprintln(stdout, "Declined.")
 				break
 			}
-			destination, err := existingDir(answer)
+			destination, err := existingDir(strings.TrimSpace(answer))
 			if err != nil {
 				fmt.Fprintln(stdout, err)
 				continue

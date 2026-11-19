@@ -210,7 +210,7 @@ $('transfers').onclick=e=>{let button=e.target.closest('button[data-cancel]');if
 $('incoming').addEventListener('cancel',e=>e.preventDefault());
 async function incomingAction(button,action){button.disabled=true;$('incoming-error').textContent='';try{await action();await refresh()}catch(e){$('incoming-error').textContent=e.message}finally{button.disabled=false}}
 $('choose-destination').onclick=e=>incomingAction(e.target,async()=>{let destination;try{[destination]=await pick('destination')}catch(error){throw Error(`${error.message}. Enter a destination path instead.`,{cause:error})}if(destination)$('destination').value=destination});
-$('accept-incoming').onclick=e=>incomingAction(e.target,async()=>{let destination=$('destination').value.trim();if(!destination)throw Error('Choose or enter a destination directory.');await api('/api/accept',{id:incomingId,destination})});
+$('accept-incoming').onclick=e=>incomingAction(e.target,async()=>{let destination=$('destination').value;if(!destination.trim())throw Error('Choose or enter a destination directory.');await api('/api/accept',{id:incomingId,destination})});
 $('decline-incoming').onclick=e=>incomingAction(e.target,()=>api('/api/cancel',{id:incomingId}));
 $('links').onclick=e=>{let button=e.target.closest('button[data-unshare]');if(button)run(button,async()=>{await api('/api/cancel',{id:button.dataset.unshare});button.closest('.item').remove()})};
 function renderPeers(data) {

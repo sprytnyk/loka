@@ -267,7 +267,9 @@ func (s *server) cancel(w http.ResponseWriter, r *http.Request) {
 // existingDir expands a leading ~ and returns the absolute path of an
 // existing directory.
 func existingDir(path string) (string, error) {
-	path = strings.TrimSpace(path)
+	if strings.TrimSpace(path) == "" {
+		return "", errors.New("The destination must be an existing directory")
+	}
 	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
 		if home, err := os.UserHomeDir(); err == nil {
 			path = filepath.Join(home, path[1:])
