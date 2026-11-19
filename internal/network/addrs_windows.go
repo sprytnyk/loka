@@ -2,6 +2,7 @@ package network
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"unsafe"
 
@@ -34,14 +35,13 @@ func interfaceAddresses() ([]localAddress, error) {
 			continue
 		}
 		description := strings.ToLower(windows.UTF16PtrToString(a.Description))
-		vpn := false
-		for _, name := range []string{"openvpn", "tap-windows", "wireguard", "wintun"} {
-			vpn = vpn || strings.Contains(description, name)
-		}
-		wired := a.IfType == windows.IF_TYPE_ETHERNET_CSMACD || a.IfType == windows.IF_TYPE_IEEE80211
+		vpn := slices.ContainsFunc([]string{"openvpn", "tap-windows", "wireguard", "wintun"}, func(name string) bool {
+			return strings.Contains(description, name)
+		})
+		wiredOrWiFi := a.IfType == windows.IF_TYPE_ETHERNET_CSMACD || a.IfType == windows.IF_TYPE_IEEE80211
 		for u := a.FirstUnicastAddress; u != nil; u = u.Next {
 			if ip := u.Address.IP().To4(); ip != nil {
-				found = append(found, localAddress{ip.String(), wired && !vpn})
+				found = append(found, localAddress{ip.String(), wiredOrWiFi && !vpn})
 			}
 		}
 	}

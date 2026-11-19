@@ -7,9 +7,8 @@ import (
 	"strings"
 )
 
-// Pick shows the Finder picker through JavaScript for
-// Automation. It brings the picker to the front and answers in JSON, so
-// any file name survives.
+// Pick shows the Finder picker through JavaScript for Automation. It brings
+// the picker to the front and answers in JSON, so any file name survives.
 func Pick(kind Kind) ([]string, error) {
 	prompt := strconv.Quote(kind.title())
 	choose := `app.chooseFile({withPrompt: ` + prompt + `, multipleSelectionsAllowed: true})`

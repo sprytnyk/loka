@@ -4,6 +4,7 @@ package network
 
 import (
 	"net"
+	"slices"
 	"strings"
 )
 
@@ -20,10 +21,9 @@ func interfaceAddresses() ([]localAddress, error) {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		virtual := false
-		for _, prefix := range []string{"docker", "br-", "virbr", "veth"} {
-			virtual = virtual || strings.HasPrefix(iface.Name, prefix)
-		}
+		virtual := slices.ContainsFunc([]string{"docker", "br-", "virbr", "veth"}, func(prefix string) bool {
+			return strings.HasPrefix(iface.Name, prefix)
+		})
 		lan := iface.Flags&net.FlagPointToPoint == 0 && !virtual
 		addrs, err := iface.Addrs()
 		if err != nil {
