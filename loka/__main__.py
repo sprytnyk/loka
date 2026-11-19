@@ -55,27 +55,28 @@ def request(host, port, method, path, data=None, headers=None, timeout=10):
 
 
 def transfer_progress(entry):
-    total = entry["size"]
-    copied = 0
-    sampled_bytes = 0
-    sampled_at = time.monotonic()
+    total_bytes = entry["size"]
+    copied_bytes = 0
+    bytes_since_sample = 0
+    sample_started_at = time.monotonic()
 
-    def advance(size):
-        nonlocal copied, sampled_bytes, sampled_at
+    def advance(block_size):
+        nonlocal copied_bytes, bytes_since_sample, sample_started_at
         if entry["cancel"].is_set():
             raise RuntimeError("Cancelled")
-        if not size:
+        if not block_size:
             return
-        copied += size
-        if total:
-            entry["progress"] = copied * 100 // total
+        copied_bytes += block_size
+        bytes_since_sample += block_size
+        if total_bytes:
+            entry["progress"] = copied_bytes * 100 // total_bytes
         now = time.monotonic()
-        elapsed = now - sampled_at
+        elapsed = now - sample_started_at
         if elapsed >= 0.5:
-            mbps = (copied - sampled_bytes) * 8 / (elapsed * 1_000_000)
+            mbps = bytes_since_sample * 8 / (elapsed * 1_000_000)
             entry["speed_sample"] = (mbps, now)
-            sampled_bytes = copied
-            sampled_at = now
+            bytes_since_sample = 0
+            sample_started_at = now
 
     return advance
 
@@ -103,12 +104,12 @@ class ZipResponse:
         self.failed = False
 
     def write(self, data):
-        if data and not self.failed:
+        size = len(data)
+        if size and not self.failed:
             if self.chunked:
-                self.output.write(f"{len(data):x}\r\n".encode("ascii") + data + b"\r\n")
-            else:
-                self.output.write(data)
-        return len(data)
+                data = f"{size:x}\r\n".encode("ascii") + data + b"\r\n"
+            self.output.write(data)
+        return size
 
     def flush(self):
         self.output.flush()
@@ -148,12 +149,11 @@ class State:
         return entry
 
     def public(self, entry):
-        result = entry.copy()
-        result.pop("cancel")
-        result.pop("secret", None)
-        result["speed_mbps"] = transfer_speed(result)
-        result.pop("speed_sample")
-        return result
+        snapshot = entry.copy()
+        snapshot["speed_mbps"] = transfer_speed(snapshot)
+        del snapshot["cancel"], snapshot["speed_sample"]
+        snapshot.pop("secret", None)
+        return snapshot
 
     def discover(self):
         threading.Thread(target=self._listen, daemon=True).start()
@@ -547,20 +547,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             paths = data["paths"]
             if not isinstance(paths, list) or not paths:
                 raise ValueError("Choose one or more paths")
+            peer = data if path == "/api/send" else None
             entry = self.state.transfer(
                 direction="outgoing",
-                name="Link" if path.endswith("share") else data["host"],
+                name="Link" if peer is None else peer["host"],
                 items=[Path(p).name for p in paths],
                 size=0,
             )
             thread = threading.Thread(
                 target=outgoing,
-                args=(
-                    self.state,
-                    entry,
-                    paths,
-                    data if path.endswith("send") else None,
-                ),
+                args=(self.state, entry, paths, peer),
                 daemon=True,
             )
             thread.start()
