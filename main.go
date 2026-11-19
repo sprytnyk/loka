@@ -46,7 +46,7 @@ type options struct {
 
 // run runs Loka with the given arguments and returns the exit code.
 func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
-	o, code := parse(args, stderr)
+	o, code := parse(args, stdout, stderr)
 	if code >= 0 {
 		return code
 	}
@@ -75,9 +75,9 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 }
 
 // parse reads the command line. Options may come before or after paths.
-// It returns a code of 0 or more when Loka should exit with it; an empty
-// command means print the version.
-func parse(args []string, stderr io.Writer) (options, int) {
+// Help goes to stdout and errors to stderr. It returns a code of 0 or more
+// when Loka should exit with it; an empty command means print the version.
+func parse(args []string, stdout, stderr io.Writer) (options, int) {
 	var o options
 	fs := flag.NewFlagSet("loka", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // help and errors are printed below
@@ -92,7 +92,7 @@ func parse(args []string, stderr io.Writer) (options, int) {
 	for {
 		if err := fs.Parse(args); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
-				printHelp(stderr, fs)
+				printHelp(stdout, fs)
 				return o, 0
 			}
 			printUsageError(stderr, err.Error())

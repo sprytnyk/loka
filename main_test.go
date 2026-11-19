@@ -96,7 +96,7 @@ func TestParse(t *testing.T) {
 		{[]string{"--port", "65536"}, "", nil, "", 2},
 		{[]string{"send", "a", "--to", "h", "--peer-port", "0"}, "", nil, "", 2},
 	} {
-		o, code := parse(c.args, io.Discard)
+		o, code := parse(c.args, io.Discard, io.Discard)
 		if code != c.code || code == -1 && (o.command != c.command || !slices.Equal(o.paths, c.paths) || o.to != c.to) {
 			t.Errorf("%q: got %q %q to=%q code %d", c.args, o.command, o.paths, o.to, code)
 		}
@@ -142,6 +142,19 @@ func TestHelpAndErrorColours(t *testing.T) {
 		if c.want && !colored || !c.want && !plain {
 			t.Errorf("NO_COLOR=%q FORCE_COLOR=%q: help %q, error %q", c.noColor, c.forceColor, help.String(), usageErr.String())
 		}
+	}
+}
+
+// TestHelpGoesToStdout keeps help on standard output, where scripts and
+// pagers expect it, and usage errors on standard error.
+func TestHelpGoesToStdout(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"--help"}, nil, &stdout, &stderr); code != 0 || !strings.HasPrefix(stdout.String(), "usage:") || stderr.Len() != 0 {
+		t.Fatalf("got %d, stdout %q, stderr %q", code, stdout.String(), stderr.String())
+	}
+	stdout.Reset()
+	if code := run(context.Background(), []string{"--bogus"}, nil, &stdout, &stderr); code != 2 || stdout.Len() != 0 || stderr.Len() == 0 {
+		t.Fatalf("got %d, stdout %q, stderr %q", code, stdout.String(), stderr.String())
 	}
 }
 
