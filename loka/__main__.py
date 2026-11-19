@@ -1,6 +1,7 @@
 import argparse
 import contextlib
 import ctypes
+import errno
 import http.client
 import http.server
 import json
@@ -818,41 +819,17 @@ def main():
     parser.add_argument("--address", help="local address to use in a share link")
     parser.add_argument("--peer-port", type=int, default=PORT, help="receiver port")
     parser.add_argument(
-        "--port", type=int, default=PORT, help="listening port (default: %(default)s)"
+        "--port",
+        type=int,
+        default=PORT,
+        help="listening port, use 0 for a free port (default: %(default)s)",
     )
     parser.add_argument(
         "--no-browser", action="store_true", help="do not open the browser"
     )
     args = parser.parse_intermixed_args()
-    if args.command == "share":
-        if not args.paths:
-            parser.error("share requires one or more paths")
-        state = State(args.port)
-        server = Server(("", args.port), Handler)
-        server.state = state
-        state.port = server.server_address[1]
-        addresses = local_addresses()
-        address = args.address or (addresses[0] if addresses else None)
-        if not address:
-            server.server_close()
-            state.temp.cleanup()
-            parser.error("could not detect a local address; supply --address")
-        entry = state.transfer(direction="outgoing", name="Link", items=[], size=0)
-        outgoing(state, entry, args.paths, None)
-        if entry["status"] != "shared":
-            print(entry.get("error", "Could not create link"), file=sys.stderr)
-            server.server_close()
-            state.temp.cleanup()
-            return 1
-        print(f"http://{address}:{state.port}/download/{entry['token']}", flush=True)
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            server.server_close()
-            state.temp.cleanup()
-        return 0
+    if args.command == "share" and not args.paths:
+        parser.error("share requires one or more paths")
     if args.command == "send":
         if not args.paths or not args.to:
             parser.error("send requires --to ADDRESS and one or more paths")
@@ -882,10 +859,51 @@ def main():
             print(entry["error"])
         state.temp.cleanup()
         return 0 if entry["status"] == "complete" else 1
-    state = State(args.port)
-    server = Server(("", args.port), Handler)
+    if not 0 <= args.port <= 65535:
+        parser.error("--port must be between 0 and 65535")
+    try:
+        server = Server(("", args.port), Handler)
+    except OSError as exc:
+        if exc.errno in (
+            errno.EADDRINUSE,
+            getattr(errno, "WSAEADDRINUSE", errno.EADDRINUSE),
+        ):
+            print(
+                f"Port {args.port} is already in use. Stop the other program or run "
+                "with --port 0 to pick a free port.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"Could not listen on port {args.port}. {exc.strerror or exc}",
+                file=sys.stderr,
+            )
+        return 1
+    state = State(server.server_port)
     server.state = state
-    state.port = server.server_address[1]
+    if args.command == "share":
+        addresses = local_addresses()
+        address = args.address or (addresses[0] if addresses else None)
+        if not address:
+            server.server_close()
+            state.temp.cleanup()
+            parser.error("could not detect a local address; supply --address")
+        entry = state.transfer(direction="outgoing", name="Link", items=[], size=0)
+        outgoing(state, entry, args.paths, None)
+        if entry["status"] != "shared":
+            print(entry.get("error", "Could not create link"), file=sys.stderr)
+            server.server_close()
+            state.temp.cleanup()
+            return 1
+        print(f"http://{address}:{state.port}/download/{entry['token']}", flush=True)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.server_close()
+            state.temp.cleanup()
+        return 0
     state.discover()
     url = f"http://127.0.0.1:{state.port}/"
     print(f"Loka {VERSION} is running at {url} (Ctrl+C to stop)", flush=True)

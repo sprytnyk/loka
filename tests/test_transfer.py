@@ -614,6 +614,28 @@ class TransferTests(unittest.TestCase):
         self.assertEqual(download()[0], 404)
         self.assertEqual(source.read_bytes(), b"updated contents")
 
+    def test_cli_reports_occupied_port(self):
+        source = self.root / "shared.txt"
+        source.write_text("hello")
+        with closing(socket.socket()) as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+            port = listener.getsockname()[1]
+            for command in ([], ["receive"], ["devices"], ["share", str(source)]):
+                with self.subTest(command=command):
+                    result = subprocess.run(
+                        [sys.executable, "-m", "loka", "--port", str(port), *command],
+                        capture_output=True,
+                        check=False,
+                        text=True,
+                        timeout=5,
+                    )
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn(f"Port {port} is already in use", result.stderr)
+                    self.assertIn("--port 0", result.stderr)
+                    self.assertNotIn("Traceback", result.stderr)
+
     def test_cli_share_serves_file_until_stopped(self):
         source = self.root / "shared.txt"
         source.write_text("hello")
