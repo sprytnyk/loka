@@ -40,12 +40,9 @@ until it stops. Several transfers can arrive at the same time.
 
 **Choose files** and **Choose directory** open the desktop's file picker:
 zenity or kdialog on Linux, Finder on macOS, and the usual dialog on Windows.
-Select **Use browser picker** to use the browser's own picker instead. Loka
-switches to it by itself when the desktop picker is unavailable. You can also
-drop files on the page or add them by path. Files from the browser picker or
-dropped on the page are copied to a temporary directory first, because the
-browser does not tell Loka where they are. Loka removes the copies when it
-stops.
+You can also drop files on the page or add them by path. Dropped files are
+copied to a temporary directory first, because the browser does not tell Loka
+where they are. Loka removes the copies when it stops.
 
 If a device does not appear, enter its address and port. Some Wi-Fi networks
 block connections between devices. On Windows, allow Loka through the firewall
