@@ -103,12 +103,8 @@ Then check:
 
 - `dist/vX.Y.Z` holds 4 archives, 3 `.tar.gz` and 1 `.zip`, and `SHA256SUMS`, all named
   `loka_X.Y.Z_*`.
-- The binary reports the version:
-  ```bash
-  tar -xzOf dist/vX.Y.Z/loka_X.Y.Z_linux_amd64.tar.gz loka > <scratchpad>/loka
-  chmod +x <scratchpad>/loka && <scratchpad>/loka --version
-  ```
-  It must print `loka X.Y.Z`.
+- The log has `loka_X.Y.Z_linux_amd64: --version and -h work`. The script runs the build
+  for this computer before packing it, and stops when it prints any other version.
 
 ## 6. Compare with CI
 
@@ -206,5 +202,4 @@ Keep it short:
 - the files in `dist/vX.Y.Z/` and that they verify
 - the release link, or the release notes in one fenced `markdown` block if the user publishes
   it themselves
-- leftovers, such as the extracted binary and CI's archives in the scratchpad, or any skipped
-  check
+- leftovers, such as CI's archives in the scratchpad, or any skipped check
