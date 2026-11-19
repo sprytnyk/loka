@@ -132,7 +132,7 @@ func TestPickReturnsChosenPaths(t *testing.T) {
 		t.Fatalf("an unknown kind answered %d", code)
 	}
 	s.pick = func(pickKind) ([]string, error) { return nil, errNoPicker }
-	if code := api(t, s, base, "/api/pick", map[string]string{"kind": "files"}, &failure); code != http.StatusBadRequest || !strings.Contains(failure.Error, "Enter a path") {
+	if code := api(t, s, base, "/api/pick", map[string]string{"kind": "files"}, &failure); code != http.StatusBadRequest || !strings.Contains(failure.Error, "unavailable") {
 		t.Fatalf("missing picker answered %d %q", code, failure.Error)
 	}
 	if !slices.Equal(asked, []pickKind{pickDirectory, pickFiles, pickDestination}) {

@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,7 +16,7 @@ import (
 var page string
 
 // errNoPicker means this system has no way to show a file picker.
-var errNoPicker = errors.New("The file picker is unavailable here. Enter a path or drop files instead")
+var errNoPicker = errors.New("The desktop file picker is unavailable here")
 
 // index serves the page, with the key it uses for the API, only to this
 // device.
@@ -52,7 +53,7 @@ func (s *server) pickPaths(w http.ResponseWriter, r *http.Request) {
 	paths, err := s.pick(req.Kind)
 	if err != nil {
 		if !errors.Is(err, errNoPicker) {
-			err = errors.Join(errNoPicker, err)
+			err = fmt.Errorf("%w (%v)", errNoPicker, err)
 		}
 		writeError(w, http.StatusBadRequest, err)
 		return
