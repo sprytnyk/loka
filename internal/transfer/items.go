@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // MaxOfferItems caps the names shown for one incoming transfer.
@@ -104,17 +105,33 @@ func walk(root, name string) (entries []Entry, size int64, err error) {
 	return entries, size, err
 }
 
+// maxNameBytes is the longest file name most systems allow.
+const maxNameBytes = 255
+
 // numbered returns name with " (i)" before its extension: "a.txt" becomes
-// "a (1).txt". Names that start with a dot keep it as part of the stem.
+// "a (1).txt". Names that start with a dot keep it as part of the stem. The
+// stem is shortened when the result would be longer than maxNameBytes.
 func numbered(name string, i int) string {
 	if i == 0 {
 		return name
 	}
+	mark := fmt.Sprintf(" (%d)", i)
 	stem, ext := name, ""
-	if dot := strings.LastIndex(name, "."); dot > 0 && dot < len(name)-1 {
+	if dot := strings.LastIndex(name, "."); dot > 0 && dot < len(name)-1 && len(name)-dot+len(mark) < maxNameBytes {
 		stem, ext = name[:dot], name[dot:]
 	}
-	return fmt.Sprintf("%s (%d)%s", stem, i, ext)
+	return cutToBytes(stem, maxNameBytes-len(mark)-len(ext)) + mark + ext
+}
+
+// cutToBytes shortens s to at most n bytes without splitting a character.
+func cutToBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }
 
 // sameFile reports whether now is still the file or directory that was.

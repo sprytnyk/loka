@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/sprytnyk/loka/internal/treetest"
 )
@@ -256,18 +258,19 @@ func TestReceiveStopsWhenCancelled(t *testing.T) {
 }
 
 func TestReceiveMovesNothingWhenOneItemCannotMove(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("relies on Linux's 255-byte name limit")
-	}
-	destination := t.TempDir()
-	long := strings.Repeat("b", 252) // "bbb… (1)" is too long a name
-	treetest.Write(t, destination, map[string]string{long: "old"})
+	staging, destination := t.TempDir(), t.TempDir()
+	treetest.Write(t, staging, map[string]string{"a": "new"})
+	treetest.Write(t, destination, map[string]string{"old": "old"})
 	before := treetest.Read(t, destination)
-	err := receiveTar(t, destination, identity, tarItem{"a", "new"}, tarItem{long, "new"})
-	if err == nil {
-		t.Fatal("receive succeeded")
+	// "b" is missing from staging, so it cannot move after "a" did.
+	staged := map[string]string{"a": filepath.Join(staging, "a"), "b": filepath.Join(staging, "b")}
+	if err := publish(staged, []string{"a", "b"}, destination); err == nil {
+		t.Fatal("publish succeeded")
 	}
 	treetest.Same(t, treetest.Read(t, destination), before)
+	if _, err := os.Lstat(staged["a"]); err != nil {
+		t.Fatalf("a was not moved back: %v", err)
+	}
 }
 
 // cancelAtEnd cancels once its last byte is read, as if a cancel arrived
@@ -318,4 +321,65 @@ func TestSendingRefusesAReplacedFile(t *testing.T) {
 	if bytes.Contains(buf.Bytes(), []byte("xyz")) {
 		t.Fatal("the replacement was sent")
 	}
+}
+
+func TestNumberedFitsTheNameLimit(t *testing.T) {
+	for _, tc := range []struct{ name, suffix string }{
+		{strings.Repeat("a", 251) + ".txt", " (1).txt"},
+		{strings.Repeat("я", 125) + ".txt", " (1).txt"},
+		{strings.Repeat("a", 255), " (1)"},
+		{"a." + strings.Repeat("e", 253), " (1)"}, // the extension alone is too long to keep
+	} {
+		got := numbered(tc.name, 1)
+		if len(got) > maxNameBytes || !utf8.ValidString(got) || !strings.HasSuffix(got, tc.suffix) {
+			t.Errorf("numbered(%q) = %q (%d bytes)", tc.name, got, len(got))
+		}
+	}
+}
+
+// TestSendingTwoItemsWithTheSameLongName sends two files whose shared name
+// is as long as names can be, so the second one's numbered name must be
+// shortened to fit.
+func TestSendingTwoItemsWithTheSameLongName(t *testing.T) {
+	root, destination := t.TempDir(), t.TempDir()
+	long := strings.Repeat("a", 251) + ".txt"
+	treetest.Write(t, root, map[string]string{"one/" + long: "1", "two/" + long: "2"})
+	entries, items, size, err := Collect([]string{filepath.Join(root, "one", long), filepath.Join(root, "two", long)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	var done atomic.Int64
+	if err := WriteTar(context.Background(), &buf, entries, &done); err != nil {
+		t.Fatal(err)
+	}
+	if err := Receive(context.Background(), &buf, destination, size, &done, identity); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{"1", "2"} {
+		if got, err := os.ReadFile(filepath.Join(destination, items[i])); err != nil || string(got) != want {
+			t.Errorf("%s: got %q, %v", items[i], got, err)
+		}
+	}
+	if found, _ := os.ReadDir(destination); len(found) != 2 {
+		t.Errorf("destination has %d items, want 2", len(found))
+	}
+}
+
+func TestReceiveFailsOnANameTooLong(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("relies on Linux's 255-byte name limit")
+	}
+	destination := t.TempDir()
+	result := make(chan error, 1)
+	go func() { result <- receiveTar(t, destination, identity, tarItem{strings.Repeat("a", 300), "x"}) }()
+	select {
+	case err := <-result:
+		if err == nil {
+			t.Fatal("receive succeeded")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("receive did not end")
+	}
+	treetest.Same(t, treetest.Read(t, destination), map[string]string{})
 }

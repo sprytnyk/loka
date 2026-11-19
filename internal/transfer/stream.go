@@ -118,7 +118,10 @@ func Receive(ctx context.Context, r io.Reader, destination string, size int64, d
 		if _, seen := u.staged[parts[0]]; !seen {
 			roots = append(roots, parts[0])
 		}
-		target := u.path(parts)
+		target, err := u.path(parts)
+		if err != nil {
+			return err
+		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0o755); err != nil {
@@ -213,27 +216,35 @@ type unpacker struct {
 	staged    map[string]string // stream path -> path inside root
 }
 
-func (u unpacker) path(parts []string) string {
+func (u unpacker) path(parts []string) (string, error) {
 	parent := u.root
 	for i := range parts {
 		key := strings.Join(parts[:i+1], "/")
 		staged, ok := u.staged[key]
 		if !ok {
-			staged = freePath(parent, u.localName(parts[i]))
+			var err error
+			if staged, err = freePath(parent, u.localName(parts[i])); err != nil {
+				return "", err
+			}
 			u.staged[key] = staged
 		}
 		parent = staged
 	}
-	return parent
+	return parent, nil
 }
 
 // freePath returns dir/name, numbered when something already has that name.
-// A broken symbolic link counts as something.
-func freePath(dir, name string) string {
+// A broken symbolic link counts as something. A name the file system
+// refuses, such as one that is too long, is an error.
+func freePath(dir, name string) (string, error) {
 	for i := 0; ; i++ {
 		path := filepath.Join(dir, numbered(name, i))
-		if _, err := os.Lstat(path); errors.Is(err, fs.ErrNotExist) {
-			return path
+		_, err := os.Lstat(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
 		}
 	}
 }
