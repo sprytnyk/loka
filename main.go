@@ -19,6 +19,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/sprytnyk/loka/internal/desktop"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -213,7 +215,7 @@ func serve(ctx context.Context, o options, stdout io.Writer) error {
 	url := fmt.Sprintf("http://127.0.0.1:%d/", port)
 	fmt.Fprintf(stdout, "Loka %s is running at %s (Ctrl+C to stop)\n", version, url)
 	if !o.noBrowser {
-		if err := openBrowser(url); err != nil {
+		if err := desktop.OpenBrowser(url); err != nil {
 			fmt.Fprintf(stdout, "Open %s in your browser.\n", url)
 		}
 	}

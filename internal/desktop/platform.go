@@ -1,28 +1,34 @@
-package main
+// Package desktop shows the system's file pickers and opens the browser,
+// through the tools each system has.
+package desktop
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-// pickKind says what a picker chooses.
-type pickKind string
+// ErrNoPicker means this system has no way to show a file picker.
+var ErrNoPicker = errors.New("The desktop file picker is unavailable here")
+
+// Kind says what a picker chooses.
+type Kind string
 
 const (
-	pickFiles       pickKind = "files"
-	pickDirectory   pickKind = "directory"
-	pickDestination pickKind = "destination"
+	Files       Kind = "files"
+	Directory   Kind = "directory"
+	Destination Kind = "destination"
 )
 
 // title is the picker window's title.
-func (k pickKind) title() string {
+func (k Kind) title() string {
 	switch k {
-	case pickFiles:
+	case Files:
 		return "Choose files"
-	case pickDirectory:
+	case Directory:
 		return "Choose a directory"
 	}
 	return "Choose a destination"

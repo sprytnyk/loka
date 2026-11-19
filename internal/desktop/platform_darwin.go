@@ -1,4 +1,4 @@
-package main
+package desktop
 
 import (
 	"errors"
@@ -7,13 +7,13 @@ import (
 	"strings"
 )
 
-// pickWithSystem shows the Finder picker through JavaScript for
+// Pick shows the Finder picker through JavaScript for
 // Automation. It brings the picker to the front and answers in JSON, so
 // any file name survives.
-func pickWithSystem(kind pickKind) ([]string, error) {
+func Pick(kind Kind) ([]string, error) {
 	prompt := strconv.Quote(kind.title())
 	choose := `app.chooseFile({withPrompt: ` + prompt + `, multipleSelectionsAllowed: true})`
-	if kind != pickFiles {
+	if kind != Files {
 		choose = `[app.chooseFolder({withPrompt: ` + prompt + `})]`
 	}
 	script := `const app = Application.currentApplication();
@@ -36,7 +36,7 @@ JSON.stringify(` + choose + `.map(p => p.toString()));`
 	return paths, err
 }
 
-// openBrowser opens url in the default web browser.
-func openBrowser(url string) error {
+// OpenBrowser opens url in the default web browser.
+func OpenBrowser(url string) error {
 	return start("open", url)
 }

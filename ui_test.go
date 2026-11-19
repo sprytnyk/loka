@@ -12,23 +12,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
-)
 
-func TestDecodePaths(t *testing.T) {
-	a := filepath.Join(t.TempDir(), "line\nbreak ")
-	out, _ := json.Marshal([]string{a})
-	if got, err := decodePaths(append(out, "\r\n"...)); err != nil || !slices.Equal(got, []string{a}) {
-		t.Fatalf("got %q %v", got, err)
-	}
-	if got, err := decodePaths([]byte("[]")); err != nil || len(got) != 0 {
-		t.Fatalf("empty answer gave %q %v", got, err)
-	}
-	for _, bad := range []string{`["relative"]`, "not json"} {
-		if _, err := decodePaths([]byte(bad)); err == nil {
-			t.Fatalf("accepted %s", bad)
-		}
-	}
-}
+	"github.com/sprytnyk/loka/internal/desktop"
+)
 
 func TestPageCarriesKeyAndVersion(t *testing.T) {
 	s, base := startServer(t)
@@ -108,10 +94,10 @@ func TestUploadKeepsEmptyDirectoriesAndDoesNotOverwrite(t *testing.T) {
 
 func TestPickReturnsChosenPaths(t *testing.T) {
 	s, base := startServer(t)
-	var asked []pickKind
-	s.pick = func(kind pickKind) ([]string, error) {
+	var asked []desktop.Kind
+	s.pick = func(kind desktop.Kind) ([]string, error) {
 		asked = append(asked, kind)
-		if kind == pickDirectory {
+		if kind == desktop.Directory {
 			return []string{"/home/me/Music"}, nil
 		}
 		return nil, nil
@@ -131,11 +117,11 @@ func TestPickReturnsChosenPaths(t *testing.T) {
 	if code := api(t, s, base, "/api/pick", map[string]string{"kind": "folder"}, &failure); code != http.StatusBadRequest {
 		t.Fatalf("an unknown kind answered %d", code)
 	}
-	s.pick = func(pickKind) ([]string, error) { return nil, errNoPicker }
+	s.pick = func(desktop.Kind) ([]string, error) { return nil, desktop.ErrNoPicker }
 	if code := api(t, s, base, "/api/pick", map[string]string{"kind": "files"}, &failure); code != http.StatusBadRequest || !strings.Contains(failure.Error, "unavailable") {
 		t.Fatalf("missing picker answered %d %q", code, failure.Error)
 	}
-	if !slices.Equal(asked, []pickKind{pickDirectory, pickFiles, pickDestination}) {
+	if !slices.Equal(asked, []desktop.Kind{desktop.Directory, desktop.Files, desktop.Destination}) {
 		t.Fatalf("asked for %v", asked)
 	}
 }

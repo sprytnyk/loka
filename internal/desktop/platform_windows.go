@@ -1,14 +1,14 @@
-package main
+package desktop
 
 import "os/exec"
 
-// pickWithSystem shows the Windows picker through PowerShell. A hidden
+// Pick shows the Windows picker through PowerShell. A hidden
 // topmost window owns the dialog, so it opens in front of the browser.
 // The answer is a JSON list in UTF-8 without a byte order mark.
-func pickWithSystem(kind pickKind) ([]string, error) {
+func Pick(kind Kind) ([]string, error) {
 	dialog := `$d = New-Object System.Windows.Forms.OpenFileDialog -Property @{Multiselect = $true; Title = '` + kind.title() + `'}
 $field = 'FileNames'`
-	if kind != pickFiles {
+	if kind != Files {
 		dialog = `$d = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{Description = '` + kind.title() + `'}
 $field = 'SelectedPath'`
 	}
@@ -32,7 +32,7 @@ try {
 	return decodePaths(out)
 }
 
-// openBrowser opens url in the default web browser.
-func openBrowser(url string) error {
+// OpenBrowser opens url in the default web browser.
+func OpenBrowser(url string) error {
 	return start("rundll32", "url.dll,FileProtocolHandler", url)
 }

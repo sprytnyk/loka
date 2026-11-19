@@ -1,6 +1,6 @@
 //go:build !darwin && !windows
 
-package main
+package desktop
 
 import (
 	"errors"
@@ -8,19 +8,19 @@ import (
 	"os/exec"
 )
 
-// pickWithSystem shows a desktop file picker through zenity or kdialog.
-func pickWithSystem(kind pickKind) ([]string, error) {
+// Pick shows a desktop file picker through zenity or kdialog.
+func Pick(kind Kind) ([]string, error) {
 	// Without a display, the tools fail the same way as when the person
 	// cancels.
 	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
-		return nil, errNoPicker
+		return nil, ErrNoPicker
 	}
 	// zenity joins several paths with this separator, which file names
 	// do not use. kdialog can only put them on separate lines.
 	const unitSeparator = "\x1f"
 	zenity := []string{"zenity", "--file-selection", "--title=" + kind.title()}
 	kdialog := []string{"kdialog", "--title", kind.title()}
-	if kind == pickFiles {
+	if kind == Files {
 		zenity = append(zenity, "--multiple", "--separator="+unitSeparator)
 		kdialog = append(kdialog, "--getopenfilename", ".", "--multiple", "--separate-output")
 	} else {
@@ -43,10 +43,10 @@ func pickWithSystem(kind pickKind) ([]string, error) {
 		}
 		return splitPaths(string(out), tool.sep)
 	}
-	return nil, errNoPicker
+	return nil, ErrNoPicker
 }
 
-// openBrowser opens url in the desktop's web browser.
-func openBrowser(url string) error {
+// OpenBrowser opens url in the desktop's web browser.
+func OpenBrowser(url string) error {
 	return start("xdg-open", url)
 }

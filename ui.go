@@ -10,13 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sprytnyk/loka/internal/desktop"
 )
 
 //go:embed index.html
 var page string
-
-// errNoPicker means this system has no way to show a file picker.
-var errNoPicker = errors.New("The desktop file picker is unavailable here")
 
 // index serves the page, with the key it uses for the API, only to this
 // device.
@@ -40,20 +39,20 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) {
 // cancels.
 func (s *server) pickPaths(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Kind pickKind `json:"kind"`
+		Kind desktop.Kind `json:"kind"`
 	}
 	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if req.Kind != pickFiles && req.Kind != pickDirectory && req.Kind != pickDestination {
+	if req.Kind != desktop.Files && req.Kind != desktop.Directory && req.Kind != desktop.Destination {
 		writeError(w, http.StatusBadRequest, errors.New("Choose files, a directory or a destination"))
 		return
 	}
 	paths, err := s.pick(req.Kind)
 	if err != nil {
-		if !errors.Is(err, errNoPicker) {
-			err = fmt.Errorf("%w (%v)", errNoPicker, err)
+		if !errors.Is(err, desktop.ErrNoPicker) {
+			err = fmt.Errorf("%w (%v)", desktop.ErrNoPicker, err)
 		}
 		writeError(w, http.StatusBadRequest, err)
 		return

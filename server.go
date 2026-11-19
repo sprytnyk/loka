@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+
+	"github.com/sprytnyk/loka/internal/desktop"
 )
 
 // server answers the page on this device and other devices on the network.
@@ -20,7 +22,7 @@ type server struct {
 	version   string
 	key       string // proves a request comes from this device's page
 	localName func(string) string
-	pick      func(kind pickKind) ([]string, error)
+	pick      func(kind desktop.Kind) ([]string, error)
 	temp      string // holds files dropped on the page, made when needed
 
 	transfers   registry
@@ -34,7 +36,7 @@ func newServer(name, version string) *server {
 		version:   version,
 		key:       randomToken(24),
 		localName: localName,
-		pick:      pickWithSystem,
+		pick:      desktop.Pick,
 		temp:      filepath.Join(os.TempDir(), "loka-"+randomToken(9)),
 	}
 }
