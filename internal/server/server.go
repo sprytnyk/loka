@@ -4,6 +4,7 @@ package server
 
 import (
 	"cmp"
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/sprytnyk/loka/internal/desktop"
 	"github.com/sprytnyk/loka/internal/network"
@@ -160,6 +162,11 @@ func (s *Server) peerUpload(w http.ResponseWriter, r *http.Request, t *transfer.
 		writeError(w, http.StatusConflict, errors.New("The transfer is not accepted"))
 		return
 	}
+	// A cancel must also end a read that is waiting for bytes, as when the
+	// sender has stalled.
+	rc := http.NewResponseController(w)
+	stop := context.AfterFunc(t.Context(), func() { rc.SetReadDeadline(time.Now()) })
+	defer stop()
 	err := transfer.Receive(t.Context(), r.Body, t.Destination(), t.Size, &t.Done, s.localName)
 	t.Finish(err)
 	switch {

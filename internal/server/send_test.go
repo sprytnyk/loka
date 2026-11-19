@@ -337,7 +337,6 @@ func TestReceiverCancelDuringUpload(t *testing.T) {
 	in := receiver.Transfers.Get(reply.ID)
 	waitFor(t, "bytes to arrive", func() bool { return in.Done.Load() > 0 })
 	api(t, receiver, base, "/api/cancel", map[string]string{"id": reply.ID}, nil)
-	go pw.Write([]byte("x")) // wake the stalled read
 	if err := <-answer; err == nil || !strings.Contains(err.Error(), "cancelled") {
 		t.Fatalf("sender was told %v", err)
 	}
