@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 )
 
-// ErrLinkGone means a shared item was removed or replaced.
-var ErrLinkGone = errors.New("The shared items are no longer available")
+// errLinkGone means a shared item was removed or replaced.
+var errLinkGone = errors.New("The shared items are no longer available")
 
 // sharedItem is a path chosen for a link and what it was when the link was
 // made, so a download can tell when something else took its place.
@@ -55,12 +55,12 @@ func (t *Transfer) OpenSharedFile() (*os.File, os.FileInfo, error) {
 	it := t.shared[0]
 	f, err := os.Open(it.path)
 	if err != nil {
-		return nil, nil, ErrLinkGone
+		return nil, nil, errLinkGone
 	}
 	info, err := f.Stat()
 	if err != nil || !it.sameAs(info) {
 		f.Close()
-		return nil, nil, ErrLinkGone
+		return nil, nil, errLinkGone
 	}
 	return f, info, nil
 }
@@ -72,13 +72,13 @@ func (t *Transfer) LinkEntries() ([]Entry, error) {
 	for i, it := range t.shared {
 		info, err := os.Lstat(it.path)
 		if err != nil || !it.sameAs(info) {
-			return nil, ErrLinkGone
+			return nil, errLinkGone
 		}
 		paths[i] = it.path
 	}
 	entries, _, _, err := Collect(paths)
 	if err != nil {
-		return nil, ErrLinkGone
+		return nil, errLinkGone
 	}
 	return entries, nil
 }

@@ -2,6 +2,7 @@ package network
 
 import (
 	"cmp"
+	"maps"
 	"net"
 	"slices"
 	"strings"
@@ -47,10 +48,7 @@ func orderAddresses(found []localAddress, route string) []string {
 		}
 		lan[a.ip] = lan[a.ip] || a.lan
 	}
-	ips := make([]string, 0, len(lan))
-	for ip := range lan {
-		ips = append(ips, ip)
-	}
+	ips := slices.Collect(maps.Keys(lan))
 	last := func(b bool) int {
 		if b {
 			return 1

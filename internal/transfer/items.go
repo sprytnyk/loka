@@ -58,37 +58,47 @@ func Collect(paths []string) (entries []Entry, items []string, size int64, err e
 		used[name] = true
 		items = append(items, name)
 
-		err = filepath.WalkDir(p, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if !d.Type().IsRegular() && !d.IsDir() {
-				return nil // symbolic links, sockets, devices
-			}
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			rel, err := filepath.Rel(p, path)
-			if err != nil {
-				return err
-			}
-			e := Entry{src: path, name: name, dir: d.IsDir(), mtime: info.ModTime()}
-			if rel != "." {
-				e.name += "/" + filepath.ToSlash(rel)
-			}
-			if !e.dir {
-				e.size = info.Size()
-				size += e.size
-			}
-			entries = append(entries, e)
-			return nil
-		})
+		found, n, err := walk(p, name)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("Cannot send %s: %w", p, err)
 		}
+		entries = append(entries, found...)
+		size += n
 	}
 	return entries, items, size, nil
+}
+
+// walk lists root and everything under it, named under name in the
+// transfer, and adds up the file sizes. Symbolic links, sockets and
+// devices are left out.
+func walk(root, name string) (entries []Entry, size int64, err error) {
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.Type().IsRegular() && !d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		e := Entry{src: path, name: name, dir: d.IsDir(), mtime: info.ModTime()}
+		if rel != "." {
+			e.name += "/" + filepath.ToSlash(rel)
+		}
+		if !e.dir {
+			e.size = info.Size()
+			size += e.size
+		}
+		entries = append(entries, e)
+		return nil
+	})
+	return entries, size, err
 }
 
 // numbered returns name with " (i)" before its extension: "a.txt" becomes

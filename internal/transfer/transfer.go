@@ -66,6 +66,7 @@ type Transfer struct {
 	speed       speedometer
 }
 
+// New makes a transfer that starts at status.
 func New(direction Direction, peer string, items []string, size int64, status Status) *Transfer {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Transfer{
@@ -127,7 +128,7 @@ func (t *Transfer) Accept(destination string) bool {
 }
 
 // Stop cancels the transfer. A transfer that is not moving bytes stops at
-// once; one that is notices the cancelled context and calls finish.
+// once; one that is notices the cancelled context and calls Finish.
 func (t *Transfer) Stop() {
 	t.cancel()
 	t.mu.Lock()
@@ -159,6 +160,7 @@ func (t *Transfer) Finish(err error) {
 	}
 }
 
+// Final reports whether a transfer at this status has ended.
 func (s Status) Final() bool {
 	switch s {
 	case Complete, Failed, Cancelled, Stopped:
@@ -179,6 +181,31 @@ type View struct {
 	Error     string    `json:"error,omitempty"`
 	Token     string    `json:"token,omitempty"`
 	SpeedMbps *float64  `json:"speed_mbps,omitempty"` // only while bytes move
+}
+
+// View returns what the page shows now. While bytes move it includes the
+// speed, which reading the view measures.
+func (t *Transfer) View() View {
+	t.mu.Lock()
+	status, err := t.status, t.err
+	var speed *float64
+	if status == Sending || status == Receiving {
+		mbps := t.speed.read(t.Done.Load(), time.Now())
+		speed = &mbps
+	}
+	t.mu.Unlock()
+	return View{
+		ID:        t.ID,
+		Direction: t.Direction,
+		Name:      t.Peer,
+		Items:     t.Items,
+		Size:      t.Size,
+		Status:    status,
+		Progress:  progress(t.Done.Load(), t.Size, status),
+		Error:     err,
+		Token:     t.Token,
+		SpeedMbps: speed,
+	}
 }
 
 // speedEvery is the shortest time a speed is measured over.
@@ -205,29 +232,6 @@ func (s *speedometer) read(bytes int64, now time.Time) float64 {
 	return s.mbps
 }
 
-func (t *Transfer) View() View {
-	t.mu.Lock()
-	status, err := t.status, t.err
-	var speed *float64
-	if status == Sending || status == Receiving {
-		mbps := t.speed.read(t.Done.Load(), time.Now())
-		speed = &mbps
-	}
-	t.mu.Unlock()
-	return View{
-		ID:        t.ID,
-		Direction: t.Direction,
-		Name:      t.Peer,
-		Items:     t.Items,
-		Size:      t.Size,
-		Status:    status,
-		Progress:  progress(t.Done.Load(), t.Size, status),
-		Error:     err,
-		Token:     t.Token,
-		SpeedMbps: speed,
-	}
-}
-
 func progress(done, size int64, status Status) int {
 	switch {
 	case status == Complete || status == Shared:
@@ -247,6 +251,7 @@ type Registry struct {
 	byToken map[string]*Transfer
 }
 
+// Add records a new transfer.
 func (r *Registry) Add(t *Transfer) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -261,22 +266,25 @@ func (r *Registry) Add(t *Transfer) {
 	}
 }
 
+// Get returns the transfer with this ID, or nil.
 func (r *Registry) Get(id string) *Transfer {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.byID[id]
 }
 
+// Link returns the download link with this token, or nil.
 func (r *Registry) Link(token string) *Transfer {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.byToken[token]
 }
 
+// All returns every transfer, oldest first.
 func (r *Registry) All() []*Transfer {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append([]*Transfer(nil), r.ordered...)
+	return slices.Clone(r.ordered)
 }
 
 // RandomToken returns n random bytes as URL-safe text.

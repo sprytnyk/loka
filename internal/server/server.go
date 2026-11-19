@@ -34,6 +34,7 @@ type Server struct {
 	destination atomic.Pointer[string] // the last accepted destination
 }
 
+// New makes a server that names this device name to other devices.
 func New(name, version string) *Server {
 	return &Server{
 		name:      name,
@@ -50,6 +51,7 @@ func (s *Server) Close() {
 	os.RemoveAll(s.temp)
 }
 
+// Handler answers the page, the page's API, other devices and download links.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /peer/offer", s.offer)
@@ -295,7 +297,7 @@ func ExistingDir(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if info, err := os.Stat(abs); path == "" || err != nil || !info.IsDir() {
+	if info, err := os.Stat(abs); err != nil || !info.IsDir() {
 		return "", errors.New("The destination must be an existing directory")
 	}
 	return abs, nil

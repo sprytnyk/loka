@@ -294,33 +294,43 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 			continue
 		}
 		fmt.Fprintf(stdout, "\n%s wants to send: %s\n", t.Peer, strings.Join(t.Items, ", "))
-		for {
-			fmt.Fprint(stdout, "Destination directory (empty to decline): ")
-			var answer string
-			var ok bool
-			select {
-			case <-ctx.Done():
-				t.Stop()
-				return <-served
-			case answer, ok = <-answers:
-			}
-			if !ok || strings.TrimSpace(answer) == "" {
-				t.Stop()
-				fmt.Fprintln(stdout, "Declined.")
-				break
-			}
-			destination, err := server.ExistingDir(strings.TrimSpace(answer))
-			if err != nil {
-				fmt.Fprintln(stdout, err)
-				continue
-			}
-			if !s.Accept(t, destination) {
-				fmt.Fprintln(stdout, "The sender cancelled.")
-				break
-			}
-			follow(t, stdout)
-			break
+		if !answerOffer(ctx, s, t, answers, stdout) {
+			return <-served
 		}
+	}
+}
+
+// answerOffer asks for a destination until one exists or the person
+// declines, then follows the transfer. It returns false when ctx ends
+// first.
+func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, answers <-chan string, stdout io.Writer) bool {
+	for {
+		fmt.Fprint(stdout, "Destination directory (empty to decline): ")
+		var answer string
+		var ok bool
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return false
+		case answer, ok = <-answers:
+		}
+		answer = strings.TrimSpace(answer)
+		if !ok || answer == "" {
+			t.Stop()
+			fmt.Fprintln(stdout, "Declined.")
+			return true
+		}
+		destination, err := server.ExistingDir(answer)
+		if err != nil {
+			fmt.Fprintln(stdout, err)
+			continue
+		}
+		if !s.Accept(t, destination) {
+			fmt.Fprintln(stdout, "The sender cancelled.")
+			return true
+		}
+		follow(t, stdout)
+		return true
 	}
 }
 

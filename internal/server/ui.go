@@ -87,7 +87,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Entry-Type") == "directory" {
 		err = os.MkdirAll(target, 0o700)
 	} else {
-		err = s.store(target, r.Body)
+		err = store(target, r.Body)
 	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -97,7 +97,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 }
 
 // store writes a new file, refusing to replace one.
-func (s *Server) store(target string, body io.Reader) error {
+func store(target string, body io.Reader) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 		return err
 	}
