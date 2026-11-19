@@ -21,11 +21,6 @@ type sharedItem struct {
 	info os.FileInfo
 }
 
-// sameAs reports whether info is still the item that was shared.
-func (it sharedItem) sameAs(info os.FileInfo) bool {
-	return sameFile(it.info, info)
-}
-
 // NewLink makes a download link for the chosen paths.
 func NewLink(paths []string) (*Transfer, error) {
 	_, items, size, err := Collect(paths)
@@ -69,7 +64,7 @@ func (t *Transfer) holdShared() error {
 			return err
 		}
 		held = append(held, f)
-		if info, err := f.Stat(); err != nil || !it.sameAs(info) {
+		if info, err := f.Stat(); err != nil || !sameFile(it.info, info) {
 			release()
 			return errLinkGone
 		}
@@ -93,7 +88,7 @@ func (t *Transfer) OpenSharedFile() (*os.File, os.FileInfo, error) {
 		return nil, nil, errLinkGone
 	}
 	info, err := f.Stat()
-	if err != nil || !it.sameAs(info) {
+	if err != nil || !sameFile(it.info, info) {
 		f.Close()
 		return nil, nil, errLinkGone
 	}
@@ -106,7 +101,7 @@ func (t *Transfer) LinkEntries() ([]Entry, error) {
 	paths := make([]string, len(t.shared))
 	for i, it := range t.shared {
 		info, err := os.Lstat(it.path)
-		if err != nil || !it.sameAs(info) {
+		if err != nil || !sameFile(it.info, info) {
 			return nil, errLinkGone
 		}
 		paths[i] = it.path
@@ -127,7 +122,7 @@ func WriteZip(ctx context.Context, w io.Writer, entries []Entry) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		hdr := &zip.FileHeader{Name: e.name, Method: zip.Store, Modified: e.mtime}
+		hdr := &zip.FileHeader{Name: e.name, Method: zip.Store, Modified: e.info.ModTime()}
 		if e.dir {
 			hdr.Name += "/"
 		}

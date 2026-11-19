@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -16,12 +15,11 @@ const MaxOfferItems = 100
 
 // Entry is one file or directory in a transfer, in the order it is sent.
 type Entry struct {
-	src   string // path on this device
-	name  string // slash-separated path in the transfer
-	dir   bool
-	size  int64
-	mtime time.Time
-	info  os.FileInfo // what Collect saw, so sending can tell a replacement
+	src  string // path on this device
+	name string // slash-separated path in the transfer
+	dir  bool
+	size int64
+	info os.FileInfo // what Collect saw, so sending can tell a replacement
 }
 
 // Collect lists what to send for the chosen paths, with the top-level names
@@ -91,7 +89,7 @@ func walk(root, name string) (entries []Entry, size int64, err error) {
 		if err != nil {
 			return err
 		}
-		e := Entry{src: path, name: name, dir: d.IsDir(), mtime: info.ModTime(), info: info}
+		e := Entry{src: path, name: name, dir: d.IsDir(), info: info}
 		if rel != "." {
 			e.name += "/" + filepath.ToSlash(rel)
 		}

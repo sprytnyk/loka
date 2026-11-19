@@ -24,7 +24,7 @@ import (
 func WriteTar(ctx context.Context, w io.Writer, entries []Entry, done *atomic.Int64) error {
 	tw := tar.NewWriter(w)
 	for _, e := range entries {
-		hdr := &tar.Header{Name: e.name, ModTime: e.mtime, Typeflag: tar.TypeReg, Mode: 0o644, Size: e.size}
+		hdr := &tar.Header{Name: e.name, ModTime: e.info.ModTime(), Typeflag: tar.TypeReg, Mode: 0o644, Size: e.size}
 		if e.dir {
 			hdr.Name += "/"
 			hdr.Typeflag, hdr.Mode, hdr.Size = tar.TypeDir, 0o755, 0
