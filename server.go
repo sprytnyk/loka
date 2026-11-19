@@ -20,6 +20,8 @@ type server struct {
 	version   string
 	key       string // proves a request comes from this device's page
 	localName func(string) string
+	pick      func(folder bool) ([]string, error)
+	temp      string // holds files dropped on the page, made when needed
 
 	transfers   registry
 	devices     *discovery             // nil when not looking for devices
@@ -27,7 +29,19 @@ type server struct {
 }
 
 func newServer(name, version string) *server {
-	return &server{name: name, version: version, key: randomToken(24), localName: localName}
+	return &server{
+		name:      name,
+		version:   version,
+		key:       randomToken(24),
+		localName: localName,
+		pick:      pickWithSystem,
+		temp:      filepath.Join(os.TempDir(), "loka-"+randomToken(9)),
+	}
+}
+
+// close removes the files dropped on the page.
+func (s *server) close() {
+	os.RemoveAll(s.temp)
 }
 
 func (s *server) handler() http.Handler {
@@ -37,7 +51,10 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /peer/cancel/{id}", s.peer(s.peerCancel))
 	mux.HandleFunc("POST /peer/upload/{id}", s.peer(s.peerUpload))
 
+	mux.HandleFunc("GET /{$}", s.index)
 	mux.HandleFunc("GET /api/state", s.local(s.state))
+	mux.HandleFunc("POST /api/pick", s.local(s.pickPaths))
+	mux.HandleFunc("POST /api/upload", s.local(s.upload))
 	mux.HandleFunc("POST /api/send", s.local(s.send))
 	mux.HandleFunc("POST /api/accept", s.local(s.accept))
 	mux.HandleFunc("POST /api/cancel", s.local(s.cancel))
@@ -150,7 +167,6 @@ func (s *server) peerUpload(w http.ResponseWriter, r *http.Request, t *Transfer)
 // state is everything the page shows.
 type state struct {
 	Name           string         `json:"name"`
-	Version        string         `json:"version"`
 	Peers          []peer         `json:"peers"`
 	Transfers      []transferView `json:"transfers"`
 	Addresses      []string       `json:"addresses"`
@@ -159,7 +175,7 @@ type state struct {
 }
 
 func (s *server) state(w http.ResponseWriter, _ *http.Request) {
-	st := state{Name: s.name, Version: s.version, Peers: []peer{}, Transfers: []transferView{}, Addresses: localAddresses()}
+	st := state{Name: s.name, Peers: []peer{}, Transfers: []transferView{}, Addresses: localAddresses()}
 	if s.devices != nil {
 		peers, problem := s.devices.list()
 		st.DiscoveryError = problem
