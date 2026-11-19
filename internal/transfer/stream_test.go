@@ -95,12 +95,13 @@ func TestReceiveKeepsExistingItems(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	treetest.Same(t, treetest.Read(t, destination), map[string]string{
+	got := treetest.Read(t, destination)
+	treetest.Same(t, got, map[string]string{
 		"source/":           "dir",
-		"source/old":        treetest.Read(t, destination)["source/old"],
+		"source/old":        got["source/old"],
 		"source (1)/":       "dir",
 		"source (1)/empty/": "dir",
-		"source (1)/file":   treetest.Read(t, destination)["source (1)/file"],
+		"source (1)/file":   got["source (1)/file"],
 	})
 }
 

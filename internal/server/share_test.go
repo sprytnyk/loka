@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ import (
 	"github.com/sprytnyk/loka/internal/treetest"
 )
 
+// get fetches url with the given header names and values, and closes the
+// response when the test ends.
 func get(t *testing.T, url string, header ...string) *http.Response {
 	t.Helper()
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
@@ -31,6 +34,48 @@ func get(t *testing.T, url string, header ...string) *http.Response {
 	}
 	t.Cleanup(func() { resp.Body.Close() })
 	return resp
+}
+
+// addLink makes a download link for paths on s.
+func addLink(t *testing.T, s *Server, paths ...string) *transfer.Transfer {
+	t.Helper()
+	link, err := transfer.NewLink(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Transfers.Add(link)
+	return link
+}
+
+// downloadZip downloads a ZIP link and returns what it holds the way
+// treetest.Read does: file path -> sha256, directory path + "/" -> "dir".
+func downloadZip(t *testing.T, url string) map[string]string {
+	t.Helper()
+	resp := get(t, url)
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("link answered %d %s", resp.StatusCode, data)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, f := range zr.File {
+		if strings.HasSuffix(f.Name, "/") {
+			got[f.Name] = "dir"
+			continue
+		}
+		rc, _ := f.Open()
+		content, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatalf("%s: %v", f.Name, err)
+		}
+		sum := sha256.Sum256(content)
+		got[f.Name] = hex.EncodeToString(sum[:])
+	}
+	return got
 }
 
 // TestLinkServesManyUnicodeFilesAsZip shares a directory of 1,200 files
@@ -52,44 +97,20 @@ func TestLinkServesManyUnicodeFilesAsZip(t *testing.T) {
 	if code := api(t, s, base, "/api/share", map[string]any{"paths": paths}, &link); code != http.StatusOK {
 		t.Fatalf("share answered %d", code)
 	}
-	resp := get(t, base+"/download/"+link.Token)
-	if resp.StatusCode != http.StatusOK || !strings.Contains(resp.Header.Get("Content-Disposition"), shareArchiveName) {
-		t.Fatalf("download answered %d %q", resp.StatusCode, resp.Header.Get("Content-Disposition"))
-	}
-	data, _ := io.ReadAll(resp.Body)
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := map[string]string{}
-	for _, f := range zr.File {
-		if strings.HasSuffix(f.Name, "/") {
-			got[f.Name] = "dir"
-			continue
-		}
-		rc, _ := f.Open()
-		content, err := io.ReadAll(rc)
-		rc.Close()
-		if err != nil {
-			t.Fatalf("%s: %v", f.Name, err)
-		}
-		sum := sha256.Sum256(content)
-		got[f.Name] = hex.EncodeToString(sum[:])
+	url := base + "/download/" + link.Token
+	if got := get(t, url).Header.Get("Content-Disposition"); !strings.Contains(got, shareArchiveName) {
+		t.Fatalf("Content-Disposition %q", got)
 	}
 	want := treetest.Read(t, root)
 	want["empty/"] = "dir" // the second chosen path
-	treetest.Same(t, got, want)
+	treetest.Same(t, downloadZip(t, url), want)
 }
 
 func TestLinkServesASingleFileAsItself(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"Звіт 100%.txt": "hello world"})
-	link, err := transfer.NewLink([]string{filepath.Join(root, "Звіт 100%.txt")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.Transfers.Add(link)
+	link := addLink(t, s, filepath.Join(root, "Звіт 100%.txt"))
 
 	resp := get(t, base+"/download/"+link.Token)
 	body, _ := io.ReadAll(resp.Body)
@@ -106,36 +127,15 @@ func TestLinkServesASingleFileAsItself(t *testing.T) {
 	}
 }
 
-// zipNames downloads a ZIP link and returns the names inside it.
-func zipNames(t *testing.T, url string) []string {
-	t.Helper()
-	resp := get(t, url)
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("link answered %d %s", resp.StatusCode, body)
-	}
-	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, f := range zr.File {
-		names = append(names, f.Name)
-	}
-	return names
-}
-
 func TestLinkServesCurrentContents(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"dir/a": "a", "file": "old"})
-	files, _ := transfer.NewLink([]string{filepath.Join(root, "file")})
-	dir, _ := transfer.NewLink([]string{filepath.Join(root, "dir")})
-	s.Transfers.Add(files)
-	s.Transfers.Add(dir)
+	file := addLink(t, s, filepath.Join(root, "file"))
+	dir := addLink(t, s, filepath.Join(root, "dir"))
 
 	treetest.Write(t, root, map[string]string{"dir/b": "b"})
-	if got := zipNames(t, base+"/download/"+dir.Token); !slices.Equal(got, []string{"dir/", "dir/a", "dir/b"}) {
+	if got := slices.Sorted(maps.Keys(downloadZip(t, base+"/download/"+dir.Token))); !slices.Equal(got, []string{"dir/", "dir/a", "dir/b"}) {
 		t.Fatalf("zip has %q", got)
 	}
 	f, err := os.OpenFile(filepath.Join(root, "file"), os.O_WRONLY|os.O_TRUNC, 0)
@@ -144,7 +144,7 @@ func TestLinkServesCurrentContents(t *testing.T) {
 	}
 	f.WriteString("edited")
 	f.Close()
-	if body, _ := io.ReadAll(get(t, base+"/download/"+files.Token).Body); string(body) != "edited" {
+	if body, _ := io.ReadAll(get(t, base+"/download/"+file.Token).Body); string(body) != "edited" {
 		t.Fatalf("got %q", body)
 	}
 }
@@ -153,10 +153,8 @@ func TestLinkRefusesReplacedItems(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"dir/a": "a", "file": "old"})
-	file, _ := transfer.NewLink([]string{filepath.Join(root, "file")})
-	dir, _ := transfer.NewLink([]string{filepath.Join(root, "dir")})
-	s.Transfers.Add(file)
-	s.Transfers.Add(dir)
+	file := addLink(t, s, filepath.Join(root, "file"))
+	dir := addLink(t, s, filepath.Join(root, "dir"))
 
 	// Write the replacements first and move them into place, the way
 	// editors save, so they cannot reuse the old items' inode numbers.
@@ -182,8 +180,7 @@ func TestStoppedLinkExpires(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"file": "x"})
-	link, _ := transfer.NewLink([]string{filepath.Join(root, "file")})
-	s.Transfers.Add(link)
+	link := addLink(t, s, filepath.Join(root, "file"))
 	api(t, s, base, "/api/cancel", map[string]string{"id": link.ID}, nil)
 	if resp := get(t, base+"/download/"+link.Token); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("stopped link answered %d", resp.StatusCode)

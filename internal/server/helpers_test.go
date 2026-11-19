@@ -73,6 +73,7 @@ func waitForIncoming(t *testing.T, s *Server) *transfer.Transfer {
 	return found
 }
 
+// waitForEnd waits for tr to end and returns how it ended.
 func waitForEnd(t *testing.T, tr *transfer.Transfer) transfer.View {
 	t.Helper()
 	waitFor(t, "the transfer to end", func() bool { return tr.Status().Final() })

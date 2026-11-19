@@ -39,6 +39,8 @@ func TestPageCarriesKeyAndVersion(t *testing.T) {
 	}
 }
 
+// uploadItem uploads one dropped file, or a directory when dir is true, the
+// way the page does. It returns the path the server answers and the status.
 func uploadItem(t *testing.T, s *Server, base, session, path, body string, dir bool) (string, int) {
 	t.Helper()
 	req, _ := http.NewRequest(http.MethodPost, base+"/api/upload", bytes.NewBufferString(body))

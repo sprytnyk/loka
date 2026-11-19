@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+// freeUDPPort returns a UDP port nothing listens on, so tests do not meet
+// a real Loka on this machine.
 func freeUDPPort(t *testing.T) int {
 	t.Helper()
 	conn, err := net.ListenPacket("udp4", "127.0.0.1:0")
@@ -33,7 +35,7 @@ func waitForPeers(d *Discovery, n int) []Peer {
 func TestParseAnnouncement(t *testing.T) {
 	valid := `{"service":"loka","id":"a","name":"desk","port":45873}`
 	if p, ok := parseAnnouncement([]byte(valid), "192.0.2.10", "self"); !ok || p.Host != "192.0.2.10" || p.Name != "desk" {
-		t.Fatalf("valid Announcement rejected: %+v", p)
+		t.Fatalf("valid announcement rejected: %+v", p)
 	}
 	for _, bad := range []string{
 		`{"service":"loka","id":"self","name":"me","port":45873}`,
