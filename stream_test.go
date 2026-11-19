@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/sprytnyk/loka/internal/treetest"
 )
 
 type tarItem struct{ name, body string }
@@ -88,17 +90,17 @@ func TestReceiveRefusesLinksAndWrongSizes(t *testing.T) {
 
 func TestReceiveKeepsExistingItems(t *testing.T) {
 	destination := t.TempDir()
-	writeTree(t, destination, map[string]string{"source/old": "old"})
+	treetest.Write(t, destination, map[string]string{"source/old": "old"})
 	err := receiveTar(t, destination, identity, tarItem{"source/", ""}, tarItem{"source/empty/", ""}, tarItem{"source/file", "new"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sameTree(t, readTree(t, destination), map[string]string{
+	treetest.Same(t, treetest.Read(t, destination), map[string]string{
 		"source/":           "dir",
-		"source/old":        readTree(t, destination)["source/old"],
+		"source/old":        treetest.Read(t, destination)["source/old"],
 		"source (1)/":       "dir",
 		"source (1)/empty/": "dir",
-		"source (1)/file":   readTree(t, destination)["source (1)/file"],
+		"source (1)/file":   treetest.Read(t, destination)["source (1)/file"],
 	})
 }
 
@@ -168,7 +170,7 @@ func TestWindowsName(t *testing.T) {
 
 func TestCollectNamesItemsApart(t *testing.T) {
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{
+	treetest.Write(t, root, map[string]string{
 		"first/report.txt/empty/": "",
 		"second/report.txt":       "second",
 		"third/report (1).txt":    "third",
@@ -201,7 +203,7 @@ func TestCollectLeavesOutLinksInsideDirectories(t *testing.T) {
 		t.Skip("symbolic links need extra rights on Windows")
 	}
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"dir/file": "x", "elsewhere/secret": "s"})
+	treetest.Write(t, root, map[string]string{"dir/file": "x", "elsewhere/secret": "s"})
 	os.Symlink(filepath.Join(root, "elsewhere"), filepath.Join(root, "dir", "linked-dir"))
 	os.Symlink(filepath.Join(root, "elsewhere", "secret"), filepath.Join(root, "dir", "linked-file"))
 	os.Symlink(filepath.Join(root, "dir", "file"), filepath.Join(root, "top-link"))
@@ -225,7 +227,7 @@ func TestCollectLeavesOutLinksInsideDirectories(t *testing.T) {
 
 func TestSendingFailsWhenAFileChanges(t *testing.T) {
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"grows": "abc", "shrinks": "abcdef"})
+	treetest.Write(t, root, map[string]string{"grows": "abc", "shrinks": "abcdef"})
 	for name, change := range map[string]string{"grows": "abcdef", "shrinks": "a"} {
 		entries, _, _, err := collect([]string{filepath.Join(root, name)})
 		if err != nil {
@@ -258,13 +260,13 @@ func TestReceiveMovesNothingWhenOneItemCannotMove(t *testing.T) {
 	}
 	destination := t.TempDir()
 	long := strings.Repeat("b", 252) // "bbb… (1)" is too long a name
-	writeTree(t, destination, map[string]string{long: "old"})
-	before := readTree(t, destination)
+	treetest.Write(t, destination, map[string]string{long: "old"})
+	before := treetest.Read(t, destination)
 	err := receiveTar(t, destination, identity, tarItem{"a", "new"}, tarItem{long, "new"})
 	if err == nil {
 		t.Fatal("receive succeeded")
 	}
-	sameTree(t, readTree(t, destination), before)
+	treetest.Same(t, treetest.Read(t, destination), before)
 }
 
 // cancelAtEnd cancels once its last byte is read, as if a cancel arrived
@@ -292,5 +294,5 @@ func TestReceiveMovesNothingWhenCancelledAtTheEnd(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v", err)
 	}
-	sameTree(t, readTree(t, destination), map[string]string{})
+	treetest.Same(t, treetest.Read(t, destination), map[string]string{})
 }

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/sprytnyk/loka/internal/treetest"
 )
 
 // output is a buffer the command writes to while the test reads it.
@@ -142,7 +144,7 @@ func TestSendCommand(t *testing.T) {
 	receiver, receiverURL := startServer(t)
 	host, port := hostPort(t, receiverURL)
 	source, destination := t.TempDir(), t.TempDir()
-	writeTree(t, source, map[string]string{"dir/a.txt": "a", "dir/sub/b.txt": "b"})
+	treetest.Write(t, source, map[string]string{"dir/a.txt": "a", "dir/sub/b.txt": "b"})
 
 	out, _, code := runLoka(t, nil, "send", filepath.Join(source, "dir"), "--to", host, "--peer-port", strconv.Itoa(port))
 	in := waitForIncoming(t, receiver)
@@ -153,7 +155,7 @@ func TestSendCommand(t *testing.T) {
 	if !strings.Contains(out.String(), "complete: 100%") {
 		t.Fatalf("output %q", out.String())
 	}
-	sameTree(t, readTree(t, destination), readTree(t, source))
+	treetest.Same(t, treetest.Read(t, destination), treetest.Read(t, source))
 }
 
 func TestReceiveCommand(t *testing.T) {
@@ -163,7 +165,7 @@ func TestReceiveCommand(t *testing.T) {
 	port, _ := strconv.Atoi(out.wait(t, `on port (\d+)`)[1])
 
 	source, destination := t.TempDir(), t.TempDir()
-	writeTree(t, source, map[string]string{"song.mp3": "la la"})
+	treetest.Write(t, source, map[string]string{"song.mp3": "la la"})
 	entries, items, size, _ := collect([]string{filepath.Join(source, "song.mp3")})
 	sent := newTransfer(outgoing, "127.0.0.1", items, size, statusWaiting)
 	go func() { sent.finish(sendTo(sent, entries, "laptop", "127.0.0.1", port)) }()

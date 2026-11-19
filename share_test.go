@@ -14,6 +14,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/sprytnyk/loka/internal/treetest"
 )
 
 func get(t *testing.T, url string, header ...string) *http.Response {
@@ -42,7 +44,7 @@ func TestLinkServesManyUnicodeFilesAsZip(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		tree["music/Set: What’s next?.mp3"] = "punctuation"
 	}
-	writeTree(t, root, tree)
+	treetest.Write(t, root, tree)
 
 	var link struct{ ID, Token string }
 	paths := []string{filepath.Join(root, "music"), filepath.Join(root, "music", "empty")}
@@ -73,15 +75,15 @@ func TestLinkServesManyUnicodeFilesAsZip(t *testing.T) {
 		sum := sha256.Sum256(content)
 		got[f.Name] = hex.EncodeToString(sum[:])
 	}
-	want := readTree(t, root)
+	want := treetest.Read(t, root)
 	want["empty/"] = "dir" // the second chosen path
-	sameTree(t, got, want)
+	treetest.Same(t, got, want)
 }
 
 func TestLinkServesASingleFileAsItself(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"Звіт 100%.txt": "hello world"})
+	treetest.Write(t, root, map[string]string{"Звіт 100%.txt": "hello world"})
 	link, err := newLink([]string{filepath.Join(root, "Звіт 100%.txt")})
 	if err != nil {
 		t.Fatal(err)
@@ -125,13 +127,13 @@ func zipNames(t *testing.T, url string) []string {
 func TestLinkServesCurrentContents(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"dir/a": "a", "file": "old"})
+	treetest.Write(t, root, map[string]string{"dir/a": "a", "file": "old"})
 	files, _ := newLink([]string{filepath.Join(root, "file")})
 	dir, _ := newLink([]string{filepath.Join(root, "dir")})
 	s.transfers.add(files)
 	s.transfers.add(dir)
 
-	writeTree(t, root, map[string]string{"dir/b": "b"})
+	treetest.Write(t, root, map[string]string{"dir/b": "b"})
 	if got := zipNames(t, base+"/download/"+dir.token); !slices.Equal(got, []string{"dir/", "dir/a", "dir/b"}) {
 		t.Fatalf("zip has %q", got)
 	}
@@ -149,7 +151,7 @@ func TestLinkServesCurrentContents(t *testing.T) {
 func TestLinkRefusesReplacedItems(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"dir/a": "a", "file": "old"})
+	treetest.Write(t, root, map[string]string{"dir/a": "a", "file": "old"})
 	file, _ := newLink([]string{filepath.Join(root, "file")})
 	dir, _ := newLink([]string{filepath.Join(root, "dir")})
 	s.transfers.add(file)
@@ -157,7 +159,7 @@ func TestLinkRefusesReplacedItems(t *testing.T) {
 
 	// Write the replacements first and move them into place, the way
 	// editors save, so they cannot reuse the old items' inode numbers.
-	writeTree(t, root, map[string]string{"new dir/a": "other", "new file": "other"})
+	treetest.Write(t, root, map[string]string{"new dir/a": "other", "new file": "other"})
 	for _, name := range []string{"file", "dir"} {
 		if err := os.RemoveAll(filepath.Join(root, name)); err != nil {
 			t.Fatal(err)
@@ -178,7 +180,7 @@ func TestLinkRefusesReplacedItems(t *testing.T) {
 func TestStoppedLinkExpires(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"file": "x"})
+	treetest.Write(t, root, map[string]string{"file": "x"})
 	link, _ := newLink([]string{filepath.Join(root, "file")})
 	s.transfers.add(link)
 	api(t, s, base, "/api/cancel", map[string]string{"id": link.ID}, nil)

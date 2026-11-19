@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/sprytnyk/loka/internal/treetest"
 )
 
 // Tests should not wait a second between polls.
@@ -50,11 +52,11 @@ func TestSendBetweenTwoServers(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		tree["album/Set: What’s next?.mp3"] = "punctuation"
 	}
-	writeTree(t, source, tree)
+	treetest.Write(t, source, tree)
 	big := make([]byte, 3<<20+17)
 	rand.Read(big)
 	os.WriteFile(filepath.Join(source, "album", "big.bin"), big, 0o644)
-	writeTree(t, destination, map[string]string{"file.txt": "old"})
+	treetest.Write(t, destination, map[string]string{"file.txt": "old"})
 
 	host, port := hostPort(t, receiverURL)
 	var sent struct{ ID string }
@@ -79,14 +81,14 @@ func TestSendBetweenTwoServers(t *testing.T) {
 		t.Fatalf("receiver ended %+v", v)
 	}
 
-	want := readTree(t, source)
+	want := treetest.Read(t, source)
 	want["file (1).txt"] = want["file.txt"]
-	got := readTree(t, destination)
+	got := treetest.Read(t, destination)
 	if old, _ := os.ReadFile(filepath.Join(destination, "file.txt")); string(old) != "old" {
 		t.Fatalf("existing file was overwritten: %q", old)
 	}
 	want["file.txt"] = got["file.txt"]
-	sameTree(t, got, want)
+	treetest.Same(t, got, want)
 
 	var st state
 	api(t, receiver, receiverURL, "/api/state", nil, &st)
@@ -100,7 +102,7 @@ func TestSeveralIncomingAtOnce(t *testing.T) {
 	host, port := hostPort(t, receiverURL)
 	root := t.TempDir()
 	destination := filepath.Join(root, "destination")
-	writeTree(t, root, map[string]string{"a/report.txt": "first", "b/report.txt": "second", "destination/": ""})
+	treetest.Write(t, root, map[string]string{"a/report.txt": "first", "b/report.txt": "second", "destination/": ""})
 
 	var outs []*Transfer
 	for _, dir := range []string{"a", "b"} {
@@ -138,7 +140,7 @@ func TestDeclineEndsBothSides(t *testing.T) {
 	receiver, receiverURL := startServer(t)
 	host, port := hostPort(t, receiverURL)
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"file": "abc"})
+	treetest.Write(t, root, map[string]string{"file": "abc"})
 	entries, items, size, _ := collect([]string{filepath.Join(root, "file")})
 	out := newTransfer(outgoing, host, items, size, statusWaiting)
 	go func() { out.finish(sendTo(out, entries, "sender", host, port)) }()
@@ -157,7 +159,7 @@ func TestSenderCancelEndsBothSides(t *testing.T) {
 	receiver, receiverURL := startServer(t)
 	host, port := hostPort(t, receiverURL)
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"file": "abc"})
+	treetest.Write(t, root, map[string]string{"file": "abc"})
 	entries, items, size, _ := collect([]string{filepath.Join(root, "file")})
 	out := newTransfer(outgoing, host, items, size, statusWaiting)
 	go func() { out.finish(sendTo(out, entries, "sender", host, port)) }()
@@ -187,7 +189,7 @@ func TestSenderFailureEndsTheOffer(t *testing.T) {
 	t.Cleanup(ts.Close)
 	host, port := hostPort(t, ts.URL)
 	root := t.TempDir()
-	writeTree(t, root, map[string]string{"file": "abc"})
+	treetest.Write(t, root, map[string]string{"file": "abc"})
 	entries, items, size, _ := collect([]string{filepath.Join(root, "file")})
 	out := newTransfer(outgoing, host, items, size, statusWaiting)
 	go func() { out.finish(sendTo(out, entries, "sender", host, port)) }()

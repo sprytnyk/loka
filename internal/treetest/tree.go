@@ -1,4 +1,5 @@
-package main
+// Package treetest writes and compares directory trees in tests.
+package treetest
 
 import (
 	"crypto/sha256"
@@ -11,9 +12,9 @@ import (
 	"testing"
 )
 
-// writeTree creates files (path -> content) and empty directories (path
+// Write creates files (path -> content) and empty directories (path
 // ending in "/") under root.
-func writeTree(t *testing.T, root string, tree map[string]string) {
+func Write(t *testing.T, root string, tree map[string]string) {
 	t.Helper()
 	for path, content := range tree {
 		full := filepath.Join(root, filepath.FromSlash(path))
@@ -32,9 +33,9 @@ func writeTree(t *testing.T, root string, tree map[string]string) {
 	}
 }
 
-// readTree returns every file under root as path -> sha256 of its content,
+// Read returns every file under root as path -> sha256 of its content,
 // and every directory as path + "/" -> "dir".
-func readTree(t *testing.T, root string) map[string]string {
+func Read(t *testing.T, root string) map[string]string {
 	t.Helper()
 	tree := map[string]string{}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -61,7 +62,8 @@ func readTree(t *testing.T, root string) map[string]string {
 	return tree
 }
 
-func sameTree(t *testing.T, got, want map[string]string) {
+// Same fails the test when two trees from Read differ.
+func Same(t *testing.T, got, want map[string]string) {
 	t.Helper()
 	if !maps.Equal(got, want) {
 		t.Fatalf("trees differ\n got: %v\nwant: %v", slices.Sorted(maps.Keys(got)), slices.Sorted(maps.Keys(want)))
