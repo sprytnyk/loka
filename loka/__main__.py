@@ -21,11 +21,13 @@ import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from loka.pickers import choose_paths, open_browser
+from loka.version import current_version
 
 PORT = 45873
 GROUP = "239.255.45.87"
 CHUNK = 1024 * 256
 MAX_OFFER_ITEMS = 100
+VERSION = current_version()
 WINDOWS_NAME_REPLACEMENTS = str.maketrans(
     {char: "_" for char in '<>:"|?*' + "".join(map(chr, range(32)))}
 )
@@ -313,7 +315,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlsplit(self.path)
         if parsed.path == "/" and self.client_address[0] in ("127.0.0.1", "::1"):
             page = Path(__file__).with_name("index.html").read_text(encoding="utf-8")
-            data = page.replace("__LOKA_KEY__", self.state.ui_key).encode()
+            data = (
+                page.replace("__LOKA_KEY__", self.state.ui_key)
+                .replace("__LOKA_VERSION__", VERSION)
+                .encode()
+            )
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
@@ -795,6 +801,7 @@ def local_addresses():
 
 def main():
     parser = argparse.ArgumentParser(description="Share files on your local network")
+    parser.add_argument("--version", action="version", version=f"loka {VERSION}")
     parser.add_argument(
         "command",
         nargs="?",
@@ -876,7 +883,7 @@ def main():
     state.port = server.server_address[1]
     state.discover()
     url = f"http://127.0.0.1:{state.port}/"
-    print(f"Loka is running at {url} (Ctrl+C to stop)", flush=True)
+    print(f"Loka {VERSION} is running at {url} (Ctrl+C to stop)", flush=True)
     if args.command == "devices":
         try:
             time.sleep(5)

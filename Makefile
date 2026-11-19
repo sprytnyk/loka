@@ -1,4 +1,4 @@
-.PHONY: all run check lint test format
+.PHONY: all run check lint test format build release
 
 all: check
 
@@ -16,3 +16,9 @@ test:
 
 format:
 	uv run ruff format .
+
+build:
+	uv run --locked --group build pyinstaller loka.spec --clean --noconfirm
+
+release: build
+	uv run --no-sync python scripts/package_release.py

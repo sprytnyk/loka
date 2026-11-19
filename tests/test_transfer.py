@@ -16,6 +16,7 @@ from urllib.parse import quote, urlsplit
 
 from loka import pickers
 from loka.__main__ import (
+    VERSION,
     Handler,
     Server,
     State,
@@ -322,6 +323,7 @@ class TransferTests(unittest.TestCase):
         self.assertTrue(
             " · ${transfer.progress}%" in page, "Transfer status is garbled"
         )
+        self.assertIn(f'<span class="version">v{VERSION}</span>', page)
         self.assertEqual(page.count(">Choose files</button>"), 1)
         self.assertEqual(page.count(">Choose directory</button>"), 1)
         self.assertNotIn("Use browser picker", page)

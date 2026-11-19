@@ -16,6 +16,9 @@ loka = "loka.__main__:main"
 loka = ["*.html"]
 
 [dependency-groups]
+build = [
+    "pyinstaller>=6.22,<7",
+]
 dev = [
     "pytest>=8",
     "ruff==0.17.5",
