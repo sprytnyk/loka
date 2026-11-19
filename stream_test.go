@@ -251,3 +251,46 @@ func TestReceiveStopsWhenCancelled(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestReceiveMovesNothingWhenOneItemCannotMove(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("relies on Linux's 255-byte name limit")
+	}
+	destination := t.TempDir()
+	long := strings.Repeat("b", 252) // "bbb… (1)" is too long a name
+	writeTree(t, destination, map[string]string{long: "old"})
+	before := readTree(t, destination)
+	err := receiveTar(t, destination, identity, tarItem{"a", "new"}, tarItem{long, "new"})
+	if err == nil {
+		t.Fatal("receive succeeded")
+	}
+	sameTree(t, readTree(t, destination), before)
+}
+
+// cancelAtEnd cancels once its last byte is read, as if a cancel arrived
+// with the last bytes.
+type cancelAtEnd struct {
+	r      *bytes.Reader
+	cancel context.CancelFunc
+}
+
+func (c cancelAtEnd) Read(b []byte) (int, error) {
+	n, err := c.r.Read(b)
+	if c.r.Len() == 0 {
+		c.cancel()
+	}
+	return n, err
+}
+
+func TestReceiveMovesNothingWhenCancelledAtTheEnd(t *testing.T) {
+	destination := t.TempDir()
+	data, size := makeTar(tarItem{"file", "abc"})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var done atomic.Int64
+	err := receive(ctx, cancelAtEnd{bytes.NewReader(data), cancel}, destination, size, &done, identity)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
+	}
+	sameTree(t, readTree(t, destination), map[string]string{})
+}

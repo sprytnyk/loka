@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 )
@@ -126,11 +127,28 @@ func receive(ctx context.Context, r io.Reader, destination string, size int64, d
 	if received != size {
 		return errors.New("The transfer ended early")
 	}
+	// A cancel that arrives with the last bytes still wins.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return publish(u.staged, roots, destination)
+}
+
+// publish moves each staged top-level item into destination. When one
+// cannot move, it moves back the ones already moved, so a failed transfer
+// still leaves nothing behind.
+func publish(staged map[string]string, roots []string, destination string) error {
+	var moved [][2]string
 	for _, root := range roots {
-		staged := u.staged[root]
-		if err := moveNoReplace(staged, destination, filepath.Base(staged)); err != nil {
+		from := staged[root]
+		to, err := moveNoReplace(from, destination, filepath.Base(from))
+		if err != nil {
+			for _, m := range slices.Backward(moved) {
+				os.Rename(m[1], m[0])
+			}
 			return err
 		}
+		moved = append(moved, [2]string{from, to})
 	}
 	return nil
 }
@@ -210,12 +228,13 @@ func freePath(dir, name string) string {
 }
 
 // moveNoReplace moves from into dir as name, or as a numbered name when
-// something already has that name.
-func moveNoReplace(from, dir, name string) error {
+// something already has that name, and returns where it went.
+func moveNoReplace(from, dir, name string) (string, error) {
 	for i := 0; ; i++ {
-		err := renameNoReplace(from, filepath.Join(dir, numbered(name, i)))
+		to := filepath.Join(dir, numbered(name, i))
+		err := renameNoReplace(from, to)
 		if !errors.Is(err, fs.ErrExist) {
-			return err
+			return to, err
 		}
 	}
 }
