@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -28,19 +29,24 @@ func sendTo(t *Transfer, entries []entry, from, host string, port int) error {
 	if err := call(t.ctx, http.MethodPost, base+"/peer/offer", "", o, &reply); err != nil {
 		return err
 	}
+	tellReceiver := sync.OnceFunc(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		call(ctx, http.MethodPost, base+"/peer/cancel/"+reply.ID, reply.Secret, nil, nil)
+	})
 	// Tell the receiver when this side cancels, before dropping the stream,
 	// so it shows the transfer as cancelled rather than failed.
 	uploadCtx, stopUpload := context.WithCancel(context.Background())
 	defer stopUpload()
 	stop := context.AfterFunc(t.ctx, func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		call(ctx, http.MethodPost, base+"/peer/cancel/"+reply.ID, reply.Secret, nil, nil)
+		tellReceiver()
 		stopUpload()
 	})
 	defer stop()
 
 	if err := waitForAnswer(t.ctx, base+"/peer/status/"+reply.ID, reply.Secret); err != nil {
+		// Otherwise the receiver would show the offer as waiting forever.
+		tellReceiver()
 		return err
 	}
 	if !t.move(statusSending, statusWaiting) {

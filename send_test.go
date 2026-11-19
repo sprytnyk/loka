@@ -5,12 +5,14 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -166,6 +168,35 @@ func TestSenderCancelEndsBothSides(t *testing.T) {
 		t.Fatalf("sender ended %+v", v)
 	}
 	waitFor(t, "the receiver to see the cancel", func() bool { return in.Status() == statusCancelled })
+}
+
+// TestSenderFailureEndsTheOffer has the receiver's first status reply fail,
+// as a dropped connection would, and checks that the receiver stops
+// waiting instead of showing the offer forever.
+func TestSenderFailureEndsTheOffer(t *testing.T) {
+	receiver := newServer("receiver", "test")
+	var failed atomic.Bool
+	handler := receiver.handler()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/peer/status/") && !failed.Swap(true) {
+			http.Error(w, `{"error":"lost"}`, http.StatusBadGateway)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(ts.Close)
+	host, port := hostPort(t, ts.URL)
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{"file": "abc"})
+	entries, items, size, _ := collect([]string{filepath.Join(root, "file")})
+	out := newTransfer(outgoing, host, items, size, statusWaiting)
+	go func() { out.finish(sendTo(out, entries, "sender", host, port)) }()
+
+	in := waitForIncoming(t, receiver)
+	if v := waitForEnd(t, out); v.Status != statusFailed {
+		t.Fatalf("sender ended %+v", v)
+	}
+	waitFor(t, "the receiver to stop waiting", func() bool { return in.Status() == statusCancelled })
 }
 
 func TestPeerRoutesNeedTheSecret(t *testing.T) {
