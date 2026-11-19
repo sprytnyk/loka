@@ -1,4 +1,4 @@
-package main
+package network
 
 import (
 	"cmp"
@@ -15,9 +15,9 @@ type localAddress struct {
 	lan bool
 }
 
-// localAddresses lists this device's IPv4 addresses, the best one for a
+// LocalAddresses lists this device's IPv4 addresses, the best one for a
 // share link first.
-func localAddresses() []string {
+func LocalAddresses() []string {
 	found, err := interfaceAddresses()
 	if err != nil {
 		return nil

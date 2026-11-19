@@ -1,4 +1,4 @@
-package main
+package network
 
 import (
 	"encoding/json"
@@ -19,10 +19,10 @@ func freeUDPPort(t *testing.T) int {
 }
 
 // waitForPeers polls until d lists n peers or a few seconds pass.
-func waitForPeers(d *discovery, n int) []peer {
+func waitForPeers(d *Discovery, n int) []Peer {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		peers, _ := d.list()
+		peers, _ := d.List()
 		if len(peers) >= n || time.Now().After(deadline) {
 			return peers
 		}
@@ -33,7 +33,7 @@ func waitForPeers(d *discovery, n int) []peer {
 func TestParseAnnouncement(t *testing.T) {
 	valid := `{"service":"loka","id":"a","name":"desk","port":45873}`
 	if p, ok := parseAnnouncement([]byte(valid), "192.0.2.10", "self"); !ok || p.Host != "192.0.2.10" || p.Name != "desk" {
-		t.Fatalf("valid announcement rejected: %+v", p)
+		t.Fatalf("valid Announcement rejected: %+v", p)
 	}
 	for _, bad := range []string{
 		`{"service":"loka","id":"self","name":"me","port":45873}`,
@@ -50,7 +50,7 @@ func TestParseAnnouncement(t *testing.T) {
 }
 
 func TestListenRecordsDatagrams(t *testing.T) {
-	d := newDiscovery(announcement{ID: "self", Name: "me"})
+	d := New(Announcement{ID: "self", Name: "me"})
 	d.port = freeUDPPort(t)
 	listener, err := d.joinGroup()
 	if err != nil {
@@ -59,7 +59,7 @@ func TestListenRecordsDatagrams(t *testing.T) {
 	ctx := t.Context()
 	go d.serve(ctx, listener)
 
-	payload, _ := json.Marshal(announcement{Service: "loka", ID: "other", Name: "laptop", Port: 1234})
+	payload, _ := json.Marshal(Announcement{Service: "loka", ID: "other", Name: "laptop", Port: 1234})
 	conn, err := net.Dial("udp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(d.port)))
 	if err != nil {
 		t.Fatal(err)
@@ -78,9 +78,9 @@ func TestListenRecordsDatagrams(t *testing.T) {
 func TestDevicesFindEachOther(t *testing.T) {
 	port := freeUDPPort(t)
 	ctx := t.Context()
-	a := newDiscovery(announcement{ID: "a", Name: "alpha", Port: 1})
-	b := newDiscovery(announcement{ID: "b", Name: "beta", Port: 2})
-	for _, d := range []*discovery{a, b} {
+	a := New(Announcement{ID: "a", Name: "alpha", Port: 1})
+	b := New(Announcement{ID: "b", Name: "beta", Port: 2})
+	for _, d := range []*Discovery{a, b} {
 		d.port = port
 		listener, err := d.joinGroup()
 		if err != nil {
@@ -88,8 +88,8 @@ func TestDevicesFindEachOther(t *testing.T) {
 		}
 		go d.serve(ctx, listener)
 	}
-	for _, d := range []*discovery{a, b} {
-		go d.announce(ctx)
+	for _, d := range []*Discovery{a, b} {
+		go d.Announce(ctx)
 	}
 	peersA, peersB := waitForPeers(a, 1), waitForPeers(b, 1)
 	if len(peersA) != 1 || peersA[0].ID != "b" || len(peersB) != 1 || peersB[0].ID != "a" {

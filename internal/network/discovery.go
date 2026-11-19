@@ -1,4 +1,6 @@
-package main
+// Package network finds nearby Loka devices over multicast and lists this
+// device's addresses.
+package network
 
 import (
 	"cmp"
@@ -15,22 +17,22 @@ import (
 )
 
 const (
-	defaultPort   = 45873
+	DefaultPort   = 45873
 	discoveryAddr = "239.255.45.87"
-	announceEvery = 3 * time.Second
+	AnnounceEvery = 3 * time.Second
 	peerTimeout   = 12 * time.Second
 )
 
-// announcement is what each device multicasts every few seconds.
-type announcement struct {
+// Announcement is what each device multicasts every few seconds.
+type Announcement struct {
 	Service string `json:"service"`
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Port    int    `json:"port"`
 }
 
-// peer is a nearby device found by discovery.
-type peer struct {
+// Peer is a nearby device found by discovery.
+type Peer struct {
 	ID   string    `json:"id"`
 	Name string    `json:"name"`
 	Host string    `json:"host"`
@@ -38,42 +40,43 @@ type peer struct {
 	seen time.Time // when it last announced itself
 }
 
-// discovery finds nearby devices. Only its listener writes peers and only
+// Discovery finds nearby devices. Only its listener writes peers and only
 // its announcer writes announceErr, each under the discovery's own lock.
-type discovery struct {
-	self announcement
+type Discovery struct {
+	self Announcement
 	port int // the UDP port to listen and announce on
 
 	mu          sync.Mutex
-	peers       map[string]peer
+	peers       map[string]Peer
 	listenErr   string
 	announceErr string
 }
 
-func newDiscovery(self announcement) *discovery {
+// New makes a Discovery that announces self.
+func New(self Announcement) *Discovery {
 	self.Service = "loka"
-	return &discovery{self: self, port: defaultPort, peers: map[string]peer{}}
+	return &Discovery{self: self, port: DefaultPort, peers: map[string]Peer{}}
 }
 
-// list returns the devices heard from recently, by name, and any problem
+// List returns the devices heard from recently, by name, and any problem
 // that may hide devices.
-func (d *discovery) list() ([]peer, string) {
+func (d *Discovery) List() ([]Peer, string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	var peers []peer
+	var peers []Peer
 	for _, p := range d.peers {
 		if time.Since(p.seen) < peerTimeout {
 			peers = append(peers, p)
 		}
 	}
-	slices.SortFunc(peers, func(a, b peer) int {
+	slices.SortFunc(peers, func(a, b Peer) int {
 		return strings.Compare(a.Name+"\x00"+a.ID, b.Name+"\x00"+b.ID)
 	})
 	return peers, cmp.Or(d.listenErr, d.announceErr)
 }
 
-// listen records announcements from other devices until ctx is done.
-func (d *discovery) listen(ctx context.Context) {
+// Listen records announcements from other devices until ctx is done.
+func (d *Discovery) Listen(ctx context.Context) {
 	conn, err := d.joinGroup()
 	if err != nil {
 		d.mu.Lock()
@@ -85,7 +88,7 @@ func (d *discovery) listen(ctx context.Context) {
 }
 
 // serve reads announcements from conn until ctx is done.
-func (d *discovery) serve(ctx context.Context, conn net.PacketConn) {
+func (d *Discovery) serve(ctx context.Context, conn net.PacketConn) {
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	defer stop()
 	defer conn.Close()
@@ -109,7 +112,7 @@ func (d *discovery) serve(ctx context.Context, conn net.PacketConn) {
 
 // joinGroup listens on the discovery port and joins the multicast group on
 // every interface that will let it.
-func (d *discovery) joinGroup() (net.PacketConn, error) {
+func (d *Discovery) joinGroup() (net.PacketConn, error) {
 	config := net.ListenConfig{Control: func(_, _ string, c syscall.RawConn) error {
 		return control(c, reuseAddr)
 	}}
@@ -140,8 +143,8 @@ func (d *discovery) joinGroup() (net.PacketConn, error) {
 	return conn, nil
 }
 
-// announce tells other devices about this one until ctx is done.
-func (d *discovery) announce(ctx context.Context) {
+// Announce tells other devices about this one until ctx is done.
+func (d *Discovery) Announce(ctx context.Context) {
 	payload, _ := json.Marshal(d.self)
 	group := &net.UDPAddr{IP: net.ParseIP(discoveryAddr), Port: d.port}
 	conn, err := net.ListenPacket("udp4", ":0")
@@ -155,7 +158,7 @@ func (d *discovery) announce(ctx context.Context) {
 		d.setAnnounceErr(fmt.Sprintf("Could not start device announcements: %v", err))
 		return
 	}
-	ticker := time.NewTicker(announceEvery)
+	ticker := time.NewTicker(AnnounceEvery)
 	defer ticker.Stop()
 	for {
 		sent := false
@@ -181,7 +184,7 @@ func (d *discovery) announce(ctx context.Context) {
 	}
 }
 
-func (d *discovery) setAnnounceErr(text string) {
+func (d *Discovery) setAnnounceErr(text string) {
 	d.mu.Lock()
 	d.announceErr = text
 	d.mu.Unlock()
@@ -189,13 +192,13 @@ func (d *discovery) setAnnounceErr(text string) {
 
 // parseAnnouncement checks a datagram and turns it into a peer. It ignores
 // this device's own announcements.
-func parseAnnouncement(data []byte, host, selfID string) (peer, bool) {
-	var a announcement
+func parseAnnouncement(data []byte, host, selfID string) (Peer, bool) {
+	var a Announcement
 	if json.Unmarshal(data, &a) != nil || a.Service != "loka" || a.ID == "" || a.ID == selfID ||
 		a.Port <= 0 || a.Port > 65535 || host == "" {
-		return peer{}, false
+		return Peer{}, false
 	}
-	return peer{ID: a.ID, Name: truncate(a.Name, 255), Host: host, Port: a.Port, seen: time.Now()}, true
+	return Peer{ID: a.ID, Name: truncate(a.Name, 255), Host: host, Port: a.Port, seen: time.Now()}, true
 }
 
 // multicastAddresses lists the interface addresses to join and announce on,

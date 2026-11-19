@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 
 	"github.com/sprytnyk/loka/internal/desktop"
+	"github.com/sprytnyk/loka/internal/network"
 )
 
 // server answers the page on this device and other devices on the network.
@@ -26,7 +27,7 @@ type server struct {
 	temp      string // holds files dropped on the page, made when needed
 
 	transfers   registry
-	devices     *discovery             // nil when not looking for devices
+	devices     *network.Discovery     // nil when not looking for devices
 	destination atomic.Pointer[string] // the last accepted destination
 }
 
@@ -169,7 +170,7 @@ func (s *server) peerUpload(w http.ResponseWriter, r *http.Request, t *Transfer)
 // state is everything the page shows.
 type state struct {
 	Name           string         `json:"name"`
-	Peers          []peer         `json:"peers"`
+	Peers          []network.Peer `json:"peers"`
 	Transfers      []transferView `json:"transfers"`
 	Addresses      []string       `json:"addresses"`
 	Destination    string         `json:"destination"`
@@ -177,9 +178,9 @@ type state struct {
 }
 
 func (s *server) state(w http.ResponseWriter, _ *http.Request) {
-	st := state{Name: s.name, Peers: []peer{}, Transfers: []transferView{}, Addresses: localAddresses()}
+	st := state{Name: s.name, Peers: []network.Peer{}, Transfers: []transferView{}, Addresses: network.LocalAddresses()}
 	if s.devices != nil {
-		peers, problem := s.devices.list()
+		peers, problem := s.devices.List()
 		st.DiscoveryError = problem
 		if peers != nil {
 			st.Peers = peers
@@ -218,7 +219,7 @@ func (s *server) send(w http.ResponseWriter, r *http.Request) {
 	}
 	t := newTransfer(outgoing, req.Host, items, size, statusWaiting)
 	s.transfers.add(t)
-	go func() { t.finish(sendTo(t, entries, s.name, req.Host, cmp.Or(req.Port, defaultPort))) }()
+	go func() { t.finish(sendTo(t, entries, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort))) }()
 	writeJSON(w, http.StatusOK, map[string]string{"id": t.ID})
 }
 
@@ -303,4 +304,12 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+// truncate shortens s to at most n bytes without splitting a character.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return strings.ToValidUTF8(s[:n], "")
 }

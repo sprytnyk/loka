@@ -1,4 +1,4 @@
-package main
+package network
 
 import (
 	"errors"
@@ -7,8 +7,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// addressInUse reports whether a listen failed because the port is taken.
-func addressInUse(err error) bool {
+// AddressInUse reports whether a listen failed because the port is taken.
+func AddressInUse(err error) bool {
 	return errors.Is(err, windows.WSAEADDRINUSE)
 }
 

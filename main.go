@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/sprytnyk/loka/internal/desktop"
+	"github.com/sprytnyk/loka/internal/network"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -101,8 +102,8 @@ func parse(args []string, stderr io.Writer) (options, int) {
 	}
 	fs.StringVar(&o.to, "to", "", "receiver address for send")
 	fs.StringVar(&o.address, "address", "", "local address to put in a share link (default: detected)")
-	fs.IntVar(&o.port, "port", defaultPort, "port to listen on, 0 for any free port")
-	fs.IntVar(&o.peerPort, "peer-port", defaultPort, "receiver port for send")
+	fs.IntVar(&o.port, "port", network.DefaultPort, "port to listen on, 0 for any free port")
+	fs.IntVar(&o.peerPort, "peer-port", network.DefaultPort, "receiver port for send")
 	fs.BoolVar(&o.noBrowser, "no-browser", false, "do not open the browser")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 
@@ -168,7 +169,7 @@ func hostname() string {
 // picks a free one.
 func listenOn(port int) (net.Listener, int, error) {
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
-	if addressInUse(err) {
+	if network.AddressInUse(err) {
 		return nil, 0, fmt.Errorf("port %d is already in use. Stop the other program, or run with --port 0 to pick a free port", port)
 	}
 	if err != nil {
@@ -200,9 +201,9 @@ func startDevice(ctx context.Context, port int) (*server, net.Listener, int, err
 		return nil, nil, 0, err
 	}
 	s := newServer(hostname(), version)
-	s.devices = newDiscovery(announcement{ID: randomToken(16), Name: s.name, Port: port})
-	go s.devices.listen(ctx)
-	go s.devices.announce(ctx)
+	s.devices = network.New(network.Announcement{ID: randomToken(16), Name: s.name, Port: port})
+	go s.devices.Listen(ctx)
+	go s.devices.Announce(ctx)
 	return s, ln, port, nil
 }
 
@@ -331,11 +332,11 @@ func firstWaiting(s *server) *Transfer {
 }
 
 func devicesCommand(ctx context.Context, stdout io.Writer) error {
-	d := newDiscovery(announcement{ID: randomToken(16)})
-	ctx, cancel := context.WithTimeout(ctx, 2*announceEvery)
+	d := network.New(network.Announcement{ID: randomToken(16)})
+	ctx, cancel := context.WithTimeout(ctx, 2*network.AnnounceEvery)
 	defer cancel()
-	d.listen(ctx)
-	peers, problem := d.list()
+	d.Listen(ctx)
+	peers, problem := d.List()
 	if problem != "" {
 		return errors.New(problem)
 	}
@@ -351,7 +352,7 @@ func devicesCommand(ctx context.Context, stdout io.Writer) error {
 func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
 	address := o.address
 	if address == "" {
-		addresses := localAddresses()
+		addresses := network.LocalAddresses()
 		if len(addresses) == 0 {
 			return errors.New("could not find a local address; give one with --address")
 		}
