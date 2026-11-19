@@ -1,6 +1,6 @@
 //go:build !linux && !darwin && !windows
 
-package main
+package transfer
 
 func renameNoReplace(from, to string) error {
 	return renameIfFree(from, to)

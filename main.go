@@ -22,6 +22,7 @@ import (
 
 	"github.com/sprytnyk/loka/internal/desktop"
 	"github.com/sprytnyk/loka/internal/network"
+	"github.com/sprytnyk/loka/internal/transfer"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -201,7 +202,7 @@ func startDevice(ctx context.Context, port int) (*server, net.Listener, int, err
 		return nil, nil, 0, err
 	}
 	s := newServer(hostname(), version)
-	s.devices = network.New(network.Announcement{ID: randomToken(16), Name: s.name, Port: port})
+	s.devices = network.New(network.Announcement{ID: transfer.RandomToken(16), Name: s.name, Port: port})
 	go s.devices.Listen(ctx)
 	go s.devices.Announce(ctx)
 	return s, ln, port, nil
@@ -224,33 +225,33 @@ func serve(ctx context.Context, o options, stdout io.Writer) error {
 }
 
 func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
-	entries, items, size, err := collect(o.paths)
+	entries, items, size, err := transfer.Collect(o.paths)
 	if err != nil {
 		return err
 	}
-	t := newTransfer(outgoing, o.to, items, size, statusWaiting)
-	go func() { t.finish(sendTo(t, entries, hostname(), o.to, o.peerPort)) }()
-	stop := context.AfterFunc(ctx, t.stop)
+	t := transfer.New(transfer.Outgoing, o.to, items, size, transfer.Waiting)
+	go func() { t.Finish(sendTo(t, entries, hostname(), o.to, o.peerPort)) }()
+	stop := context.AfterFunc(ctx, t.Stop)
 	defer stop()
 	v := follow(t, stdout)
-	if v.Status != statusComplete {
+	if v.Status != transfer.Complete {
 		return errors.New(cmp.Or(v.Error, string(v.Status)))
 	}
 	return nil
 }
 
 // follow prints a transfer's progress until it ends.
-func follow(t *Transfer, stdout io.Writer) transferView {
+func follow(t *transfer.Transfer, stdout io.Writer) transfer.View {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		v := t.view()
+		v := t.View()
 		label := fmt.Sprintf("%s: %d%%", v.Status, v.Progress)
 		if v.SpeedMbps != nil {
 			label += fmt.Sprintf(" at %.1f Mbps", *v.SpeedMbps)
 		}
 		fmt.Fprintf(stdout, "\r%-40s", label) // pads over a longer earlier line
-		if v.Status.final() {
+		if v.Status.Final() {
 			fmt.Fprintln(stdout)
 			return v
 		}
@@ -297,12 +298,12 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 			var ok bool
 			select {
 			case <-ctx.Done():
-				t.stop()
+				t.Stop()
 				return <-served
 			case answer, ok = <-answers:
 			}
 			if !ok || strings.TrimSpace(answer) == "" {
-				t.stop()
+				t.Stop()
 				fmt.Fprintln(stdout, "Declined.")
 				break
 			}
@@ -311,7 +312,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 				fmt.Fprintln(stdout, err)
 				continue
 			}
-			if !t.accept(destination) {
+			if !t.Accept(destination) {
 				fmt.Fprintln(stdout, "The sender cancelled.")
 				break
 			}
@@ -322,9 +323,9 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 	}
 }
 
-func firstWaiting(s *server) *Transfer {
-	for _, t := range s.transfers.all() {
-		if t.Direction == incoming && t.Status() == statusWaiting {
+func firstWaiting(s *server) *transfer.Transfer {
+	for _, t := range s.transfers.All() {
+		if t.Direction == transfer.Incoming && t.Status() == transfer.Waiting {
 			return t
 		}
 	}
@@ -332,7 +333,7 @@ func firstWaiting(s *server) *Transfer {
 }
 
 func devicesCommand(ctx context.Context, stdout io.Writer) error {
-	d := network.New(network.Announcement{ID: randomToken(16)})
+	d := network.New(network.Announcement{ID: transfer.RandomToken(16)})
 	ctx, cancel := context.WithTimeout(ctx, 2*network.AnnounceEvery)
 	defer cancel()
 	d.Listen(ctx)
@@ -358,7 +359,7 @@ func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
 		}
 		address = addresses[0]
 	}
-	link, err := newLink(o.paths)
+	link, err := transfer.NewLink(o.paths)
 	if err != nil {
 		return err
 	}
@@ -367,7 +368,7 @@ func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
 		return err
 	}
 	s := newServer(hostname(), version)
-	s.transfers.add(link)
-	fmt.Fprintf(stdout, "http://%s/download/%s\n", net.JoinHostPort(address, strconv.Itoa(port)), link.token)
+	s.transfers.Add(link)
+	fmt.Fprintf(stdout, "http://%s/download/%s\n", net.JoinHostPort(address, strconv.Itoa(port)), link.Token)
 	return serveUntil(ctx, ln, s.handler())
 }

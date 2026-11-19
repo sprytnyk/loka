@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sprytnyk/loka/internal/transfer"
 	"github.com/sprytnyk/loka/internal/treetest"
 )
 
@@ -84,13 +85,13 @@ func TestLinkServesASingleFileAsItself(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"Звіт 100%.txt": "hello world"})
-	link, err := newLink([]string{filepath.Join(root, "Звіт 100%.txt")})
+	link, err := transfer.NewLink([]string{filepath.Join(root, "Звіт 100%.txt")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.transfers.add(link)
+	s.transfers.Add(link)
 
-	resp := get(t, base+"/download/"+link.token)
+	resp := get(t, base+"/download/"+link.Token)
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "hello world" {
 		t.Fatalf("got %q", body)
@@ -98,7 +99,7 @@ func TestLinkServesASingleFileAsItself(t *testing.T) {
 	if got := resp.Header.Get("Content-Disposition"); got != "attachment; filename*=UTF-8''%D0%97%D0%B2%D1%96%D1%82%20100%25.txt" {
 		t.Fatalf("Content-Disposition %q", got)
 	}
-	resp = get(t, base+"/download/"+link.token, "Range", "bytes=6-")
+	resp = get(t, base+"/download/"+link.Token, "Range", "bytes=6-")
 	body, _ = io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusPartialContent || string(body) != "world" {
 		t.Fatalf("resume answered %d %q", resp.StatusCode, body)
@@ -128,13 +129,13 @@ func TestLinkServesCurrentContents(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"dir/a": "a", "file": "old"})
-	files, _ := newLink([]string{filepath.Join(root, "file")})
-	dir, _ := newLink([]string{filepath.Join(root, "dir")})
-	s.transfers.add(files)
-	s.transfers.add(dir)
+	files, _ := transfer.NewLink([]string{filepath.Join(root, "file")})
+	dir, _ := transfer.NewLink([]string{filepath.Join(root, "dir")})
+	s.transfers.Add(files)
+	s.transfers.Add(dir)
 
 	treetest.Write(t, root, map[string]string{"dir/b": "b"})
-	if got := zipNames(t, base+"/download/"+dir.token); !slices.Equal(got, []string{"dir/", "dir/a", "dir/b"}) {
+	if got := zipNames(t, base+"/download/"+dir.Token); !slices.Equal(got, []string{"dir/", "dir/a", "dir/b"}) {
 		t.Fatalf("zip has %q", got)
 	}
 	f, err := os.OpenFile(filepath.Join(root, "file"), os.O_WRONLY|os.O_TRUNC, 0)
@@ -143,7 +144,7 @@ func TestLinkServesCurrentContents(t *testing.T) {
 	}
 	f.WriteString("edited")
 	f.Close()
-	if body, _ := io.ReadAll(get(t, base+"/download/"+files.token).Body); string(body) != "edited" {
+	if body, _ := io.ReadAll(get(t, base+"/download/"+files.Token).Body); string(body) != "edited" {
 		t.Fatalf("got %q", body)
 	}
 }
@@ -152,10 +153,10 @@ func TestLinkRefusesReplacedItems(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"dir/a": "a", "file": "old"})
-	file, _ := newLink([]string{filepath.Join(root, "file")})
-	dir, _ := newLink([]string{filepath.Join(root, "dir")})
-	s.transfers.add(file)
-	s.transfers.add(dir)
+	file, _ := transfer.NewLink([]string{filepath.Join(root, "file")})
+	dir, _ := transfer.NewLink([]string{filepath.Join(root, "dir")})
+	s.transfers.Add(file)
+	s.transfers.Add(dir)
 
 	// Write the replacements first and move them into place, the way
 	// editors save, so they cannot reuse the old items' inode numbers.
@@ -168,8 +169,8 @@ func TestLinkRefusesReplacedItems(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, link := range []*Transfer{file, dir} {
-		resp := get(t, base+"/download/"+link.token)
+	for _, link := range []*transfer.Transfer{file, dir} {
+		resp := get(t, base+"/download/"+link.Token)
 		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode != http.StatusNotFound || !strings.Contains(string(body), "no longer available") {
 			t.Fatalf("replaced %v answered %d %s", link.Items, resp.StatusCode, body)
@@ -181,16 +182,16 @@ func TestStoppedLinkExpires(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"file": "x"})
-	link, _ := newLink([]string{filepath.Join(root, "file")})
-	s.transfers.add(link)
+	link, _ := transfer.NewLink([]string{filepath.Join(root, "file")})
+	s.transfers.Add(link)
 	api(t, s, base, "/api/cancel", map[string]string{"id": link.ID}, nil)
-	if resp := get(t, base+"/download/"+link.token); resp.StatusCode != http.StatusNotFound {
+	if resp := get(t, base+"/download/"+link.Token); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("stopped link answered %d", resp.StatusCode)
 	}
 	if resp := get(t, base+"/download/unknown"); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown link answered %d", resp.StatusCode)
 	}
-	if v := link.view(); v.Status != statusStopped {
+	if v := link.View(); v.Status != transfer.Stopped {
 		t.Fatalf("status %q", v.Status)
 	}
 }

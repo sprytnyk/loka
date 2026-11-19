@@ -15,6 +15,7 @@ import (
 
 	"github.com/sprytnyk/loka/internal/desktop"
 	"github.com/sprytnyk/loka/internal/network"
+	"github.com/sprytnyk/loka/internal/transfer"
 )
 
 // server answers the page on this device and other devices on the network.
@@ -26,7 +27,7 @@ type server struct {
 	pick      func(kind desktop.Kind) ([]string, error)
 	temp      string // holds files dropped on the page, made when needed
 
-	transfers   registry
+	transfers   transfer.Registry
 	devices     *network.Discovery     // nil when not looking for devices
 	destination atomic.Pointer[string] // the last accepted destination
 }
@@ -35,10 +36,10 @@ func newServer(name, version string) *server {
 	return &server{
 		name:      name,
 		version:   version,
-		key:       randomToken(24),
-		localName: localName,
+		key:       transfer.RandomToken(24),
+		localName: transfer.LocalName,
 		pick:      desktop.Pick,
-		temp:      filepath.Join(os.TempDir(), "loka-"+randomToken(9)),
+		temp:      filepath.Join(os.TempDir(), "loka-"+transfer.RandomToken(9)),
 	}
 }
 
@@ -93,11 +94,11 @@ func (s *server) local(h http.HandlerFunc) http.HandlerFunc {
 
 // peer finds the incoming transfer named in the path and lets through only
 // the device that offered it.
-func (s *server) peer(h func(http.ResponseWriter, *http.Request, *Transfer)) http.HandlerFunc {
+func (s *server) peer(h func(http.ResponseWriter, *http.Request, *transfer.Transfer)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		t := s.transfers.get(r.PathValue("id"))
+		t := s.transfers.Get(r.PathValue("id"))
 		secret := r.Header.Get("X-Transfer-Secret")
-		if t == nil || t.Direction != incoming || subtle.ConstantTimeCompare([]byte(secret), []byte(t.secret)) != 1 {
+		if t == nil || t.Direction != transfer.Incoming || subtle.ConstantTimeCompare([]byte(secret), []byte(t.Secret)) != 1 {
 			writeError(w, http.StatusNotFound, errors.New("Not found"))
 			return
 		}
@@ -127,58 +128,58 @@ func (s *server) offer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("Invalid offer"))
 		return
 	}
-	items := o.Items[:min(len(o.Items), maxOfferItems)]
+	items := o.Items[:min(len(o.Items), transfer.MaxOfferItems)]
 	for i := range items {
 		items[i] = truncate(items[i], 255)
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	t := newTransfer(incoming, cmp.Or(truncate(o.Name, 255), host), items, o.Size, statusWaiting)
-	t.secret = randomToken(24)
-	s.transfers.add(t)
-	writeJSON(w, http.StatusOK, offerReply{t.ID, t.secret})
+	t := transfer.New(transfer.Incoming, cmp.Or(truncate(o.Name, 255), host), items, o.Size, transfer.Waiting)
+	t.Secret = transfer.RandomToken(24)
+	s.transfers.Add(t)
+	writeJSON(w, http.StatusOK, offerReply{t.ID, t.Secret})
 }
 
-func (s *server) peerStatus(w http.ResponseWriter, _ *http.Request, t *Transfer) {
-	writeJSON(w, http.StatusOK, map[string]Status{"status": t.Status()})
+func (s *server) peerStatus(w http.ResponseWriter, _ *http.Request, t *transfer.Transfer) {
+	writeJSON(w, http.StatusOK, map[string]transfer.Status{"status": t.Status()})
 }
 
-func (s *server) peerCancel(w http.ResponseWriter, _ *http.Request, t *Transfer) {
-	t.stop()
+func (s *server) peerCancel(w http.ResponseWriter, _ *http.Request, t *transfer.Transfer) {
+	t.Stop()
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-func (s *server) peerUpload(w http.ResponseWriter, r *http.Request, t *Transfer) {
+func (s *server) peerUpload(w http.ResponseWriter, r *http.Request, t *transfer.Transfer) {
 	// When the upload stops early, answer at once and drop the connection,
 	// rather than first reading the rest of the stream.
 	w.Header().Set("Connection", "close")
-	if !t.move(statusReceiving, statusAccepted) {
+	if !t.Move(transfer.Receiving, transfer.Accepted) {
 		writeError(w, http.StatusConflict, errors.New("The transfer is not accepted"))
 		return
 	}
-	err := receive(t.ctx, r.Body, t.Destination(), t.Size, &t.done, s.localName)
-	t.finish(err)
+	err := transfer.Receive(t.Context(), r.Body, t.Destination(), t.Size, &t.Done, s.localName)
+	t.Finish(err)
 	switch {
-	case t.ctx.Err() != nil:
+	case t.Context().Err() != nil:
 		writeError(w, http.StatusConflict, errors.New("The receiver cancelled the transfer"))
 	case err != nil:
 		writeError(w, http.StatusBadRequest, err)
 	default:
-		writeJSON(w, http.StatusOK, map[string]Status{"status": statusComplete})
+		writeJSON(w, http.StatusOK, map[string]transfer.Status{"status": transfer.Complete})
 	}
 }
 
 // state is everything the page shows.
 type state struct {
-	Name           string         `json:"name"`
-	Peers          []network.Peer `json:"peers"`
-	Transfers      []transferView `json:"transfers"`
-	Addresses      []string       `json:"addresses"`
-	Destination    string         `json:"destination"`
-	DiscoveryError string         `json:"discovery_error"`
+	Name           string          `json:"name"`
+	Peers          []network.Peer  `json:"peers"`
+	Transfers      []transfer.View `json:"transfers"`
+	Addresses      []string        `json:"addresses"`
+	Destination    string          `json:"destination"`
+	DiscoveryError string          `json:"discovery_error"`
 }
 
 func (s *server) state(w http.ResponseWriter, _ *http.Request) {
-	st := state{Name: s.name, Peers: []network.Peer{}, Transfers: []transferView{}, Addresses: network.LocalAddresses()}
+	st := state{Name: s.name, Peers: []network.Peer{}, Transfers: []transfer.View{}, Addresses: network.LocalAddresses()}
 	if s.devices != nil {
 		peers, problem := s.devices.List()
 		st.DiscoveryError = problem
@@ -186,8 +187,8 @@ func (s *server) state(w http.ResponseWriter, _ *http.Request) {
 			st.Peers = peers
 		}
 	}
-	for _, t := range s.transfers.all() {
-		st.Transfers = append(st.Transfers, t.view())
+	for _, t := range s.transfers.All() {
+		st.Transfers = append(st.Transfers, t.View())
 	}
 	if d := s.destination.Load(); d != nil {
 		st.Destination = *d
@@ -212,14 +213,14 @@ func (s *server) send(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("Enter the device address"))
 		return
 	}
-	entries, items, size, err := collect(req.Paths)
+	entries, items, size, err := transfer.Collect(req.Paths)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	t := newTransfer(outgoing, req.Host, items, size, statusWaiting)
-	s.transfers.add(t)
-	go func() { t.finish(sendTo(t, entries, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort))) }()
+	t := transfer.New(transfer.Outgoing, req.Host, items, size, transfer.Waiting)
+	s.transfers.Add(t)
+	go func() { t.Finish(sendTo(t, entries, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort))) }()
 	writeJSON(w, http.StatusOK, map[string]string{"id": t.ID})
 }
 
@@ -232,8 +233,8 @@ func (s *server) accept(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	t := s.transfers.get(req.ID)
-	if t == nil || t.Direction != incoming {
+	t := s.transfers.Get(req.ID)
+	if t == nil || t.Direction != transfer.Incoming {
 		writeError(w, http.StatusNotFound, errors.New("Not found"))
 		return
 	}
@@ -242,7 +243,7 @@ func (s *server) accept(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if !t.accept(destination) {
+	if !t.Accept(destination) {
 		writeError(w, http.StatusConflict, errors.New("The transfer is no longer waiting"))
 		return
 	}
@@ -258,12 +259,12 @@ func (s *server) cancel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	t := s.transfers.get(req.ID)
+	t := s.transfers.Get(req.ID)
 	if t == nil {
 		writeError(w, http.StatusNotFound, errors.New("Not found"))
 		return
 	}
-	t.stop()
+	t.Stop()
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/sprytnyk/loka/internal/transfer"
 	"github.com/sprytnyk/loka/internal/treetest"
 )
 
@@ -166,15 +167,15 @@ func TestReceiveCommand(t *testing.T) {
 
 	source, destination := t.TempDir(), t.TempDir()
 	treetest.Write(t, source, map[string]string{"song.mp3": "la la"})
-	entries, items, size, _ := collect([]string{filepath.Join(source, "song.mp3")})
-	sent := newTransfer(outgoing, "127.0.0.1", items, size, statusWaiting)
-	go func() { sent.finish(sendTo(sent, entries, "laptop", "127.0.0.1", port)) }()
+	entries, items, size, _ := transfer.Collect([]string{filepath.Join(source, "song.mp3")})
+	sent := transfer.New(transfer.Outgoing, "127.0.0.1", items, size, transfer.Waiting)
+	go func() { sent.Finish(sendTo(sent, entries, "laptop", "127.0.0.1", port)) }()
 
 	out.wait(t, `laptop wants to send: song\.mp3\nDestination directory`)
 	io.WriteString(answer, filepath.Join(destination, "missing")+"\n")
 	out.wait(t, `must be an existing directory\nDestination directory`)
 	io.WriteString(answer, destination+"\n")
-	if v := waitForEnd(t, sent); v.Status != statusComplete {
+	if v := waitForEnd(t, sent); v.Status != transfer.Complete {
 		t.Fatalf("sender ended %+v", v)
 	}
 	if data, _ := os.ReadFile(filepath.Join(destination, "song.mp3")); string(data) != "la la" {

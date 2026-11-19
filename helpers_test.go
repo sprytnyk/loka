@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/sprytnyk/loka/internal/transfer"
 )
 
 // startServer runs a server on a loopback port and returns it with its URL.
@@ -56,12 +58,12 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 }
 
 // waitForIncoming returns the first incoming transfer on s.
-func waitForIncoming(t *testing.T, s *server) *Transfer {
+func waitForIncoming(t *testing.T, s *server) *transfer.Transfer {
 	t.Helper()
-	var found *Transfer
+	var found *transfer.Transfer
 	waitFor(t, "an incoming offer", func() bool {
-		for _, tr := range s.transfers.all() {
-			if tr.Direction == incoming {
+		for _, tr := range s.transfers.All() {
+			if tr.Direction == transfer.Incoming {
 				found = tr
 				return true
 			}
@@ -71,8 +73,8 @@ func waitForIncoming(t *testing.T, s *server) *Transfer {
 	return found
 }
 
-func waitForEnd(t *testing.T, tr *Transfer) transferView {
+func waitForEnd(t *testing.T, tr *transfer.Transfer) transfer.View {
 	t.Helper()
-	waitFor(t, "the transfer to end", func() bool { return tr.Status().final() })
-	return tr.view()
+	waitFor(t, "the transfer to end", func() bool { return tr.Status().Final() })
+	return tr.View()
 }

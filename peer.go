@@ -14,6 +14,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sprytnyk/loka/internal/transfer"
 )
 
 // pollEvery is how often a sender asks whether the receiver has answered.
@@ -22,11 +24,11 @@ var pollEvery = time.Second
 // sendTo offers entries to the device at host and port, waits for it to
 // accept, then streams them. It returns why the transfer ended, if not
 // complete.
-func sendTo(t *Transfer, entries []entry, from, host string, port int) error {
+func sendTo(t *transfer.Transfer, entries []transfer.Entry, from, host string, port int) error {
 	base := "http://" + net.JoinHostPort(host, strconv.Itoa(port))
 	var reply offerReply
-	o := offer{Name: from, Items: t.Items[:min(len(t.Items), maxOfferItems)], Size: t.Size}
-	if err := call(t.ctx, http.MethodPost, base+"/peer/offer", "", o, &reply); err != nil {
+	o := offer{Name: from, Items: t.Items[:min(len(t.Items), transfer.MaxOfferItems)], Size: t.Size}
+	if err := call(t.Context(), http.MethodPost, base+"/peer/offer", "", o, &reply); err != nil {
 		return err
 	}
 	tellReceiver := sync.OnceFunc(func() {
@@ -38,21 +40,21 @@ func sendTo(t *Transfer, entries []entry, from, host string, port int) error {
 	// so it shows the transfer as cancelled rather than failed.
 	uploadCtx, stopUpload := context.WithCancel(context.Background())
 	defer stopUpload()
-	stop := context.AfterFunc(t.ctx, func() {
+	stop := context.AfterFunc(t.Context(), func() {
 		tellReceiver()
 		stopUpload()
 	})
 	defer stop()
 
-	if err := waitForAnswer(t.ctx, base+"/peer/status/"+reply.ID, reply.Secret); err != nil {
+	if err := waitForAnswer(t.Context(), base+"/peer/status/"+reply.ID, reply.Secret); err != nil {
 		// Otherwise the receiver would show the offer as waiting forever.
 		tellReceiver()
 		return err
 	}
-	if !t.move(statusSending, statusWaiting) {
+	if !t.Move(transfer.Sending, transfer.Waiting) {
 		return context.Canceled
 	}
-	return upload(uploadCtx, base+"/peer/upload/"+reply.ID, reply.Secret, entries, &t.done)
+	return upload(uploadCtx, base+"/peer/upload/"+reply.ID, reply.Secret, entries, &t.Done)
 }
 
 // waitForAnswer polls the receiver until it accepts or turns the transfer
@@ -62,15 +64,15 @@ func waitForAnswer(ctx context.Context, url, secret string) error {
 	defer ticker.Stop()
 	for {
 		var reply struct {
-			Status Status `json:"status"`
+			Status transfer.Status `json:"status"`
 		}
 		if err := call(ctx, http.MethodGet, url, secret, nil, &reply); err != nil {
 			return err
 		}
 		switch reply.Status {
-		case statusAccepted:
+		case transfer.Accepted:
 			return nil
-		case statusWaiting:
+		case transfer.Waiting:
 		default:
 			return errors.New("The receiver declined or cancelled")
 		}
@@ -83,12 +85,12 @@ func waitForAnswer(ctx context.Context, url, secret string) error {
 }
 
 // upload streams the entries to the receiver.
-func upload(ctx context.Context, url, secret string, entries []entry, done *atomic.Int64) error {
+func upload(ctx context.Context, url, secret string, entries []transfer.Entry, done *atomic.Int64) error {
 	pr, pw := io.Pipe()
 	defer pr.Close()
 	writeErr := make(chan error, 1)
 	go func() {
-		err := writeTar(ctx, pw, entries, done)
+		err := transfer.WriteTar(ctx, pw, entries, done)
 		writeErr <- err
 		pw.CloseWithError(err)
 	}()

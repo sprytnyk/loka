@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sprytnyk/loka/internal/desktop"
+	"github.com/sprytnyk/loka/internal/transfer"
 )
 
 //go:embed index.html
@@ -70,7 +71,7 @@ func (s *server) pickPaths(w http.ResponseWriter, r *http.Request) {
 func (s *server) upload(w http.ResponseWriter, r *http.Request) {
 	session := r.Header.Get("X-Upload-Session")
 	name, err := url.PathUnescape(r.Header.Get("X-File-Path"))
-	parts, perr := splitName(name)
+	parts, perr := transfer.SplitName(name)
 	if err != nil || perr != nil || session == "" || strings.Trim(session, "0123456789abcdefABCDEF") != "" {
 		writeError(w, http.StatusBadRequest, errors.New("Invalid upload path"))
 		return

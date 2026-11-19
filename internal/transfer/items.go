@@ -1,4 +1,4 @@
-package main
+package transfer
 
 import (
 	"errors"
@@ -10,11 +10,11 @@ import (
 	"time"
 )
 
-// maxOfferItems caps the names shown for one incoming transfer.
-const maxOfferItems = 100
+// MaxOfferItems caps the names shown for one incoming transfer.
+const MaxOfferItems = 100
 
-// entry is one file or directory in a transfer, in the order it is sent.
-type entry struct {
+// Entry is one file or directory in a transfer, in the order it is sent.
+type Entry struct {
 	src   string // path on this device
 	name  string // slash-separated path in the transfer
 	dir   bool
@@ -22,12 +22,12 @@ type entry struct {
 	mtime time.Time
 }
 
-// collect lists what to send for the chosen paths, with the top-level names
+// Collect lists what to send for the chosen paths, with the top-level names
 // and the total size of the files. Each path becomes a top-level item, and
 // items that share a name get numbered names. A chosen path must be a file
 // or a directory; inside directories, symbolic links and other special
 // files are left out.
-func collect(paths []string) (entries []entry, items []string, size int64, err error) {
+func Collect(paths []string) (entries []Entry, items []string, size int64, err error) {
 	if len(paths) == 0 {
 		return nil, nil, 0, errors.New("Choose one or more files or directories")
 	}
@@ -73,7 +73,7 @@ func collect(paths []string) (entries []entry, items []string, size int64, err e
 			if err != nil {
 				return err
 			}
-			e := entry{src: path, name: name, dir: d.IsDir(), mtime: info.ModTime()}
+			e := Entry{src: path, name: name, dir: d.IsDir(), mtime: info.ModTime()}
 			if rel != "." {
 				e.name += "/" + filepath.ToSlash(rel)
 			}

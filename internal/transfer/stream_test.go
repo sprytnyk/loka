@@ -1,4 +1,4 @@
-package main
+package transfer
 
 import (
 	"archive/tar"
@@ -40,7 +40,7 @@ func receiveTar(t *testing.T, destination string, nameFor func(string) string, i
 	t.Helper()
 	data, size := makeTar(items...)
 	var done atomic.Int64
-	return receive(context.Background(), bytes.NewReader(data), destination, size, &done, nameFor)
+	return Receive(context.Background(), bytes.NewReader(data), destination, size, &done, nameFor)
 }
 
 func identity(s string) string { return s }
@@ -69,18 +69,18 @@ func TestReceiveRefusesLinksAndWrongSizes(t *testing.T) {
 	tw.WriteHeader(&tar.Header{Name: "link", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"})
 	tw.Close()
 	var done atomic.Int64
-	if err := receive(context.Background(), &buf, destination, 0, &done, identity); err == nil {
+	if err := Receive(context.Background(), &buf, destination, 0, &done, identity); err == nil {
 		t.Error("a symbolic link was accepted")
 	}
 
 	data, size := makeTar(tarItem{"file", "abcdef"})
-	if err := receive(context.Background(), bytes.NewReader(data), destination, size-1, &done, identity); err == nil {
+	if err := Receive(context.Background(), bytes.NewReader(data), destination, size-1, &done, identity); err == nil {
 		t.Error("more data than offered was accepted")
 	}
-	if err := receive(context.Background(), bytes.NewReader(data), destination, size+1, &done, identity); err == nil {
+	if err := Receive(context.Background(), bytes.NewReader(data), destination, size+1, &done, identity); err == nil {
 		t.Error("less data than offered was accepted")
 	}
-	if err := receive(context.Background(), bytes.NewReader(data[:515]), destination, size, &done, identity); err == nil {
+	if err := Receive(context.Background(), bytes.NewReader(data[:515]), destination, size, &done, identity); err == nil {
 		t.Error("a cut-off stream was accepted")
 	}
 	if entries, _ := os.ReadDir(destination); len(entries) != 0 {
@@ -175,7 +175,7 @@ func TestCollectNamesItemsApart(t *testing.T) {
 		"second/report.txt":       "second",
 		"third/report (1).txt":    "third",
 	})
-	entries, items, size, err := collect([]string{
+	entries, items, size, err := Collect([]string{
 		filepath.Join(root, "first", "report.txt"),
 		filepath.Join(root, "second", "report.txt"),
 		filepath.Join(root, "third", "report (1).txt"),
@@ -208,7 +208,7 @@ func TestCollectLeavesOutLinksInsideDirectories(t *testing.T) {
 	os.Symlink(filepath.Join(root, "elsewhere", "secret"), filepath.Join(root, "dir", "linked-file"))
 	os.Symlink(filepath.Join(root, "dir", "file"), filepath.Join(root, "top-link"))
 
-	entries, _, _, err := collect([]string{filepath.Join(root, "dir")})
+	entries, _, _, err := Collect([]string{filepath.Join(root, "dir")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,10 +217,10 @@ func TestCollectLeavesOutLinksInsideDirectories(t *testing.T) {
 			t.Errorf("%s was included", e.name)
 		}
 	}
-	if _, _, _, err := collect([]string{filepath.Join(root, "top-link")}); err == nil {
+	if _, _, _, err := Collect([]string{filepath.Join(root, "top-link")}); err == nil {
 		t.Error("a chosen symbolic link was accepted")
 	}
-	if _, _, _, err := collect([]string{filepath.Join(root, "missing")}); err == nil {
+	if _, _, _, err := Collect([]string{filepath.Join(root, "missing")}); err == nil {
 		t.Error("a missing path was accepted")
 	}
 }
@@ -229,14 +229,14 @@ func TestSendingFailsWhenAFileChanges(t *testing.T) {
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"grows": "abc", "shrinks": "abcdef"})
 	for name, change := range map[string]string{"grows": "abcdef", "shrinks": "a"} {
-		entries, _, _, err := collect([]string{filepath.Join(root, name)})
+		entries, _, _, err := Collect([]string{filepath.Join(root, name)})
 		if err != nil {
 			t.Fatal(err)
 		}
 		os.WriteFile(filepath.Join(root, name), []byte(change), 0o644)
 		var done atomic.Int64
 		var buf bytes.Buffer
-		if err := writeTar(context.Background(), &buf, entries, &done); err == nil || !strings.Contains(err.Error(), "changed") {
+		if err := WriteTar(context.Background(), &buf, entries, &done); err == nil || !strings.Contains(err.Error(), "changed") {
 			t.Errorf("%s: got %v", name, err)
 		}
 	}
@@ -248,7 +248,7 @@ func TestReceiveStopsWhenCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var done atomic.Int64
-	err := receive(ctx, bytes.NewReader(data), destination, size, &done, identity)
+	err := Receive(ctx, bytes.NewReader(data), destination, size, &done, identity)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v", err)
 	}
@@ -290,7 +290,7 @@ func TestReceiveMovesNothingWhenCancelledAtTheEnd(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var done atomic.Int64
-	err := receive(ctx, cancelAtEnd{bytes.NewReader(data), cancel}, destination, size, &done, identity)
+	err := Receive(ctx, cancelAtEnd{bytes.NewReader(data), cancel}, destination, size, &done, identity)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("got %v", err)
 	}

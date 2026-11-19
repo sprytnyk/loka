@@ -1,4 +1,4 @@
-package main
+package transfer
 
 import (
 	"archive/tar"
@@ -16,12 +16,12 @@ import (
 )
 
 // A transfer between devices is a tar stream: one header per directory or
-// file, in the order collect listed them, then the file's bytes. The
+// file, in the order Collect listed them, then the file's bytes. The
 // receiver unpacks it as it arrives, so neither side keeps a copy.
 
-// writeTar writes entries to w as a transfer stream, adding the bytes of
+// WriteTar writes entries to w as a transfer stream, adding the bytes of
 // file content it sends to done.
-func writeTar(ctx context.Context, w io.Writer, entries []entry, done *atomic.Int64) error {
+func WriteTar(ctx context.Context, w io.Writer, entries []Entry, done *atomic.Int64) error {
 	tw := tar.NewWriter(w)
 	for _, e := range entries {
 		hdr := &tar.Header{Name: e.name, ModTime: e.mtime, Typeflag: tar.TypeReg, Mode: 0o644, Size: e.size}
@@ -41,8 +41,8 @@ func writeTar(ctx context.Context, w io.Writer, entries []entry, done *atomic.In
 	return tw.Close()
 }
 
-// copyFile sends one file, which must still be the size collect saw.
-func copyFile(ctx context.Context, w io.Writer, e entry, done *atomic.Int64) error {
+// copyFile sends one file, which must still be the size Collect saw.
+func copyFile(ctx context.Context, w io.Writer, e Entry, done *atomic.Int64) error {
 	f, err := os.Open(e.src)
 	if err != nil {
 		return err
@@ -76,12 +76,12 @@ func (p progressReader) Read(b []byte) (int, error) {
 	return n, err
 }
 
-// receive unpacks a transfer stream of size bytes of file content into
+// Receive unpacks a transfer stream of size bytes of file content into
 // destination. It unpacks into a hidden staging directory first, then moves
 // each top-level item into destination under a name nothing else uses. So
 // nothing that exists is overwritten, and a failed transfer leaves nothing
 // behind. nameFor adapts each name to this system.
-func receive(ctx context.Context, r io.Reader, destination string, size int64, done *atomic.Int64, nameFor func(string) string) error {
+func Receive(ctx context.Context, r io.Reader, destination string, size int64, done *atomic.Int64, nameFor func(string) string) error {
 	staging, err := os.MkdirTemp(destination, ".loka-")
 	if err != nil {
 		return err
@@ -100,7 +100,7 @@ func receive(ctx context.Context, r io.Reader, destination string, size int64, d
 		if err != nil {
 			return transferError(ctx, err)
 		}
-		parts, err := splitName(hdr.Name)
+		parts, err := SplitName(hdr.Name)
 		if err != nil {
 			return err
 		}
@@ -180,9 +180,9 @@ func writeFile(ctx context.Context, target string, r io.Reader, done *atomic.Int
 	return f.Close()
 }
 
-// splitName checks a path from a transfer stream and splits it into names.
+// SplitName checks a path from a transfer stream and splits it into names.
 // It refuses anything that could reach outside the destination.
-func splitName(name string) ([]string, error) {
+func SplitName(name string) ([]string, error) {
 	trimmed := strings.TrimSuffix(name, "/")
 	parts := strings.Split(trimmed, "/")
 	for _, part := range parts {
@@ -249,8 +249,8 @@ func renameIfFree(from, to string) error {
 	return os.Rename(from, to)
 }
 
-// localName adapts a received name to this system.
-func localName(name string) string {
+// LocalName adapts a received name to this system.
+func LocalName(name string) string {
 	if runtime.GOOS == "windows" {
 		return windowsName(name)
 	}

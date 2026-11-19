@@ -1,4 +1,4 @@
-package main
+package transfer
 
 import (
 	"errors"
@@ -29,33 +29,33 @@ func TestSpeedometer(t *testing.T) {
 }
 
 func TestViewShowsSpeedOnlyWhileBytesMove(t *testing.T) {
-	tr := newTransfer(outgoing, "receiver", nil, 10, statusWaiting)
-	if v := tr.view(); v.SpeedMbps != nil {
+	tr := New(Outgoing, "receiver", nil, 10, Waiting)
+	if v := tr.View(); v.SpeedMbps != nil {
 		t.Fatalf("waiting transfer has speed %v", *v.SpeedMbps)
 	}
-	tr.move(statusSending, statusWaiting)
-	tr.done.Add(10)
-	if v := tr.view(); v.SpeedMbps == nil || *v.SpeedMbps != 0 {
+	tr.Move(Sending, Waiting)
+	tr.Done.Add(10)
+	if v := tr.View(); v.SpeedMbps == nil || *v.SpeedMbps != 0 {
 		t.Fatalf("new send has speed %v", v.SpeedMbps)
 	}
 	// Measuring starts when sending starts, so the first look after
 	// speedEvery already has a speed.
 	time.Sleep(speedEvery)
-	if v := tr.view(); v.SpeedMbps == nil || *v.SpeedMbps <= 0 {
+	if v := tr.View(); v.SpeedMbps == nil || *v.SpeedMbps <= 0 {
 		t.Fatalf("moving send has speed %v", v.SpeedMbps)
 	}
-	tr.finish(nil)
-	if v := tr.view(); v.SpeedMbps != nil {
+	tr.Finish(nil)
+	if v := tr.View(); v.SpeedMbps != nil {
 		t.Fatalf("finished transfer has speed %v", *v.SpeedMbps)
 	}
 }
 
 func TestOnlyOneActorWinsAStep(t *testing.T) {
-	tr := newTransfer(incoming, "sender", nil, 10, statusWaiting)
+	tr := New(Incoming, "sender", nil, 10, Waiting)
 	var wins sync.WaitGroup
 	results := make(chan bool, 50)
 	for range 50 {
-		wins.Go(func() { results <- tr.move(statusReceiving, statusAccepted, statusWaiting) })
+		wins.Go(func() { results <- tr.Move(Receiving, Accepted, Waiting) })
 	}
 	wins.Wait()
 	close(results)
@@ -71,12 +71,12 @@ func TestOnlyOneActorWinsAStep(t *testing.T) {
 }
 
 func TestAcceptOnlyWhileWaiting(t *testing.T) {
-	tr := newTransfer(incoming, "sender", nil, 10, statusWaiting)
-	tr.stop()
-	if tr.accept("/tmp") {
+	tr := New(Incoming, "sender", nil, 10, Waiting)
+	tr.Stop()
+	if tr.Accept("/tmp") {
 		t.Fatal("accepted a declined transfer")
 	}
-	if got := tr.Status(); got != statusCancelled {
+	if got := tr.Status(); got != Cancelled {
 		t.Fatalf("status %q, want cancelled", got)
 	}
 	if tr.ctx.Err() == nil {
@@ -85,28 +85,28 @@ func TestAcceptOnlyWhileWaiting(t *testing.T) {
 }
 
 func TestFinishKeepsTheFirstEnding(t *testing.T) {
-	tr := newTransfer(outgoing, "receiver", nil, 10, statusSending)
-	tr.finish(errors.New("connection lost"))
-	tr.finish(nil)
-	v := tr.view()
-	if v.Status != statusFailed || v.Error != "connection lost" {
+	tr := New(Outgoing, "receiver", nil, 10, Sending)
+	tr.Finish(errors.New("connection lost"))
+	tr.Finish(nil)
+	v := tr.View()
+	if v.Status != Failed || v.Error != "connection lost" {
 		t.Fatalf("got %q %q, want failed with the first error", v.Status, v.Error)
 	}
 }
 
 func TestFinishAfterStopIsCancelled(t *testing.T) {
-	tr := newTransfer(outgoing, "receiver", nil, 10, statusSending)
-	tr.stop()
-	tr.finish(errors.New("read tcp: use of closed connection"))
-	if v := tr.view(); v.Status != statusCancelled || v.Error != "" {
+	tr := New(Outgoing, "receiver", nil, 10, Sending)
+	tr.Stop()
+	tr.Finish(errors.New("read tcp: use of closed connection"))
+	if v := tr.View(); v.Status != Cancelled || v.Error != "" {
 		t.Fatalf("got %q %q, want cancelled without an error", v.Status, v.Error)
 	}
 }
 
 func TestStopEndsALink(t *testing.T) {
-	tr := newTransfer(outgoing, "Link", nil, 0, statusShared)
-	tr.stop()
-	if got := tr.Status(); got != statusStopped {
+	tr := New(Outgoing, "Link", nil, 0, Shared)
+	tr.Stop()
+	if got := tr.Status(); got != Stopped {
 		t.Fatalf("status %q, want stopped", got)
 	}
 }
@@ -117,11 +117,11 @@ func TestProgress(t *testing.T) {
 		status     Status
 		want       int
 	}{
-		{0, 0, statusSending, 0},
-		{0, 0, statusComplete, 100},
-		{5, 10, statusSending, 50},
-		{15, 10, statusReceiving, 100},
-		{0, 0, statusShared, 100},
+		{0, 0, Sending, 0},
+		{0, 0, Complete, 100},
+		{5, 10, Sending, 50},
+		{15, 10, Receiving, 100},
+		{0, 0, Shared, 100},
 	} {
 		if got := progress(c.done, c.size, c.status); got != c.want {
 			t.Errorf("progress(%d, %d, %s) = %d, want %d", c.done, c.size, c.status, got, c.want)
@@ -130,16 +130,16 @@ func TestProgress(t *testing.T) {
 }
 
 func TestRegistryFindsLinksByToken(t *testing.T) {
-	var r registry
-	link := newTransfer(outgoing, "Link", nil, 0, statusShared)
-	link.token = "abc"
-	send := newTransfer(outgoing, "receiver", nil, 0, statusWaiting)
-	r.add(link)
-	r.add(send)
-	if r.link("abc") != link || r.get(send.ID) != send || r.link("") != nil {
+	var r Registry
+	link := New(Outgoing, "Link", nil, 0, Shared)
+	link.Token = "abc"
+	send := New(Outgoing, "receiver", nil, 0, Waiting)
+	r.Add(link)
+	r.Add(send)
+	if r.Link("abc") != link || r.Get(send.ID) != send || r.Link("") != nil {
 		t.Fatal("lookup returned the wrong transfer")
 	}
-	if all := r.all(); len(all) != 2 || all[0] != link {
+	if all := r.All(); len(all) != 2 || all[0] != link {
 		t.Fatal("transfers are not kept in creation order")
 	}
 }

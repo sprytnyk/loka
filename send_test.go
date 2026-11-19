@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"io"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sprytnyk/loka/internal/transfer"
 	"github.com/sprytnyk/loka/internal/treetest"
 )
 
@@ -73,11 +75,11 @@ func TestSendBetweenTwoServers(t *testing.T) {
 		t.Fatalf("accept answered %d", code)
 	}
 
-	out := sender.transfers.get(sent.ID)
-	if v := waitForEnd(t, out); v.Status != statusComplete || v.Progress != 100 {
+	out := sender.transfers.Get(sent.ID)
+	if v := waitForEnd(t, out); v.Status != transfer.Complete || v.Progress != 100 {
 		t.Fatalf("sender ended %+v", v)
 	}
-	if v := waitForEnd(t, in); v.Status != statusComplete || v.Progress != 100 {
+	if v := waitForEnd(t, in); v.Status != transfer.Complete || v.Progress != 100 {
 		t.Fatalf("receiver ended %+v", v)
 	}
 
@@ -104,22 +106,22 @@ func TestSeveralIncomingAtOnce(t *testing.T) {
 	destination := filepath.Join(root, "destination")
 	treetest.Write(t, root, map[string]string{"a/report.txt": "first", "b/report.txt": "second", "destination/": ""})
 
-	var outs []*Transfer
+	var outs []*transfer.Transfer
 	for _, dir := range []string{"a", "b"} {
-		entries, items, size, err := collect([]string{filepath.Join(root, dir, "report.txt")})
+		entries, items, size, err := transfer.Collect([]string{filepath.Join(root, dir, "report.txt")})
 		if err != nil {
 			t.Fatal(err)
 		}
-		out := newTransfer(outgoing, host, items, size, statusWaiting)
+		out := transfer.New(transfer.Outgoing, host, items, size, transfer.Waiting)
 		outs = append(outs, out)
-		go func() { out.finish(sendTo(out, entries, dir, host, port)) }()
+		go func() { out.Finish(sendTo(out, entries, dir, host, port)) }()
 	}
-	waitFor(t, "both offers", func() bool { return len(receiver.transfers.all()) == 2 })
-	for _, in := range receiver.transfers.all() {
+	waitFor(t, "both offers", func() bool { return len(receiver.transfers.All()) == 2 })
+	for _, in := range receiver.transfers.All() {
 		api(t, receiver, receiverURL, "/api/accept", map[string]string{"id": in.ID, "destination": destination}, nil)
 	}
 	for _, out := range outs {
-		if v := waitForEnd(t, out); v.Status != statusComplete {
+		if v := waitForEnd(t, out); v.Status != transfer.Complete {
 			t.Fatalf("a sender ended %+v", v)
 		}
 	}
@@ -141,16 +143,16 @@ func TestDeclineEndsBothSides(t *testing.T) {
 	host, port := hostPort(t, receiverURL)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"file": "abc"})
-	entries, items, size, _ := collect([]string{filepath.Join(root, "file")})
-	out := newTransfer(outgoing, host, items, size, statusWaiting)
-	go func() { out.finish(sendTo(out, entries, "sender", host, port)) }()
+	entries, items, size, _ := transfer.Collect([]string{filepath.Join(root, "file")})
+	out := transfer.New(transfer.Outgoing, host, items, size, transfer.Waiting)
+	go func() { out.Finish(sendTo(out, entries, "sender", host, port)) }()
 
 	in := waitForIncoming(t, receiver)
 	api(t, receiver, receiverURL, "/api/cancel", map[string]string{"id": in.ID}, nil)
-	if v := waitForEnd(t, out); v.Status != statusFailed || !strings.Contains(v.Error, "declined") {
+	if v := waitForEnd(t, out); v.Status != transfer.Failed || !strings.Contains(v.Error, "declined") {
 		t.Fatalf("sender ended %+v", v)
 	}
-	if got := in.Status(); got != statusCancelled {
+	if got := in.Status(); got != transfer.Cancelled {
 		t.Fatalf("receiver status %q", got)
 	}
 }
@@ -160,16 +162,16 @@ func TestSenderCancelEndsBothSides(t *testing.T) {
 	host, port := hostPort(t, receiverURL)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"file": "abc"})
-	entries, items, size, _ := collect([]string{filepath.Join(root, "file")})
-	out := newTransfer(outgoing, host, items, size, statusWaiting)
-	go func() { out.finish(sendTo(out, entries, "sender", host, port)) }()
+	entries, items, size, _ := transfer.Collect([]string{filepath.Join(root, "file")})
+	out := transfer.New(transfer.Outgoing, host, items, size, transfer.Waiting)
+	go func() { out.Finish(sendTo(out, entries, "sender", host, port)) }()
 
 	in := waitForIncoming(t, receiver)
-	out.stop()
-	if v := waitForEnd(t, out); v.Status != statusCancelled {
+	out.Stop()
+	if v := waitForEnd(t, out); v.Status != transfer.Cancelled {
 		t.Fatalf("sender ended %+v", v)
 	}
-	waitFor(t, "the receiver to see the cancel", func() bool { return in.Status() == statusCancelled })
+	waitFor(t, "the receiver to see the cancel", func() bool { return in.Status() == transfer.Cancelled })
 }
 
 // TestSenderFailureEndsTheOffer has the receiver's first status reply fail,
@@ -190,15 +192,15 @@ func TestSenderFailureEndsTheOffer(t *testing.T) {
 	host, port := hostPort(t, ts.URL)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"file": "abc"})
-	entries, items, size, _ := collect([]string{filepath.Join(root, "file")})
-	out := newTransfer(outgoing, host, items, size, statusWaiting)
-	go func() { out.finish(sendTo(out, entries, "sender", host, port)) }()
+	entries, items, size, _ := transfer.Collect([]string{filepath.Join(root, "file")})
+	out := transfer.New(transfer.Outgoing, host, items, size, transfer.Waiting)
+	go func() { out.Finish(sendTo(out, entries, "sender", host, port)) }()
 
 	in := waitForIncoming(t, receiver)
-	if v := waitForEnd(t, out); v.Status != statusFailed {
+	if v := waitForEnd(t, out); v.Status != transfer.Failed {
 		t.Fatalf("sender ended %+v", v)
 	}
-	waitFor(t, "the receiver to stop waiting", func() bool { return in.Status() == statusCancelled })
+	waitFor(t, "the receiver to stop waiting", func() bool { return in.Status() == transfer.Cancelled })
 }
 
 func TestPeerRoutesNeedTheSecret(t *testing.T) {
@@ -212,7 +214,7 @@ func TestPeerRoutesNeedTheSecret(t *testing.T) {
 	if err := call(t.Context(), http.MethodPost, base+"/peer/cancel/"+reply.ID, "wrong", nil, nil); err == nil {
 		t.Fatal("cancel worked without the secret")
 	}
-	if got := receiver.transfers.get(reply.ID).Status(); got != statusWaiting {
+	if got := receiver.transfers.Get(reply.ID).Status(); got != transfer.Waiting {
 		t.Fatalf("status %q", got)
 	}
 }
@@ -239,7 +241,7 @@ func TestOffersMustNameItemsAndASize(t *testing.T) {
 			t.Errorf("accepted %+v", o)
 		}
 	}
-	if n := len(receiver.transfers.all()); n != 0 {
+	if n := len(receiver.transfers.All()); n != 0 {
 		t.Fatalf("%d offers shown", n)
 	}
 }
@@ -280,19 +282,19 @@ func TestReceiverCancelReachesALiveSender(t *testing.T) {
 	root, destination := t.TempDir(), t.TempDir()
 	big := make([]byte, 256<<20)
 	os.WriteFile(filepath.Join(root, "big.bin"), big, 0o644)
-	entries, items, size, _ := collect([]string{filepath.Join(root, "big.bin")})
-	out := newTransfer(outgoing, host, items, size, statusWaiting)
-	go func() { out.finish(sendTo(out, entries, "sender", host, port)) }()
+	entries, items, size, _ := transfer.Collect([]string{filepath.Join(root, "big.bin")})
+	out := transfer.New(transfer.Outgoing, host, items, size, transfer.Waiting)
+	go func() { out.Finish(sendTo(out, entries, "sender", host, port)) }()
 
 	in := waitForIncoming(t, receiver)
 	api(t, receiver, receiverURL, "/api/accept", map[string]string{"id": in.ID, "destination": destination}, nil)
-	waitFor(t, "bytes to arrive", func() bool { return in.done.Load() > 0 })
+	waitFor(t, "bytes to arrive", func() bool { return in.Done.Load() > 0 })
 	api(t, receiver, receiverURL, "/api/cancel", map[string]string{"id": in.ID}, nil)
 	v := waitForEnd(t, out)
-	if in.done.Load() == size {
+	if in.Done.Load() == size {
 		t.Skip("the transfer finished before the cancel")
 	}
-	if v.Status != statusFailed || !strings.Contains(v.Error, "cancelled") {
+	if v.Status != transfer.Failed || !strings.Contains(v.Error, "cancelled") {
 		t.Fatalf("sender ended %+v", v)
 	}
 	if entries, _ := os.ReadDir(destination); len(entries) != 0 {
@@ -307,7 +309,15 @@ func TestReceiverCancelDuringUpload(t *testing.T) {
 	host, port := hostPort(t, receiverURL)
 	base := "http://" + net.JoinHostPort(host, strconv.Itoa(port))
 	destination := t.TempDir()
-	data, size := makeTar(tarItem{"file", strings.Repeat("x", 4096)})
+	source := t.TempDir()
+	treetest.Write(t, source, map[string]string{"file": strings.Repeat("x", 4096)})
+	entries, _, size, _ := transfer.Collect([]string{filepath.Join(source, "file")})
+	var stream bytes.Buffer
+	var written atomic.Int64
+	if err := transfer.WriteTar(t.Context(), &stream, entries, &written); err != nil {
+		t.Fatal(err)
+	}
+	data := stream.Bytes()
 
 	var reply offerReply
 	if err := call(t.Context(), http.MethodPost, base+"/peer/offer", "", offer{Name: "s", Items: []string{"file"}, Size: size}, &reply); err != nil {
@@ -329,15 +339,15 @@ func TestReceiverCancelDuringUpload(t *testing.T) {
 		answer <- err
 	}()
 
-	in := receiver.transfers.get(reply.ID)
-	waitFor(t, "bytes to arrive", func() bool { return in.done.Load() > 0 })
+	in := receiver.transfers.Get(reply.ID)
+	waitFor(t, "bytes to arrive", func() bool { return in.Done.Load() > 0 })
 	api(t, receiver, receiverURL, "/api/cancel", map[string]string{"id": reply.ID}, nil)
 	go pw.Write([]byte("x")) // wake the stalled read
 	if err := <-answer; err == nil || !strings.Contains(err.Error(), "cancelled") {
 		t.Fatalf("sender was told %v", err)
 	}
 	pw.Close()
-	if got := in.Status(); got != statusCancelled {
+	if got := in.Status(); got != transfer.Cancelled {
 		t.Fatalf("status %q", got)
 	}
 	if entries, _ := os.ReadDir(destination); len(entries) != 0 {
