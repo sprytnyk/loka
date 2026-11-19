@@ -13,7 +13,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:20px;pa
 .brand{display:flex;align-items:center;gap:11px}.logo{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:var(--accent);color:white}
 .logo svg,.section-icon svg,.drop-icon svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .brand-name{font-size:21px;letter-spacing:-.06em;font-weight:750}.brand-version{color:var(--muted);font-size:12px;font-weight:600}.device-badge{display:flex;align-items:center;gap:8px;background:#1e293b;border:1px solid var(--line);border-radius:99px;padding:7px 12px;font-size:12px;color:#cbd5e1;overflow-wrap:anywhere}.device-badge:before{content:"";width:7px;height:7px;flex:none;border-radius:50%;background:#60a5fa}
-.intro{padding:49px 0 30px}.eyebrow{margin:0 0 8px;color:#93c5fd;font-size:11px;font-weight:750;letter-spacing:.13em;text-transform:uppercase}h1{margin:0;color:#fff;font-size:clamp(30px,4vw,42px);line-height:1.12;letter-spacing:-.05em;font-weight:700}.intro p:last-child{margin:10px 0 0;color:var(--muted);font-size:15px}
+.intro{padding:49px 0 30px}h1{margin:0;color:#fff;font-size:clamp(30px,4vw,42px);line-height:1.12;letter-spacing:-.05em;font-weight:700}
 .layout{display:grid;grid-template-columns:minmax(0,1.18fr) minmax(0,1fr);gap:20px;align-items:start}.column{display:grid;gap:20px}.card{min-width:0;background:#1e293b;border:1px solid #334155;border-radius:1.5rem;padding:24px;box-shadow:0 25px 50px -12px #0004}.card-heading{display:flex;align-items:flex-start;gap:12px;margin-bottom:18px}.section-icon{display:grid;place-items:center;flex:none;width:39px;height:39px;border-radius:12px;background:var(--soft);color:#93c5fd}.section-icon svg{width:19px;height:19px}.card-heading h2{margin:0;color:#fff;font-size:16px;line-height:1.3;letter-spacing:-.02em}.card-heading p{margin:3px 0 0;color:var(--muted);font-size:13px}
 .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.row>*{min-width:0}input{background:#0f172a;border:1px solid #475569;border-radius:9px;color:var(--ink);padding:10px 12px;font:inherit;font-size:13px;flex:1;min-width:10rem}input::placeholder{color:#94a3b8}button,.button{border:1px solid transparent;border-radius:9px;background:var(--accent);color:#fff;padding:10px 15px;font:inherit;font-size:13px;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s}button:hover,.button:hover{background:var(--accent-hover)}button.secondary,.button.secondary{background:#334155;color:#fff;border-color:#475569}button.secondary:hover,.button.secondary:hover{background:#475569;border-color:#64748b}button:disabled{opacity:.5;cursor:wait}:focus-visible,.button:focus-within{outline:3px solid #93c5fd;outline-offset:2px}
 .drop{border:1.5px dashed #475569;border-radius:12px;background:#172337;padding:26px 16px 20px;text-align:center;margin-bottom:16px}.drop.over{border-color:#60a5fa;background:#263b5d}.drop-icon{display:grid;place-items:center;width:42px;height:42px;margin:0 auto 11px;border-radius:13px;background:var(--soft);color:#93c5fd}.drop-title{margin:0;font-weight:650;font-size:14px}.drop .row{justify-content:center;margin-top:12px}
@@ -37,7 +37,7 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 </head>
 <body><main>
 <header><div class="brand"><span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6M4 7h5M4 17h5"/></svg></span><span class="brand-name">loka</span><span class="brand-version">__LOKA_VERSION__</span></div><span class="device-badge" id="hostname">Connecting...</span></header>
-<div class="intro"><p class="eyebrow">Local file sharing</p><h1>Share files on your network.</h1><p>Choose files and send them to another device.</p></div>
+<div class="intro"><h1>Share files on your network</h1></div>
 <div id="message" role="status"></div>
 <div class="layout"><div class="column">
 <section class="card choose-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><div><h2>Items to share</h2></div></div>
@@ -45,10 +45,10 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 <div class="row"><button class="secondary" id="pick-files">Choose files</button><button class="secondary" id="pick-directory">Choose directory</button></div>
 <p id="selection" role="status">Nothing selected</p></div>
 <label class="field-label" for="paths">Add by path</label><div class="row action-row"><input id="paths" placeholder="File or directory path"><button class="secondary" id="add-path">Add path</button></div><ul id="selected"></ul></section>
-<section class="card link-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></svg></span><div><h2>Share a download link</h2><p>For someone who doesn't have Loka. The link works while Loka is running.</p></div></div><label class="field-label" for="link-address">Your local address</label><div class="row action-row"><input id="link-address" placeholder="Your local address"><button id="share">Create link</button></div><div id="links"></div></section>
+<section class="card link-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></svg></span><div><h2>Share a download link</h2><p>The recipient can open the link in a browser.</p></div></div><label class="field-label" for="link-address">Your local address</label><div class="row action-row"><input id="link-address" placeholder="Your local address"><button id="share">Create link</button></div><div id="links"></div></section>
 </div><div class="column">
-<section class="card device-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><h2>Send to a device</h2><p>Devices running Loka on your network appear here.</p></div></div><div id="peers"><p>Looking for devices...</p></div><div class="manual"><label class="field-label" for="address">Or enter a device address</label><div class="row action-row"><input id="address" placeholder="Device address"><input id="port" value="45873" aria-label="Device port"><button id="send">Send</button></div></div></section>
-<section class="card transfers-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3"/></svg></span><div><h2>Transfers</h2><p>Follow your incoming and outgoing transfers.</p></div></div><div id="transfers"><p>Nothing to show yet.</p></div></section>
+<section class="card device-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div><h2>Send to a device</h2></div></div><div id="peers"><p>Looking for devices...</p></div><div class="manual"><label class="field-label" for="address">Or enter a device address</label><div class="row action-row"><input id="address" placeholder="Device address"><input id="port" value="45873" aria-label="Device port"><button id="send">Send</button></div></div></section>
+<section class="card transfers-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3"/></svg></span><div><h2>Transfers</h2></div></div><div id="transfers"><p>No transfers yet.</p></div></section>
 </div></div><footer class="footer-note"><p>Transfers are not encrypted. Use Loka on a network you trust.</p><a href="https://github.com/sprytnyk/loka">Source on GitHub</a></footer>
 </main>
 <dialog id="incoming" aria-labelledby="incoming-title">
@@ -167,7 +167,7 @@ async function paths(items = selected) {
     const group = item.group ?? item;
     const first = !sessions.has(group);
     if (first) sessions.set(group, crypto.randomUUID().replaceAll('-', ''));
-    message(`Preparing ${item.label}…`);
+    message(`Copying ${item.label}…`);
     const headers = {
       'X-Loka-Key': key,
       'X-Upload-Session': sessions.get(group),
@@ -201,7 +201,7 @@ function renderPeers(data) {
   const list = $('peers');
   const markup = data.peers.length
     ? data.peers.map(peer => `<div class="item row"><span><strong>${escapeHtml(peer.name)}</strong><br><small>${escapeHtml(peer.host)}</small></span><button data-host="${escapeHtml(peer.host)}" data-port="${peer.port}">Send</button></div>`).join('')
-    : `<p>${escapeHtml(data.discovery_error || 'No devices found yet. You can enter an address below.')}</p>`;
+    : `<p>${escapeHtml(data.discovery_error || 'No devices found. Enter an address below.')}</p>`;
   if (markup === renderedPeers) return;
   const active = document.activeElement;
   const focused = list.contains(active) ? active.dataset : null;
@@ -226,7 +226,7 @@ function fileNames(items) {
 function renderTransfers(transfers) {
   const list = $('transfers');
   if (!transfers.length) {
-    if (!list.firstElementChild?.matches('p')) list.innerHTML = '<p>Nothing to show yet.</p>';
+    if (!list.firstElementChild?.matches('p')) list.innerHTML = '<p>No transfers yet.</p>';
     return;
   }
   if (list.firstElementChild?.matches('p')) list.firstElementChild.remove();

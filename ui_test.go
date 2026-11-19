@@ -39,7 +39,7 @@ func TestPageCarriesKeyAndVersion(t *testing.T) {
 	if resp.Header.Get("Content-Type") != "text/html; charset=utf-8" {
 		t.Fatalf("Content-Type %q", resp.Header.Get("Content-Type"))
 	}
-	for _, want := range []string{"const key='" + s.key + "'", ">v1.2.3<", "Preparing ${item.label}…", " · ${transfer.progress}%"} {
+	for _, want := range []string{"const key='" + s.key + "'", ">v1.2.3<", "Copying ${item.label}…", " · ${transfer.progress}%"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page lacks %q", want)
 		}
