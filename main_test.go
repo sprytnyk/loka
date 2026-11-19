@@ -206,3 +206,32 @@ func TestSendAndReceiveCommands(t *testing.T) {
 		t.Fatalf("receive exited %d, output %q", c, received.String())
 	}
 }
+
+// TestReceiveStopsAfterAccepting stops loka receive after it accepted an
+// offer whose sender never starts uploading.
+func TestReceiveStopsAfterAccepting(t *testing.T) {
+	stdin, answer := io.Pipe()
+	defer answer.Close()
+	received, stopReceiving, receiveCode := runLoka(t, stdin, "receive", "--port", "0")
+	port := received.wait(t, `on port (\d+)`)[1]
+
+	offer := strings.NewReader(`{"name":"stalled","items":["x"],"size":1}`)
+	resp, err := http.Post("http://127.0.0.1:"+port+"/peer/offer", "application/json", offer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	received.wait(t, `wants to send: x\nDestination directory`)
+	io.WriteString(answer, t.TempDir()+"\n")
+	received.wait(t, `accepted: 0%`)
+
+	stopReceiving()
+	select {
+	case c := <-receiveCode:
+		if c != 0 {
+			t.Fatalf("receive exited %d, output %q", c, received.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("receive kept running after it was stopped, output %q", received.String())
+	}
+}

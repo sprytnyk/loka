@@ -281,8 +281,8 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 }
 
 // answerOffer asks for a destination until one exists or the person
-// declines, then follows the transfer. It returns false when ctx ends
-// first.
+// declines, then follows the transfer. It returns false when ctx ends,
+// which also stops the transfer.
 func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, answers <-chan string, stdout io.Writer) bool {
 	for {
 		fmt.Fprint(stdout, "Destination directory (empty to decline): ")
@@ -309,8 +309,10 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 			fmt.Fprintln(stdout, "The sender cancelled.")
 			return true
 		}
+		stop := context.AfterFunc(ctx, t.Stop)
+		defer stop()
 		follow(t, stdout)
-		return true
+		return ctx.Err() == nil
 	}
 }
 
