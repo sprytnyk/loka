@@ -28,6 +28,11 @@ type Entry struct {
 // or a directory; inside directories, symbolic links and other special
 // files are left out.
 func Collect(paths []string) (entries []Entry, items []string, size int64, err error) {
+	return collect(paths, nil)
+}
+
+// collect is Collect that keeps the files open in h, unless h is nil.
+func collect(paths []string, h *holder) (entries []Entry, items []string, size int64, err error) {
 	if len(paths) == 0 {
 		return nil, nil, 0, errors.New("Choose one or more files or directories")
 	}
@@ -58,7 +63,7 @@ func Collect(paths []string) (entries []Entry, items []string, size int64, err e
 		used[name] = true
 		items = append(items, name)
 
-		found, n, err := walk(p, name)
+		found, n, err := walk(p, name, h)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("Cannot send %s: %w", p, err)
 		}
@@ -70,8 +75,8 @@ func Collect(paths []string) (entries []Entry, items []string, size int64, err e
 
 // walk lists root and everything under it, named under name in the
 // transfer, and adds up the file sizes. Symbolic links, sockets and
-// devices are left out.
-func walk(root, name string) (entries []Entry, size int64, err error) {
+// devices are left out. Files are kept open in h, unless h is nil.
+func walk(root, name string, h *holder) (entries []Entry, size int64, err error) {
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -79,9 +84,10 @@ func walk(root, name string) (entries []Entry, size int64, err error) {
 		if !d.Type().IsRegular() && !d.IsDir() {
 			return nil
 		}
-		// Lstat rather than d.Info, so the file's identity is read now
-		// on every system.
-		info, err := os.Lstat(path)
+		info, err := lstat(path)
+		if err == nil && h != nil && !d.IsDir() {
+			info, err = h.open(path, info)
+		}
 		if err != nil {
 			return err
 		}
@@ -130,6 +136,17 @@ func cutToBytes(s string, n int) string {
 		n--
 	}
 	return s[:n]
+}
+
+// lstat is os.Lstat that reads the file's identity now. On Windows,
+// os.Lstat and d.Info leave the file ID to be read by the first
+// os.SameFile, from whatever is at the path by then.
+func lstat(path string) (os.FileInfo, error) {
+	info, err := os.Lstat(path)
+	if err == nil {
+		os.SameFile(info, info)
+	}
+	return info, err
 }
 
 // sameFile reports whether now is still the file or directory that was.

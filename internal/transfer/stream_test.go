@@ -323,6 +323,124 @@ func TestSendingRefusesAReplacedFile(t *testing.T) {
 	}
 }
 
+// TestSendingRefusesADeletedAndRecreatedFile deletes a chosen file and
+// writes a new one in its place, again and again. Unix systems often give
+// the new file the old one's inode number, which would make it pass for the
+// chosen file, unless the chosen file is held open.
+func TestSendingRefusesADeletedAndRecreatedFile(t *testing.T) {
+	if !idsCanBeReused {
+		t.Skip("file IDs are not reused on this system")
+	}
+	path := filepath.Join(t.TempDir(), "chosen")
+	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entries, _, _, release, err := CollectHeld([]string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	for i := range 256 {
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("new"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if info, err := os.Lstat(path); err == nil && os.SameFile(entries[0].info, info) {
+			t.Logf("the new file took the chosen file's identity after %d tries", i+1)
+			break
+		}
+	}
+	var done atomic.Int64
+	var buf bytes.Buffer
+	if err := WriteTar(context.Background(), &buf, entries, &done); !errors.Is(err, errReplaced) {
+		t.Fatalf("got %v", err)
+	}
+	if bytes.Contains(buf.Bytes(), []byte("new")) {
+		t.Fatal("the replacement was sent")
+	}
+}
+
+// TestHoldingRecordsTheHeldFile replaces a file between looking at it and
+// opening it, with the new file taking the old one's identity. What is
+// recorded must then describe the file that is held, not the one looked at.
+func TestHoldingRecordsTheHeldFile(t *testing.T) {
+	if !idsCanBeReused {
+		t.Skip("nothing is held on this system")
+	}
+	path := filepath.Join(t.TempDir(), "chosen")
+	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	seen, err := lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reused := false
+	for range 256 {
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("longer"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if info, err := os.Lstat(path); err == nil && os.SameFile(seen, info) {
+			reused = true
+			break
+		}
+	}
+	if !reused {
+		t.Skip("the filesystem did not reuse the identity")
+	}
+	h := newHolder()
+	defer h.release()
+	info, err := h.open(path, seen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() != int64(len("longer")) {
+		t.Fatalf("recorded %d bytes for the held file", info.Size())
+	}
+}
+
+// TestHoldingSharesOneBudget checks that even a low open file limit leaves
+// room to send a file, and that transfers waiting at once share the room.
+func TestHoldingSharesOneBudget(t *testing.T) {
+	if !idsCanBeReused {
+		t.Skip("nothing is held on this system")
+	}
+	root := t.TempDir()
+	treetest.Write(t, root, map[string]string{"one": "1", "dir/a": "1", "dir/b": "2"})
+	defer func(limit func() int) { openFileLimit = limit }(openFileLimit)
+
+	openFileLimit = func() int { return 256 }
+	_, _, _, release, err := CollectHeld([]string{filepath.Join(root, "one")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+
+	openFileLimit = func() int { return 4 } // room for 3
+	dir := filepath.Join(root, "dir")
+	_, _, _, first, err := CollectHeld([]string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, _, err := CollectHeld([]string{dir}); err == nil || !strings.Contains(err.Error(), "only 3 files") {
+		t.Fatalf("got %v", err)
+	}
+	first()
+	_, _, _, second, err := CollectHeld([]string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second()
+	if n := heldFiles.Load(); n != 0 {
+		t.Fatalf("%d files still counted as held", n)
+	}
+}
+
 func TestNumberedFitsTheNameLimit(t *testing.T) {
 	for _, tc := range []struct{ name, suffix string }{
 		{strings.Repeat("a", 251) + ".txt", " (1).txt"},

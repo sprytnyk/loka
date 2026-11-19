@@ -207,12 +207,15 @@ func serve(ctx context.Context, o options, stdout io.Writer) error {
 }
 
 func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
-	entries, items, size, err := transfer.Collect(o.paths)
+	entries, items, size, release, err := transfer.CollectHeld(o.paths)
 	if err != nil {
 		return err
 	}
 	t := transfer.New(transfer.Outgoing, o.to, items, size, transfer.Waiting)
-	go func() { t.Finish(server.SendTo(t, entries, hostname(), o.to, o.peerPort)) }()
+	go func() {
+		defer release()
+		t.Finish(server.SendTo(t, entries, hostname(), o.to, o.peerPort))
+	}()
 	stop := context.AfterFunc(ctx, t.Stop)
 	defer stop()
 	v := follow(t, stdout)

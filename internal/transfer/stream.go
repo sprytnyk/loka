@@ -45,20 +45,13 @@ func WriteTar(ctx context.Context, w io.Writer, entries []Entry, done *atomic.In
 var errReplaced = errors.New("was replaced after it was chosen")
 
 // copyFile sends one file, which must still be the file Collect saw, at the
-// size Collect saw. It checks before opening too, so a special file put in
-// its place is never opened.
+// size Collect saw.
 func copyFile(ctx context.Context, w io.Writer, e Entry, done *atomic.Int64) error {
-	if info, err := os.Lstat(e.src); err != nil || !sameFile(e.info, info) {
-		return fmt.Errorf("%s %w", e.src, errReplaced)
-	}
-	f, err := os.Open(e.src)
+	f, _, err := openChosen(e.src, e.info)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	if info, err := f.Stat(); err != nil || !sameFile(e.info, info) {
-		return fmt.Errorf("%s %w", e.src, errReplaced)
-	}
 	n, err := io.CopyN(w, progressReader{ctx, f, done}, e.size)
 	if errors.Is(err, io.EOF) || err == nil && n == e.size && moreToRead(f) {
 		return fmt.Errorf("%s changed while it was being sent", e.src)
