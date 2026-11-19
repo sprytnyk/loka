@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 )
 
@@ -40,7 +41,41 @@ func NewLink(paths []string) (*Transfer, error) {
 		}
 		t.shared = append(t.shared, sharedItem{filepath.Clean(p), info})
 	}
+	if err := t.holdShared(); err != nil {
+		return nil, err
+	}
 	return t, nil
+}
+
+// holdShared keeps the shared items open until the link stops. Unix
+// systems can give a deleted file's inode number to the next new file, but
+// not while the old one is open, so a file written in place of a shared
+// one can't pass for it. Windows file IDs change on reuse, so nothing is
+// held there.
+func (t *Transfer) holdShared() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	var held []*os.File
+	release := func() {
+		for _, f := range held {
+			f.Close()
+		}
+	}
+	for _, it := range t.shared {
+		f, err := os.Open(it.path)
+		if err != nil {
+			release()
+			return err
+		}
+		held = append(held, f)
+		if info, err := f.Stat(); err != nil || !it.sameAs(info) {
+			release()
+			return errLinkGone
+		}
+	}
+	context.AfterFunc(t.Context(), release)
+	return nil
 }
 
 // SharesOneFile reports whether a link shares a single file, which is

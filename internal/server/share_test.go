@@ -176,6 +176,26 @@ func TestLinkRefusesReplacedItems(t *testing.T) {
 	}
 }
 
+// Deleting a shared file and writing a new one in its place often gives the
+// new file the old inode number, so the number alone can't tell them apart.
+func TestLinkRefusesAFileRewrittenInPlace(t *testing.T) {
+	s, base := startServer(t)
+	root := t.TempDir()
+	path := filepath.Join(root, "file")
+	treetest.Write(t, root, map[string]string{"file": "old"})
+	link := addLink(t, s, path)
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	treetest.Write(t, root, map[string]string{"file": "new"})
+	resp := get(t, base+"/download/"+link.Token)
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("rewritten file answered %d %s", resp.StatusCode, body)
+	}
+}
+
 func TestStoppedLinkExpires(t *testing.T) {
 	s, base := startServer(t)
 	root := t.TempDir()
