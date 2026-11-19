@@ -224,17 +224,14 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("Enter the device address"))
 		return
 	}
-	entries, items, size, release, err := transfer.CollectHeld(req.Paths)
+	entries, items, size, err := transfer.Collect(req.Paths)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	t := transfer.New(transfer.Outgoing, req.Host, items, size, transfer.Waiting)
 	s.Transfers.Add(t)
-	go func() {
-		defer release()
-		t.Finish(SendTo(t, entries, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort)))
-	}()
+	go func() { t.Finish(SendTo(t, entries, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort))) }()
 	writeJSON(w, http.StatusOK, map[string]string{"id": t.ID})
 }
 

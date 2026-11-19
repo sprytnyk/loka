@@ -28,11 +28,6 @@ type Entry struct {
 // or a directory; inside directories, symbolic links and other special
 // files are left out.
 func Collect(paths []string) (entries []Entry, items []string, size int64, err error) {
-	return collect(paths, nil)
-}
-
-// collect is Collect that keeps the files open in h, unless h is nil.
-func collect(paths []string, h *holder) (entries []Entry, items []string, size int64, err error) {
 	if len(paths) == 0 {
 		return nil, nil, 0, errors.New("Choose one or more files or directories")
 	}
@@ -63,7 +58,7 @@ func collect(paths []string, h *holder) (entries []Entry, items []string, size i
 		used[name] = true
 		items = append(items, name)
 
-		found, n, err := walk(p, name, h)
+		found, n, err := walk(p, name)
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("Cannot send %s: %w", p, err)
 		}
@@ -75,8 +70,8 @@ func collect(paths []string, h *holder) (entries []Entry, items []string, size i
 
 // walk lists root and everything under it, named under name in the
 // transfer, and adds up the file sizes. Symbolic links, sockets and
-// devices are left out. Files are kept open in h, unless h is nil.
-func walk(root, name string, h *holder) (entries []Entry, size int64, err error) {
+// devices are left out.
+func walk(root, name string) (entries []Entry, size int64, err error) {
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -84,9 +79,11 @@ func walk(root, name string, h *holder) (entries []Entry, size int64, err error)
 		if !d.Type().IsRegular() && !d.IsDir() {
 			return nil
 		}
+		// The entry may have changed since the directory was listed, to
+		// a named pipe for one, so the fresh info must agree with d.
 		info, err := lstat(path)
-		if err == nil && h != nil && !d.IsDir() {
-			info, err = h.open(path, info)
+		if err == nil && info.Mode().Type() != d.Type() {
+			err = fmt.Errorf("%s %w", path, errReplaced)
 		}
 		if err != nil {
 			return err
@@ -150,9 +147,21 @@ func lstat(path string) (os.FileInfo, error) {
 }
 
 // sameFile reports whether now is still the file or directory that was.
+// A new file can get a deleted one's identity, on Unix and on FAT drives;
+// unchanged also catches that.
 func sameFile(was, now os.FileInfo) bool {
 	return os.SameFile(was, now) && now.Mode().Type() == was.Mode().Type()
 }
+
+// unchanged reports whether now is the file that was, with nothing about
+// it changed since, as far as changeStamp can tell. A file made later in a
+// deleted one's place gets a later stamp even when it gets the same ID.
+func unchanged(was, now os.FileInfo) bool {
+	return sameFile(was, now) && changeStamp(was) == changeStamp(now)
+}
+
+// stamp marks a version of a file: times that move when the file changes.
+type stamp [2]int64
 
 // windowsName changes a file name that Windows cannot use: it replaces
 // characters Windows forbids, drops trailing spaces and dots, and puts "_"

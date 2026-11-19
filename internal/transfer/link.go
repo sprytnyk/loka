@@ -59,13 +59,8 @@ func (t *Transfer) SharesOneFile() bool {
 // it is still the file that was shared.
 func (t *Transfer) OpenSharedFile() (*os.File, os.FileInfo, error) {
 	it := t.shared[0]
-	f, err := os.Open(it.path)
+	f, info, err := openChosen(it.path, it.info)
 	if err != nil {
-		return nil, nil, errLinkGone
-	}
-	info, err := f.Stat()
-	if err != nil || !sameFile(it.info, info) {
-		f.Close()
 		return nil, nil, errLinkGone
 	}
 	return f, info, nil

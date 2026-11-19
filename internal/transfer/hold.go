@@ -6,30 +6,21 @@ import (
 	"sync/atomic"
 )
 
-// CollectHeld is Collect that also keeps the files open until release is
-// called. Each file's size and identity are read from the open file, so
-// nothing can take a file's place between choosing it and sending it.
-func CollectHeld(paths []string) (entries []Entry, items []string, size int64, release func(), err error) {
-	h := newHolder()
-	entries, items, size, err = collect(paths, h)
-	if err != nil {
-		h.release()
-		return nil, nil, 0, nil, err
-	}
-	return entries, items, size, h.release, nil
-}
-
-// holder keeps chosen files open. Unix systems can give a deleted file's
-// inode number to the next new file, but not while the old one is open, so
-// a file written in place of a held one can't pass for it. Windows file IDs
-// change on reuse, so nothing is held there.
+// holder keeps the items a link shares open. Unix systems can give a
+// deleted file's inode number to the next new file, but not while the old
+// one is open, so a file written in place of a held one can't pass for it.
+// Links serve their items as they are now, edits included, so the change
+// time that sends check can't tell a link's file apart from a new one.
+// Only the chosen items are held, not what is inside directories. Nothing
+// is held on Windows, where NTFS file IDs change on reuse; FAT drives can
+// reuse them, so a link there still trusts the ID.
 type holder struct {
 	budget int
 	files  []*os.File
 }
 
-// heldFiles counts the files all holders keep open, so transfers waiting
-// at the same time share one budget.
+// heldFiles counts the files all holders keep open, so links share one
+// budget.
 var heldFiles atomic.Int64
 
 func newHolder() *holder {
@@ -42,12 +33,12 @@ func newHolder() *holder {
 // open. It returns the open file's own info, so what is recorded and what
 // is held are the same file.
 func (h *holder) open(path string, seen os.FileInfo) (os.FileInfo, error) {
-	if !idsCanBeReused {
+	if !holdsFiles {
 		return seen, nil
 	}
 	if heldFiles.Add(1) > int64(h.budget) {
 		heldFiles.Add(-1)
-		return nil, fmt.Errorf("Loka can keep only %d files open on this system, counting those other transfers and links hold. Choose fewer files", h.budget)
+		return nil, fmt.Errorf("Loka can keep only %d items open on this system, counting those other links hold. Share fewer items, or share the directory that holds them", h.budget)
 	}
 	f, info, err := openChosen(path, seen)
 	if err != nil {
@@ -67,14 +58,18 @@ func (h *holder) release() {
 	h.files = nil
 }
 
-// openChosen opens path only while it is still what seen describes, and
-// returns what the open file is. It checks before opening too, so a
-// special file put in its place is never opened.
+// openChosen opens path only while it is still what seen describes, a
+// file or a directory, and returns what the open file is. It checks before
+// opening too, and opens with openForReading, so a special file put in its
+// place is never read and never hangs the open.
 func openChosen(path string, seen os.FileInfo) (*os.File, os.FileInfo, error) {
+	if !seen.Mode().IsRegular() && !seen.IsDir() {
+		return nil, nil, fmt.Errorf("%s %w", path, errReplaced)
+	}
 	if info, err := os.Lstat(path); err != nil || !sameFile(seen, info) {
 		return nil, nil, fmt.Errorf("%s %w", path, errReplaced)
 	}
-	f, err := os.Open(path)
+	f, err := openForReading(path)
 	if err != nil {
 		return nil, nil, err
 	}

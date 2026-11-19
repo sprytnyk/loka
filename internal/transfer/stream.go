@@ -41,22 +41,32 @@ func WriteTar(ctx context.Context, w io.Writer, entries []Entry, done *atomic.In
 	return tw.Close()
 }
 
-// errReplaced means a file was replaced after it was chosen.
-var errReplaced = errors.New("was replaced after it was chosen")
+// errReplaced means a file changed or was replaced after it was chosen.
+var errReplaced = errors.New("changed or was replaced after it was chosen")
 
-// copyFile sends one file, which must still be the file Collect saw, at the
-// size Collect saw.
+// copyFile sends one file, which must still be the file Collect saw,
+// unchanged, at the size Collect saw. It checks again after copying, so an
+// edit made while the file was read can't pass as a whole file.
 func copyFile(ctx context.Context, w io.Writer, e Entry, done *atomic.Int64) error {
-	f, _, err := openChosen(e.src, e.info)
+	f, info, err := openChosen(e.src, e.info)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	n, err := io.CopyN(w, progressReader{ctx, f, done}, e.size)
-	if errors.Is(err, io.EOF) || err == nil && n == e.size && moreToRead(f) {
+	if !unchanged(e.info, info) {
+		return fmt.Errorf("%s %w", e.src, errReplaced)
+	}
+	_, err = io.CopyN(w, progressReader{ctx, f, done}, e.size)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	if err != nil || moreToRead(f) {
 		return fmt.Errorf("%s changed while it was being sent", e.src)
 	}
-	return err
+	if info, err := f.Stat(); err != nil || !unchanged(e.info, info) {
+		return fmt.Errorf("%s changed while it was being sent", e.src)
+	}
+	return nil
 }
 
 func moreToRead(r io.Reader) bool {

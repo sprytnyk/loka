@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -323,23 +325,24 @@ func TestSendingRefusesAReplacedFile(t *testing.T) {
 	}
 }
 
+// waitPastChangeTime lets the clock move past the times just given to a
+// file, which some systems keep to a few milliseconds.
+func waitPastChangeTime() { time.Sleep(50 * time.Millisecond) }
+
 // TestSendingRefusesADeletedAndRecreatedFile deletes a chosen file and
 // writes a new one in its place, again and again. Unix systems often give
-// the new file the old one's inode number, which would make it pass for the
-// chosen file, unless the chosen file is held open.
+// the new file the old one's inode number, so only its later change time
+// tells it apart from the chosen file.
 func TestSendingRefusesADeletedAndRecreatedFile(t *testing.T) {
-	if !idsCanBeReused {
-		t.Skip("file IDs are not reused on this system")
-	}
 	path := filepath.Join(t.TempDir(), "chosen")
 	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	entries, _, _, release, err := CollectHeld([]string{path})
+	waitPastChangeTime()
+	entries, _, _, err := Collect([]string{path})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer release()
 	for i := range 256 {
 		if err := os.Remove(path); err != nil {
 			t.Fatal(err)
@@ -366,7 +369,7 @@ func TestSendingRefusesADeletedAndRecreatedFile(t *testing.T) {
 // opening it, with the new file taking the old one's identity. What is
 // recorded must then describe the file that is held, not the one looked at.
 func TestHoldingRecordsTheHeldFile(t *testing.T) {
-	if !idsCanBeReused {
+	if !holdsFiles {
 		t.Skip("nothing is held on this system")
 	}
 	path := filepath.Join(t.TempDir(), "chosen")
@@ -404,40 +407,170 @@ func TestHoldingRecordsTheHeldFile(t *testing.T) {
 	}
 }
 
-// TestHoldingSharesOneBudget checks that even a low open file limit leaves
-// room to send a file, and that transfers waiting at once share the room.
-func TestHoldingSharesOneBudget(t *testing.T) {
-	if !idsCanBeReused {
+// TestLinksShareOneBudget checks that even a low open file limit leaves
+// room to share an item, and that links share the room.
+func TestLinksShareOneBudget(t *testing.T) {
+	if !holdsFiles {
 		t.Skip("nothing is held on this system")
 	}
 	root := t.TempDir()
-	treetest.Write(t, root, map[string]string{"one": "1", "dir/a": "1", "dir/b": "2"})
+	treetest.Write(t, root, map[string]string{"a": "1", "b": "2", "c": "3"})
 	defer func(limit func() int) { openFileLimit = limit }(openFileLimit)
+	hold := func(names ...string) (*holder, error) {
+		h := newHolder()
+		for _, name := range names {
+			path := filepath.Join(root, name)
+			info, err := lstat(path)
+			if err == nil {
+				_, err = h.open(path, info)
+			}
+			if err != nil {
+				h.release()
+				return nil, err
+			}
+		}
+		return h, nil
+	}
 
 	openFileLimit = func() int { return 256 }
-	_, _, _, release, err := CollectHeld([]string{filepath.Join(root, "one")})
+	h, err := hold("a")
 	if err != nil {
 		t.Fatal(err)
 	}
-	release()
+	h.release()
 
 	openFileLimit = func() int { return 4 } // room for 3
-	dir := filepath.Join(root, "dir")
-	_, _, _, first, err := CollectHeld([]string{dir})
+	first, err := hold("a", "b", "c")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, _, err := CollectHeld([]string{dir}); err == nil || !strings.Contains(err.Error(), "only 3 files") {
+	if _, err := hold("a"); err == nil || !strings.Contains(err.Error(), "only 3 items") {
 		t.Fatalf("got %v", err)
 	}
-	first()
-	_, _, _, second, err := CollectHeld([]string{dir})
+	first.release()
+	second, err := hold("a", "b", "c")
 	if err != nil {
 		t.Fatal(err)
 	}
-	second()
+	second.release()
 	if n := heldFiles.Load(); n != 0 {
 		t.Fatalf("%d files still counted as held", n)
+	}
+}
+
+// TestSendingAFolderKeepsNoFilesOpen sends a folder of more files than the
+// open file limit allows, which works because nothing is held open while
+// the transfer waits.
+func TestSendingAFolderKeepsNoFilesOpen(t *testing.T) {
+	root := t.TempDir()
+	tree := map[string]string{}
+	for i := range 64 {
+		tree[fmt.Sprintf("dir/%d", i)] = fmt.Sprint(i)
+	}
+	treetest.Write(t, root, tree)
+	defer func(limit func() int) { openFileLimit = limit }(openFileLimit)
+	openFileLimit = func() int { return 4 }
+
+	entries, _, _, err := Collect([]string{filepath.Join(root, "dir")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var done atomic.Int64
+	if err := WriteTar(context.Background(), io.Discard, entries, &done); err != nil {
+		t.Fatal(err)
+	}
+	if n := heldFiles.Load(); n != 0 {
+		t.Fatalf("%d files held", n)
+	}
+}
+
+// TestSendingRefusesAFileChangedAfterChoosing changes a chosen file
+// without changing its identity or size. Its stamp moves, the same as a new
+// file in its place would get, so it is refused.
+func TestSendingRefusesAFileChangedAfterChoosing(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(path string) error
+	}{
+		{"edit", func(path string) error {
+			f, err := os.OpenFile(path, os.O_WRONLY, 0)
+			if err != nil {
+				return err
+			}
+			_, err = f.WriteString("xyz")
+			return errors.Join(err, f.Close())
+		}},
+		{"chmod", func(path string) error {
+			if runtime.GOOS == "windows" {
+				t.Skip("Windows doesn't record permission changes in the times Loka reads")
+			}
+			return os.Chmod(path, 0o644)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "chosen")
+			if err := os.WriteFile(path, []byte("abc"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			waitPastChangeTime()
+			entries, _, _, err := Collect([]string{path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			waitPastChangeTime()
+			if err := tc.change(path); err != nil {
+				t.Fatal(err)
+			}
+			var done atomic.Int64
+			if err := WriteTar(context.Background(), io.Discard, entries, &done); !errors.Is(err, errReplaced) {
+				t.Fatalf("got %v", err)
+			}
+		})
+	}
+}
+
+// editWhileSent edits path in place, at the same size, once the stream
+// is past the file's tar header and into its bytes.
+type editWhileSent struct {
+	t       *testing.T
+	path    string
+	written int
+	edited  bool
+}
+
+func (w *editWhileSent) Write(b []byte) (int, error) {
+	w.written += len(b)
+	if !w.edited && w.written > 512 {
+		w.edited = true
+		waitPastChangeTime()
+		f, err := os.OpenFile(w.path, os.O_WRONLY, 0)
+		if err != nil {
+			w.t.Fatal(err)
+		}
+		if _, err := f.WriteAt([]byte("new"), 0); err != nil {
+			w.t.Fatal(err)
+		}
+		f.Close()
+	}
+	return len(b), nil
+}
+
+// TestSendingRefusesAFileEditedWhileSent edits a file at the same size
+// while it is being read, so the count of bytes alone can't tell.
+func TestSendingRefusesAFileEditedWhileSent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "chosen")
+	if err := os.WriteFile(path, []byte("old"+strings.Repeat(".", 1<<20)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	waitPastChangeTime()
+	entries, _, _, err := Collect([]string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var done atomic.Int64
+	err = WriteTar(context.Background(), &editWhileSent{t: t, path: path}, entries, &done)
+	if err == nil || !strings.Contains(err.Error(), "changed while it was being sent") {
+		t.Fatalf("got %v", err)
 	}
 }
 
