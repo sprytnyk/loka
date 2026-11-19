@@ -11,10 +11,16 @@ repos:
       - id: check-added-large-files
       - id: detect-private-key
 
-  # Keep this version in step with Ruff in the lockfile.
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.5
+  - repo: local
     hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -l -w
+        language: system
+        types: [go]
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        types: [go]
+        pass_filenames: false

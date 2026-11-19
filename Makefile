@@ -1,24 +1,26 @@
-.PHONY: all run check lint test format build release
+.PHONY: all run build check lint test format release
+
+VERSION ?= $(patsubst v%,%,$(shell git describe --tags --always --dirty))
 
 all: check
 
 run:
-	uv run python -m loka
+	go run .
+
+build:
+	go build -trimpath -ldflags "-X main.version=$(VERSION)" -o dist/loka .
 
 check: lint test
 
 lint:
-	uv run ruff check .
-	uv run ruff format --check .
+	test -z "$$(gofmt -l .)" || { gofmt -l .; exit 1; }
+	go vet ./...
 
 test:
-	uv run pytest
+	go test -race ./...
 
 format:
-	uv run ruff format .
+	gofmt -w .
 
-build:
-	uv run --locked --group build pyinstaller loka.spec --clean --noconfirm
-
-release: build
-	uv run --no-sync python scripts/package_release.py
+release:
+	scripts/build-release.sh dist

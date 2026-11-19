@@ -1,79 +1,101 @@
 # Loka
 
-Share files and directories over your local network. To run from source, use
-Python 3.10 or later.
+Share files and directories with computers on your local network. Loka is one
+program with nothing else to install.
 
 ![Loka showing selected files, nearby devices, and transfer progress](docs/loka.png)
 
-## Start
+## Install
 
-Run `loka` on both computers, or `uv run python -m loka` from a checkout. Loka
-opens in your browser.
+Download the archive for your computer from
+[Releases](https://github.com/sprytnyk/loka/releases), unpack it, and put
+`loka` (`loka.exe` on Windows) in a directory on your `PATH`.
 
-Drop files or a directory onto the page, then choose the receiving device. If
-it does not appear, enter its address and port. Some Wi-Fi networks block
-connections between devices. On the receiver, choose an existing destination
-directory and accept the transfer. Loka remembers your destination until it
-stops.
+| Computer | Archive |
+| --- | --- |
+| Mac with Apple silicon | `loka_X.Y.Z_darwin_arm64.tar.gz` |
+| Mac with Intel | `loka_X.Y.Z_darwin_amd64.tar.gz` |
+| Linux | `loka_X.Y.Z_linux_amd64.tar.gz` |
+| Windows | `loka_X.Y.Z_windows_amd64.zip` |
 
-When you send or share dragged files, Loka keeps a temporary copy until it
-stops. **Choose files**, **Choose directory**, and **Add by path** let Loka read
-the originals.
-The desktop picker uses Zenity or KDialog on Linux, AppleScript on macOS, and
-Windows PowerShell on Windows. You can type the destination directory when
-receiving a transfer.
+macOS refuses to open downloaded programs from unidentified developers. After
+unpacking, run `xattr -d com.apple.quarantine loka` once.
 
-Loka stages incoming files in the destination directory and moves them into
-place when the transfer finishes. Update Loka on both devices to use this
-transfer format.
+To check a download, put `SHA256SUMS` and `SHA256SUMS.asc` from the release
+next to it and run:
+
+```sh
+gpg --verify SHA256SUMS.asc SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS
+```
+
+With Go installed, you can instead run
+`go install github.com/sprytnyk/loka@latest`.
+
+## Send and receive
+
+Run `loka` on both computers. It opens in your browser.
+
+1. Add what to send: choose files or a directory, drop them on the page, or
+   enter a path.
+2. Select the receiving device. If it doesn't show up, enter its address and
+   port.
+3. On the receiver, choose an existing directory and accept.
+
+Several transfers can arrive at once, and each shows its speed. Loka remembers
+the last destination until it stops.
+
+The pickers use zenity or kdialog on Linux, Finder on macOS, and the usual
+dialog on Windows. Without one, drop files or enter paths instead.
+
+Dropped files are copied first, because the browser doesn't tell Loka where
+they are. Loka deletes the copies when it stops. Chosen files and paths are
+read where they are.
+
+Incoming files go to a hidden directory inside the destination and move into
+place when the transfer finishes. Nothing is overwritten, and a failed transfer
+leaves nothing behind.
+
+If the computers can't see each other, the Wi-Fi network may block connections
+between devices. On Windows, allow Loka through the firewall when asked.
 
 ## Download links
 
-Choose what to share and select **Create link**. Enter your local address if
-Loka cannot find it. The recipient can open the link in a browser while you're
-sharing.
+For someone without Loka, add what to share and select **Create link**. Enter
+your local address if Loka can't find it. The link works in any browser while
+you're sharing.
 
-Loka sends a single file as-is. It builds a ZIP as you download a directory or
-multiple files. Each download reads the current contents. If a selected file
-or directory goes missing or gets replaced, the link stops working.
+A single file downloads as itself, and an interrupted download can resume.
+Directories and several files download as a ZIP that Loka builds during the
+download. Each download has the current contents. If a shared file or
+directory is deleted or replaced, the link stops working.
 
 ## Command line
 
 ```sh
-uv run python -m loka receive
-uv run python -m loka devices
-uv run python -m loka send --to 192.0.2.10 /path/to/file /path/to/directory
-uv run python -m loka share --address 192.0.2.10 /path/to/file
+loka receive
+loka devices
+loka send --to 192.0.2.10 /path/to/file /path/to/directory
+loka share --address 192.0.2.10 /path/to/file
 ```
 
-Use your receiver's address with `send`. For `share`, use your own address or
-omit `--address` to let Loka choose it. Press Ctrl+C to stop sharing. Leave the
-destination empty to decline an incoming transfer.
+`send` takes the receiver's address. `receive` asks where to put each
+transfer; leave the answer empty to decline. `share` prints a link that works
+until you press Ctrl+C. Without `--address`, it uses this computer's address.
 
-Run `loka -h` for all options. If the listening port is busy, use `--port 0` to
-pick a free port.
+Run `loka -h` for all options and `loka --version` for the version. If the port
+is busy, add `--port 0` to use a free one. Help and errors are in colour in a
+terminal. Set `NO_COLOR=1` to turn that off.
 
-Use Loka on networks you trust. Transfers are unencrypted, and anyone with the
-link can download while you're sharing. Restart interrupted transfers from the
-beginning. Choose the original files and directories in place of symbolic
-links.
+## Safety
+
+Transfers aren't encrypted, so use Loka only on networks you trust. Anyone with
+a link can download while you're sharing. An interrupted transfer between
+devices starts over. Loka skips symbolic links inside the directories you
+choose.
 
 ## Development
 
-Run `make check` for Ruff and pytest, or `make format` to format the Python code.
-
-Run `make build` on the operating system you want to build for. The executable
-is `dist/loka` on macOS and Linux, or `dist/loka.exe` on Windows. Add it to your
-`PATH` to run `loka` from any directory. `loka --version` shows the same version
-as the startup line and browser page.
-
-Without Make, run
-`uv run --locked --group build pyinstaller loka.spec --clean --noconfirm`.
-
-Run `make release TAG=vX.Y.Z` to build an archive and `SHA256SUMS` in
-`dist/release/X.Y.Z/`. Use `TAG` for the release version. Leave it out to build a
-development version from `git describe`. The release script checks `--version`
-and `-h` before it creates the archive.
-
-Without Make, set `TAG` when you run PyInstaller, then run
-`uv run --no-sync python scripts/package_release.py`.
+Run `make check` for gofmt, go vet and the tests, and `make format` to format
+the code. `make build` builds `dist/loka` for this computer. `make release`
+builds the archives for every system into `dist/`, after checking that the
+build for this computer runs.
