@@ -38,14 +38,12 @@ def request(host, port, method, path, data=None, headers=None, timeout=10):
 
 
 def unique_path(path):
-    if not path.exists():
-        return path
+    candidate = path
     index = 1
-    while True:
+    while os.path.lexists(candidate):
         candidate = path.with_name(f"{path.stem} ({index}){path.suffix}")
-        if not candidate.exists():
-            return candidate
         index += 1
+    return candidate
 
 
 def extract(archive, destination):

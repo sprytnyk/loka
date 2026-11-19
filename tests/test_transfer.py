@@ -142,6 +142,30 @@ class TransferTests(unittest.TestCase):
         self.assertEqual((destination / "source (1)" / "file").read_text(), "new")
         self.assertTrue((destination / "source (1)" / "empty").is_dir())
 
+    def test_extract_preserves_broken_symlinks_at_conflicting_names(self):
+        destination = self.root / "destination"
+        destination.mkdir()
+        links = (destination / "report.txt", destination / "report (1).txt")
+        missing_target = Path("missing.txt")
+        try:
+            for link in links:
+                link.symlink_to(missing_target)
+        except OSError as error:
+            if getattr(error, "winerror", None) != 1314:
+                raise
+            self.skipTest("Creating symlinks requires extra privileges")
+
+        archive = self.root / "transfer.zip"
+        with zipfile.ZipFile(archive, "w") as transfer:
+            transfer.writestr("report.txt", b"incoming")
+
+        extract(archive, destination)
+
+        for link in links:
+            with self.subTest(filename=link.name):
+                self.assertEqual(link.readlink(), missing_target)
+        self.assertEqual((destination / "report (2).txt").read_bytes(), b"incoming")
+
     def test_archive_keeps_distinct_items_with_the_same_name(self):
         first = self.root / "first"
         second = self.root / "second"
