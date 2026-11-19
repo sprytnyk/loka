@@ -20,7 +20,7 @@
 :root[data-theme=dark]{color-scheme:dark;--bg:#0f172a;--bg-image:linear-gradient(135deg,#0f172a,#1e293b,#0f172a);--ink:#e2e8f0;--strong:#fff;--muted:#a6b5c9;--label:#cbd5e1;--line:#334155;--card:#1e293b;--shadow:0 25px 50px -12px #0004;--field:#0f172a;--field-line:#475569;--placeholder:#94a3b8;--secondary:#334155;--secondary-hover:#475569;--secondary-line:#475569;--secondary-hover-line:#64748b;--secondary-ink:#fff;--soft:#263b5d;--icon:#93c5fd;--drop:#172337;--drop-line:#475569;--drop-over:#263b5d;--drop-over-line:#60a5fa;--item:#33415580;--item-line:#475569;--notice:#fbbf24;--message:#3a3020;--message-line:#a16207;--message-ink:#fcd34d;--link:#93c5fd;--focus:#93c5fd;--dot:#60a5fa;--backdrop:#020617b3;--dialog-shadow:0 20px 70px #0008}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg) var(--bg-image) fixed;color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-main{display:flex;flex-direction:column;height:100vh;height:100dvh;max-width:1360px;margin:auto;padding:0 28px 16px}
+main{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;max-width:1360px;margin:auto;padding:0 28px 16px}
 header{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px 20px;padding:16px 0;border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:11px}.logo{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:var(--accent);color:white}
 svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
@@ -31,7 +31,7 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 #theme{display:grid;place-items:center;flex:none;width:34px;height:34px;padding:0;border-radius:50%;background:var(--card);border-color:var(--line);color:var(--label)}#theme:hover{background:var(--secondary)}#theme svg{width:18px;height:18px}
 [data-theme=light] .sun,[data-theme=dark] .moon{display:none}
 .intro{flex:none;padding:20px 0 16px}h1{margin:0;color:var(--strong);font-size:clamp(26px,3vw,34px);line-height:1.12;letter-spacing:-.05em;font-weight:700}
-.layout{flex:1 1 0;display:grid;grid-template-columns:minmax(0,1.18fr) minmax(0,1fr);grid-template-rows:auto 1fr auto;grid-template-areas:"choose device" "choose transfers" "link transfers";gap:18px}
+.layout{display:grid;grid-template-columns:minmax(0,1.18fr) minmax(0,1fr);grid-template-rows:auto auto auto;grid-template-areas:"choose device" "choose transfers" "link transfers";gap:18px}
 .choose-card{grid-area:choose}.device-card{grid-area:device}.transfers-card{grid-area:transfers}.link-card{grid-area:link}
 .card{display:flex;flex-direction:column;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:1.5rem;padding:20px;box-shadow:var(--shadow)}.card-heading{flex:none;display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}.section-icon{display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:12px;background:var(--soft);color:var(--icon)}.section-icon svg{width:19px;height:19px}.card-heading h2{margin:0;color:var(--strong);font-size:16px;line-height:1.3;letter-spacing:-.02em}.card-heading p{margin:3px 0 0;color:var(--muted);font-size:13px}.card-heading>h2{align-self:center}
 .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.row>*{min-width:0}input{background:var(--field);border:1px solid var(--field-line);border-radius:9px;color:var(--ink);padding:10px 12px;font:inherit;font-size:13px;flex:1;min-width:10rem}input::placeholder{color:var(--placeholder)}button,.button{border:1px solid transparent;border-radius:9px;background:var(--accent);color:#fff;padding:10px 15px;font:inherit;font-size:13px;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s}button:hover,.button:hover{background:var(--accent-hover)}button.secondary,.button.secondary{background:var(--secondary);color:var(--secondary-ink);border-color:var(--secondary-line)}button.secondary:hover,.button.secondary:hover{background:var(--secondary-hover);border-color:var(--secondary-hover-line)}button:disabled{opacity:.5;cursor:wait}:focus-visible,.button:focus-within{outline:3px solid var(--focus);outline-offset:2px}
@@ -49,15 +49,18 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .transfer-files summary{cursor:pointer}
 .transfer-files ul{max-height:12rem;overflow-y:auto;margin:6px 0;padding-inline-start:1.5rem}
 .transfer-files li{padding-block:2px}
-/* Lists scroll inside their cards, so the page fits the window. The padding
-   keeps focus outlines inside the scrolling box. */
+/* The page grows with its content. A long list scrolls inside its card
+   instead of stretching the page; on wide windows the device list may grow
+   with the window height. The padding keeps focus outlines inside the
+   scrolling box. */
 #selected,#peers,#transfers,#links{overflow-y:auto;margin-inline:-5px;padding-inline:5px;padding-block:5px}
 #peers,#links{max-height:14rem}
-#selected,#transfers{flex:1 1 auto;contain:size;min-height:5rem}
-.footer-note{flex:none;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px;margin:14px 0 0;color:var(--muted);font-size:12px}.footer-note p{margin:0}
+#selected{max-height:24rem}
+#transfers{max-height:32rem}
+.footer-note{flex:none;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px;margin:auto 0 0;padding-top:14px;color:var(--muted);font-size:12px}.footer-note p{margin:0}
 dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);border-radius:1.5rem;background:var(--card);color:var(--ink);padding:26px;box-shadow:var(--dialog-shadow)}dialog::backdrop{background:var(--backdrop)}dialog h2{margin:0;color:var(--strong);font-size:20px;letter-spacing:-.03em}dialog p{color:var(--muted);font-size:14px}dialog .row{margin-top:16px}
-@media(min-width:1240px){.layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr);grid-template-rows:1fr auto;grid-template-areas:"choose device transfers" "choose link transfers"}#peers{flex:1 1 auto;contain:size;min-height:3rem;max-height:none}}
-@media(max-width:720px){main{height:auto;min-height:100vh;padding:0 16px 24px}header{flex-wrap:wrap;padding:14px 0}.intro{padding:24px 0 18px}.layout{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-template-areas:"choose" "device" "transfers" "link";gap:14px}#message{margin-bottom:14px}#selected,#transfers{contain:none;min-height:0;max-height:24rem}}
+@media(min-width:1240px){.layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;grid-template-areas:"choose device transfers" "choose link transfers"}#peers{max-height:max(14rem,100vh - 26rem);max-height:max(14rem,100dvh - 26rem)}}
+@media(max-width:720px){main{padding:0 16px 24px}header{flex-wrap:wrap;padding:14px 0}.intro{padding:24px 0 18px}.layout{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-template-areas:"choose" "device" "transfers" "link";gap:14px}#message{margin-bottom:14px}#transfers{max-height:24rem}}
 @media(max-width:400px){.device-badge{font-size:11px}}
 </style>
 </head>
