@@ -3,11 +3,17 @@
 package main
 
 import (
+	"errors"
 	"runtime"
 	"syscall"
 
 	"golang.org/x/sys/unix"
 )
+
+// addressInUse reports whether a listen failed because the port is taken.
+func addressInUse(err error) bool {
+	return errors.Is(err, unix.EADDRINUSE)
+}
 
 // reuseAddr lets several Loka processes listen on the discovery port.
 func reuseAddr(fd uintptr) error {

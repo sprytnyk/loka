@@ -99,7 +99,7 @@ func parse(args []string, stderr io.Writer) (options, int) {
 	}
 	fs.StringVar(&o.to, "to", "", "receiver address for send")
 	fs.StringVar(&o.address, "address", "", "local address to put in a share link (default: detected)")
-	fs.IntVar(&o.port, "port", defaultPort, "port to listen on")
+	fs.IntVar(&o.port, "port", defaultPort, "port to listen on, 0 for any free port")
 	fs.IntVar(&o.peerPort, "peer-port", defaultPort, "receiver port for send")
 	fs.BoolVar(&o.noBrowser, "no-browser", false, "do not open the browser")
 	showVersion := fs.Bool("version", false, "print the version and exit")
@@ -138,6 +138,10 @@ func parse(args []string, stderr io.Writer) (options, int) {
 		return o, 2
 	}
 	switch {
+	case o.port < 0 || o.port > 65535:
+		return fail("--port must be between 0 and 65535")
+	case o.peerPort < 1 || o.peerPort > 65535:
+		return fail("--peer-port must be between 1 and 65535")
 	case o.command == "send" && (o.to == "" || len(o.paths) == 0):
 		return fail("send needs --to ADDRESS and one or more paths")
 	case o.command == "share" && len(o.paths) == 0:
@@ -158,11 +162,15 @@ func hostname() string {
 	return "Loka"
 }
 
-// listenOn opens the listening port, with a hint when it is taken.
+// listenOn opens the listening port, with a hint when it is taken. Port 0
+// picks a free one.
 func listenOn(port int) (net.Listener, int, error) {
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+	if addressInUse(err) {
+		return nil, 0, fmt.Errorf("port %d is already in use. Stop the other program, or run with --port 0 to pick a free port", port)
+	}
 	if err != nil {
-		return nil, 0, fmt.Errorf("could not listen on port %d (is Loka already running?): %w", port, err)
+		return nil, 0, fmt.Errorf("could not listen on port %d: %w", port, err)
 	}
 	return ln, ln.Addr().(*net.TCPAddr).Port, nil
 }

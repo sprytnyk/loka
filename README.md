@@ -67,7 +67,8 @@ loka send --to 192.0.2.10 /path/to/file /path/to/directory
 loka share --address 192.0.2.10 /path/to/file
 ```
 
-Run `loka --help` for port options and `loka --version` for the version. For
+Run `loka --help` for port options and `loka --version` for the version. If
+the port is already in use, run with `--port 0` to let Loka pick a free one. For
 `share`, use this computer's local address in place of the example, or omit
 `--address` to use a detected address. The link remains available until you
 press Ctrl+C. When receiving, enter a destination directory or leave it empty

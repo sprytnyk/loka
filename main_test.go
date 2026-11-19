@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -77,11 +78,28 @@ func TestParse(t *testing.T) {
 		{[]string{"share"}, "", nil, "", 2},
 		{[]string{"devices", "x"}, "", nil, "", 2},
 		{[]string{"--bogus"}, "", nil, "", 2},
+		{[]string{"--port", "65536"}, "", nil, "", 2},
+		{[]string{"send", "a", "--to", "h", "--peer-port", "0"}, "", nil, "", 2},
 	} {
 		o, code := parse(c.args, io.Discard)
 		if code != c.code || code == -1 && (o.command != c.command || !slices.Equal(o.paths, c.paths) || o.to != c.to) {
 			t.Errorf("%q: got %q %q to=%q code %d", c.args, o.command, o.paths, o.to, code)
 		}
+	}
+}
+
+func TestTakenPortSuggestsAFreeOne(t *testing.T) {
+	ln, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
+	var out bytes.Buffer
+	code := run(context.Background(), []string{"--no-browser", "--port", port}, nil, &out, &out)
+	want := "loka: port " + port + " is already in use. Stop the other program, or run with --port 0 to pick a free port\n"
+	if code != 1 || out.String() != want {
+		t.Fatalf("got %d %q", code, out.String())
 	}
 }
 

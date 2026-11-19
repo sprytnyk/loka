@@ -1,6 +1,16 @@
 package main
 
-import "syscall"
+import (
+	"errors"
+	"syscall"
+
+	"golang.org/x/sys/windows"
+)
+
+// addressInUse reports whether a listen failed because the port is taken.
+func addressInUse(err error) bool {
+	return errors.Is(err, windows.WSAEADDRINUSE)
+}
 
 // reuseAddr lets several Loka processes listen on the discovery port.
 func reuseAddr(fd uintptr) error {
