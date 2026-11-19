@@ -52,7 +52,7 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	}
 	entries, err := t.LinkEntries()
 	if err != nil {
-		writeError(w, http.StatusNotFound, err)
+		linkError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")
@@ -62,6 +62,18 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 		// with a broken archive that looks complete.
 		panic(http.ErrAbortHandler)
 	}
+}
+
+// linkError answers a download that can't be served. A file open for
+// editing is a passing state, so that answer is not to be cached, or a
+// retry after the file is closed could get it again.
+func linkError(w http.ResponseWriter, err error) {
+	if errors.Is(err, transfer.ErrLinkBusy) {
+		w.Header().Set("Cache-Control", "no-store")
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	writeError(w, http.StatusNotFound, err)
 }
 
 // stopWriting calls cancel when ctx ends, and also ends any write to w
@@ -94,7 +106,7 @@ func stopWriting(w http.ResponseWriter, ctx context.Context, cancel func()) (sto
 func serveFile(w http.ResponseWriter, r *http.Request, t *transfer.Transfer) {
 	f, info, err := t.OpenSharedFile()
 	if err != nil {
-		writeError(w, http.StatusNotFound, err)
+		linkError(w, err)
 		return
 	}
 	defer f.Close()

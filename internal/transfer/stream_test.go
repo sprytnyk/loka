@@ -530,12 +530,14 @@ func TestSendingRefusesAFileChangedAfterChoosing(t *testing.T) {
 }
 
 // editWhileSent edits path in place, at the same size, once the stream
-// is past the file's tar header and into its bytes.
+// is past the file's tar header and into its bytes. On Windows the edit
+// must be refused, which blocked records.
 type editWhileSent struct {
 	t       *testing.T
 	path    string
 	written int
 	edited  bool
+	blocked bool
 }
 
 func (w *editWhileSent) Write(b []byte) (int, error) {
@@ -544,6 +546,10 @@ func (w *editWhileSent) Write(b []byte) (int, error) {
 		w.edited = true
 		waitPastChangeTime()
 		f, err := os.OpenFile(w.path, os.O_WRONLY, 0)
+		if err != nil && runtime.GOOS == "windows" {
+			w.blocked = true
+			return len(b), nil
+		}
 		if err != nil {
 			w.t.Fatal(err)
 		}
@@ -556,7 +562,8 @@ func (w *editWhileSent) Write(b []byte) (int, error) {
 }
 
 // TestSendingRefusesAFileEditedWhileSent edits a file at the same size
-// while it is being read, so the count of bytes alone can't tell.
+// while it is being read, so the count of bytes alone can't tell. Windows
+// doesn't let the edit happen at all.
 func TestSendingRefusesAFileEditedWhileSent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "chosen")
 	if err := os.WriteFile(path, []byte("old"+strings.Repeat(".", 1<<20)), 0o600); err != nil {
@@ -568,7 +575,17 @@ func TestSendingRefusesAFileEditedWhileSent(t *testing.T) {
 		t.Fatal(err)
 	}
 	var done atomic.Int64
-	err = WriteTar(context.Background(), &editWhileSent{t: t, path: path}, entries, &done)
+	w := &editWhileSent{t: t, path: path}
+	err = WriteTar(context.Background(), w, entries, &done)
+	if w.blocked {
+		if err != nil {
+			t.Fatalf("the edit was blocked, yet sending failed: %v", err)
+		}
+		return
+	}
+	if runtime.GOOS == "windows" {
+		t.Fatal("another program could write to the file while it was sent")
+	}
 	if err == nil || !strings.Contains(err.Error(), "changed while it was being sent") {
 		t.Fatalf("got %v", err)
 	}

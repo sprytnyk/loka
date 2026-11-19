@@ -14,6 +14,11 @@ import (
 // errLinkGone means a shared item was removed or replaced.
 var errLinkGone = errors.New("The shared items are no longer available")
 
+// ErrLinkBusy tells whoever downloads a link that a shared file is open
+// for writing, without showing where it is on the sharing device. It
+// lasts only until the file is closed.
+var ErrLinkBusy = errors.New("A shared file is open for editing on the sharing device. Try again later")
+
 // sharedItem is a path chosen for a link and what it was when the link was
 // made, so a download can tell when something else took its place.
 type sharedItem struct {
@@ -60,6 +65,9 @@ func (t *Transfer) SharesOneFile() bool {
 func (t *Transfer) OpenSharedFile() (*os.File, os.FileInfo, error) {
 	it := t.shared[0]
 	f, info, err := openChosen(it.path, it.info)
+	if errors.Is(err, errInUse) {
+		return nil, nil, ErrLinkBusy
+	}
 	if err != nil {
 		return nil, nil, errLinkGone
 	}
@@ -81,7 +89,33 @@ func (t *Transfer) LinkEntries() ([]Entry, error) {
 	if err != nil {
 		return nil, errLinkGone
 	}
+	if anyInUse(entries) {
+		return nil, ErrLinkBusy
+	}
 	return entries, nil
+}
+
+// anyInUse reports whether another program has one of the files open for
+// writing, so reading it would fail. A ZIP download checks first, while it
+// can still answer with a message instead of breaking off. A program can
+// still open a file after the check, which breaks the download off.
+func anyInUse(entries []Entry) bool {
+	if !blocksWriters {
+		return false
+	}
+	for _, e := range entries {
+		if e.dir {
+			continue
+		}
+		f, err := openForReading(e.src)
+		if errors.Is(err, errInUse) {
+			return true
+		}
+		if err == nil {
+			f.Close()
+		}
+	}
+	return false
 }
 
 // WriteZip writes entries as a ZIP archive without compression, the way

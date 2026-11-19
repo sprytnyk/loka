@@ -10,6 +10,10 @@ import (
 
 const holdsFiles = true
 
+// blocksWriters is false: nothing can keep other programs from writing
+// to a file here, so only its change time shows an edit.
+const blocksWriters = false
+
 // openFileLimit is how many files this process may have open. A variable
 // so tests can lower it.
 var openFileLimit = func() int {

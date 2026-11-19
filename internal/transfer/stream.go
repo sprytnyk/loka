@@ -44,6 +44,10 @@ func WriteTar(ctx context.Context, w io.Writer, entries []Entry, done *atomic.In
 // errReplaced means a file changed or was replaced after it was chosen.
 var errReplaced = errors.New("changed or was replaced after it was chosen")
 
+// errInUse means another program has a file open for writing, so it can't
+// be read without the risk of an edit while it is sent.
+var errInUse = errors.New("is open for writing in another program. Close it there and try again")
+
 // copyFile sends one file, which must still be the file Collect saw,
 // unchanged, at the size Collect saw. It checks again after copying, so an
 // edit made while the file was read can't pass as a whole file.
