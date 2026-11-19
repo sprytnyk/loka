@@ -46,8 +46,9 @@ type Transfer struct {
 	Items     []string // the top-level names, for display
 	Size      int64    // bytes of file content
 
-	secret string // proves a remote sender owns an incoming transfer
-	token  string // the download link token, only for links
+	secret  string  // proves a remote sender owns an incoming transfer
+	token   string  // the download link token, only for links
+	entries []entry // what a link serves, only for links
 
 	ctx    context.Context
 	cancel context.CancelFunc

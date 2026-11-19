@@ -41,6 +41,8 @@ func (s *server) handler() http.Handler {
 	mux.HandleFunc("POST /api/send", s.local(s.send))
 	mux.HandleFunc("POST /api/accept", s.local(s.accept))
 	mux.HandleFunc("POST /api/cancel", s.local(s.cancel))
+	mux.HandleFunc("POST /api/share", s.local(s.share))
+	mux.HandleFunc("GET /download/{token}", s.download)
 	return mux
 }
 
