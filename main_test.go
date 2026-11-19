@@ -110,11 +110,38 @@ func TestTakenPortSuggestsAFreeOne(t *testing.T) {
 	}
 	defer ln.Close()
 	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
+	t.Setenv("FORCE_COLOR", "")
 	var out bytes.Buffer
 	code := run(context.Background(), []string{"--no-browser", "--port", port}, nil, &out, &out)
-	want := "loka: port " + port + " is already in use. Stop the other program, or run with --port 0 to pick a free port\n"
+	want := "loka: error: port " + port + " is already in use. Stop the other program, or run with --port 0 to pick a free port\n"
 	if code != 1 || out.String() != want {
 		t.Fatalf("got %d %q", code, out.String())
+	}
+}
+
+// TestHelpAndErrorColours checks the rules Python's argparse uses: colour
+// only on a terminal or with FORCE_COLOR, and never with NO_COLOR.
+func TestHelpAndErrorColours(t *testing.T) {
+	for _, c := range []struct {
+		noColor, forceColor string
+		want                bool
+	}{
+		{"", "", false}, // a buffer is not a terminal
+		{"", "1", true},
+		{"1", "1", false},
+	} {
+		t.Setenv("NO_COLOR", c.noColor)
+		t.Setenv("FORCE_COLOR", c.forceColor)
+		var help, usageErr bytes.Buffer
+		run(context.Background(), []string{"-h"}, nil, &help, &help)
+		run(context.Background(), []string{"bogus"}, nil, &usageErr, &usageErr)
+		colored := strings.Contains(help.String(), "\x1b[1;34musage:\x1b[0m") &&
+			strings.Contains(help.String(), "\x1b[1;36m--port\x1b[0m \x1b[1;33mPORT\x1b[0m") &&
+			strings.Contains(usageErr.String(), "loka: \x1b[1;35merror:\x1b[0m \x1b[35munknown command \"bogus\"\x1b[0m")
+		plain := !strings.Contains(help.String()+usageErr.String(), "\x1b[")
+		if c.want && !colored || !c.want && !plain {
+			t.Errorf("NO_COLOR=%q FORCE_COLOR=%q: help %q, error %q", c.noColor, c.forceColor, help.String(), usageErr.String())
+		}
 	}
 }
 

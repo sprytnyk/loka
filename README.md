@@ -83,7 +83,8 @@ transfer; leave the answer empty to decline. `share` prints a link that works
 until you press Ctrl+C. Without `--address`, it uses this computer's address.
 
 Run `loka -h` for all options and `loka --version` for the version. If the port
-is busy, add `--port 0` to use a free one.
+is busy, add `--port 0` to use a free one. Help and errors are in colour in a
+terminal. Set `NO_COLOR=1` to turn that off.
 
 ## Safety
 

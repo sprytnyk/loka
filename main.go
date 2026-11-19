@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -28,22 +27,6 @@ import (
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
-
-const usage = `usage: loka [command] [options] [paths...]
-
-Share files and directories with computers on the same local network.
-
-commands:
-  serve     open the page in your browser (the default)
-  send      send paths to another device: loka send --to ADDRESS PATH...
-  receive   wait for transfers and answer them in the terminal
-  devices   list devices running Loka nearby
-  share     print a download link for paths: loka share PATH...
-
-options:
-`
-
-var commands = []string{"serve", "send", "receive", "devices", "share"}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -85,7 +68,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		err = shareCommand(ctx, o, stdout)
 	}
 	if err != nil {
-		fmt.Fprintln(stderr, "loka:", err)
+		printError(stderr, err.Error())
 		return 1
 	}
 	return 0
@@ -97,11 +80,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 func parse(args []string, stderr io.Writer) (options, int) {
 	var o options
 	fs := flag.NewFlagSet("loka", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	fs.Usage = func() {
-		fmt.Fprint(stderr, usage)
-		fs.PrintDefaults()
-	}
+	fs.SetOutput(io.Discard) // help and errors are printed below
 	fs.StringVar(&o.to, "to", "", "receiver address for send")
 	fs.StringVar(&o.address, "address", "", "local address to put in a share link (default: detected)")
 	fs.IntVar(&o.port, "port", network.DefaultPort, "port to listen on, 0 for any free port")
@@ -113,8 +92,10 @@ func parse(args []string, stderr io.Writer) (options, int) {
 	for {
 		if err := fs.Parse(args); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
+				printHelp(stderr, fs)
 				return o, 0
 			}
+			printUsageError(stderr, err.Error())
 			return o, 2
 		}
 		rest := fs.Args()
@@ -132,14 +113,13 @@ func parse(args []string, stderr io.Writer) (options, int) {
 	}
 
 	o.command = "serve"
-	named := len(positional) > 0 && slices.Contains(commands, positional[0])
+	named := len(positional) > 0 && isCommand(positional[0])
 	if named {
 		o.command, positional = positional[0], positional[1:]
 	}
 	o.paths = positional
 	fail := func(format string, a ...any) (options, int) {
-		fmt.Fprintf(stderr, "loka: "+format+"\n", a...)
-		fs.Usage()
+		printUsageError(stderr, fmt.Sprintf(format, a...))
 		return o, 2
 	}
 	switch {
