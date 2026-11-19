@@ -297,3 +297,25 @@ func TestReceiveMovesNothingWhenCancelledAtTheEnd(t *testing.T) {
 	}
 	treetest.Same(t, treetest.Read(t, destination), map[string]string{})
 }
+
+func TestSendingRefusesAReplacedFile(t *testing.T) {
+	root := t.TempDir()
+	treetest.Write(t, root, map[string]string{"dir/chosen": "abc", "other": "xyz"})
+	entries, _, _, err := Collect([]string{filepath.Join(root, "dir")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Replace it in one step with a file of the same size, the way an
+	// editor saves.
+	if err := os.Rename(filepath.Join(root, "other"), filepath.Join(root, "dir", "chosen")); err != nil {
+		t.Fatal(err)
+	}
+	var done atomic.Int64
+	var buf bytes.Buffer
+	if err := WriteTar(context.Background(), &buf, entries, &done); !errors.Is(err, errReplaced) {
+		t.Fatalf("got %v", err)
+	}
+	if bytes.Contains(buf.Bytes(), []byte("xyz")) {
+		t.Fatal("the replacement was sent")
+	}
+}

@@ -20,6 +20,7 @@ type Entry struct {
 	dir   bool
 	size  int64
 	mtime time.Time
+	info  os.FileInfo // what Collect saw, so sending can tell a replacement
 }
 
 // Collect lists what to send for the chosen paths, with the top-level names
@@ -79,7 +80,9 @@ func walk(root, name string) (entries []Entry, size int64, err error) {
 		if !d.Type().IsRegular() && !d.IsDir() {
 			return nil
 		}
-		info, err := d.Info()
+		// Lstat rather than d.Info, so the file's identity is read now
+		// on every system.
+		info, err := os.Lstat(path)
 		if err != nil {
 			return err
 		}
@@ -87,7 +90,7 @@ func walk(root, name string) (entries []Entry, size int64, err error) {
 		if err != nil {
 			return err
 		}
-		e := Entry{src: path, name: name, dir: d.IsDir(), mtime: info.ModTime()}
+		e := Entry{src: path, name: name, dir: d.IsDir(), mtime: info.ModTime(), info: info}
 		if rel != "." {
 			e.name += "/" + filepath.ToSlash(rel)
 		}
@@ -112,6 +115,11 @@ func numbered(name string, i int) string {
 		stem, ext = name[:dot], name[dot:]
 	}
 	return fmt.Sprintf("%s (%d)%s", stem, i, ext)
+}
+
+// sameFile reports whether now is still the file or directory that was.
+func sameFile(was, now os.FileInfo) bool {
+	return os.SameFile(was, now) && now.Mode().Type() == was.Mode().Type()
 }
 
 // windowsName changes a file name that Windows cannot use: it replaces

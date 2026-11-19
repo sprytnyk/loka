@@ -23,7 +23,7 @@ type sharedItem struct {
 
 // sameAs reports whether info is still the item that was shared.
 func (it sharedItem) sameAs(info os.FileInfo) bool {
-	return os.SameFile(it.info, info) && info.Mode().Type() == it.info.Mode().Type()
+	return sameFile(it.info, info)
 }
 
 // NewLink makes a download link for the chosen paths.
