@@ -242,7 +242,11 @@ func follow(t *Transfer, stdout io.Writer) transferView {
 	defer ticker.Stop()
 	for {
 		v := t.view()
-		fmt.Fprintf(stdout, "\r%s: %d%%   ", v.Status, v.Progress)
+		label := fmt.Sprintf("%s: %d%%", v.Status, v.Progress)
+		if v.SpeedMbps != nil {
+			label += fmt.Sprintf(" at %.1f Mbps", *v.SpeedMbps)
+		}
+		fmt.Fprintf(stdout, "\r%-40s", label) // pads over a longer earlier line
 		if v.Status.final() {
 			fmt.Fprintln(stdout)
 			return v

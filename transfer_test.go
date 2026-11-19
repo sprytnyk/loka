@@ -4,7 +4,51 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 )
+
+func TestSpeedometer(t *testing.T) {
+	var s speedometer
+	start := time.Unix(1000, 0)
+	for _, step := range []struct {
+		bytes int64
+		after time.Duration
+		want  float64
+	}{
+		{0, 0, 0},                               // the first look only starts measuring
+		{1_000_000, 250 * time.Millisecond, 0},  // too soon to measure
+		{2_000_000, 500 * time.Millisecond, 32}, // 2 MB in 0.5 s
+		{2_500_000, 750 * time.Millisecond, 32}, // too soon, keeps the last speed
+		{2_500_000, 1500 * time.Millisecond, 4}, // 0.5 MB in 1 s
+		{2_500_000, 2000 * time.Millisecond, 0}, // stalled
+	} {
+		if got := s.read(step.bytes, start.Add(step.after)); got != step.want {
+			t.Fatalf("after %v: got %v Mbps, want %v", step.after, got, step.want)
+		}
+	}
+}
+
+func TestViewShowsSpeedOnlyWhileBytesMove(t *testing.T) {
+	tr := newTransfer(outgoing, "receiver", nil, 10, statusWaiting)
+	if v := tr.view(); v.SpeedMbps != nil {
+		t.Fatalf("waiting transfer has speed %v", *v.SpeedMbps)
+	}
+	tr.move(statusSending, statusWaiting)
+	tr.done.Add(10)
+	if v := tr.view(); v.SpeedMbps == nil || *v.SpeedMbps != 0 {
+		t.Fatalf("new send has speed %v", v.SpeedMbps)
+	}
+	// Measuring starts when sending starts, so the first look after
+	// speedEvery already has a speed.
+	time.Sleep(speedEvery)
+	if v := tr.view(); v.SpeedMbps == nil || *v.SpeedMbps <= 0 {
+		t.Fatalf("moving send has speed %v", v.SpeedMbps)
+	}
+	tr.finish(nil)
+	if v := tr.view(); v.SpeedMbps != nil {
+		t.Fatalf("finished transfer has speed %v", *v.SpeedMbps)
+	}
+}
 
 func TestOnlyOneActorWinsAStep(t *testing.T) {
 	tr := newTransfer(incoming, "sender", nil, 10, statusWaiting)

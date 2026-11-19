@@ -40,7 +40,7 @@ does not appear, enter its address and port. Some Wi-Fi networks block
 connections between devices. On Windows, allow Loka through the firewall when
 asked. On the receiver, choose an existing destination directory and accept the
 transfer. Loka remembers your destination until it stops. Several transfers can
-arrive at the same time.
+arrive at the same time, and each shows its speed while it runs.
 
 When you send or share dropped files, Loka keeps a temporary copy until it
 stops. **Choose files**, **Choose directory**, and **Add by path** let Loka read

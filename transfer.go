@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Status is a step in a transfer's life.
@@ -58,6 +59,7 @@ type Transfer struct {
 	status      Status
 	err         string
 	destination string
+	speed       speedometer
 }
 
 func newTransfer(direction Direction, peer string, items []string, size int64, status Status) *Transfer {
@@ -98,6 +100,10 @@ func (t *Transfer) move(to Status, from ...Status) bool {
 		return false
 	}
 	t.status = to
+	if to == statusSending || to == statusReceiving {
+		t.speed = speedometer{} // start measuring as the bytes start
+		t.speed.read(t.done.Load(), time.Now())
+	}
 	return true
 }
 
@@ -165,11 +171,41 @@ type transferView struct {
 	Progress  int       `json:"progress"`
 	Error     string    `json:"error,omitempty"`
 	Token     string    `json:"token,omitempty"`
+	SpeedMbps *float64  `json:"speed_mbps,omitempty"` // only while bytes move
+}
+
+// speedEvery is the shortest time a speed is measured over.
+const speedEvery = 500 * time.Millisecond
+
+// speedometer measures the speed between looks at the byte count, so the
+// copy loops only add to a counter. Each measurement covers at least
+// speedEvery, and one that saw no new bytes reads zero.
+type speedometer struct {
+	bytes int64
+	at    time.Time
+	mbps  float64
+}
+
+func (s *speedometer) read(bytes int64, now time.Time) float64 {
+	if s.at.IsZero() {
+		s.bytes, s.at = bytes, now
+		return 0
+	}
+	if elapsed := now.Sub(s.at); elapsed >= speedEvery {
+		s.mbps = float64(bytes-s.bytes) * 8 / elapsed.Seconds() / 1e6
+		s.bytes, s.at = bytes, now
+	}
+	return s.mbps
 }
 
 func (t *Transfer) view() transferView {
 	t.mu.Lock()
 	status, err := t.status, t.err
+	var speed *float64
+	if status == statusSending || status == statusReceiving {
+		mbps := t.speed.read(t.done.Load(), time.Now())
+		speed = &mbps
+	}
 	t.mu.Unlock()
 	return transferView{
 		ID:        t.ID,
@@ -181,6 +217,7 @@ func (t *Transfer) view() transferView {
 		Progress:  progress(t.done.Load(), t.Size, status),
 		Error:     err,
 		Token:     t.token,
+		SpeedMbps: speed,
 	}
 }
 
