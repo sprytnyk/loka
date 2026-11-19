@@ -212,3 +212,24 @@ func TestStoppedLinkExpires(t *testing.T) {
 		t.Fatalf("status %q", v.Status)
 	}
 }
+
+// TestStoppingALinkEndsADownloadOfOneFile stops a link while its single
+// file is downloading, and expects the download to fail rather than finish.
+func TestStoppingALinkEndsADownloadOfOneFile(t *testing.T) {
+	s, base := startServer(t)
+	file := filepath.Join(t.TempDir(), "big")
+	const size = 32 << 20
+	if err := os.WriteFile(file, make([]byte, size), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := addLink(t, s, file)
+	resp := get(t, base+"/download/"+link.Token)
+	if _, err := io.ReadFull(resp.Body, make([]byte, 1)); err != nil {
+		t.Fatal(err)
+	}
+	link.Stop()
+	n, err := io.Copy(io.Discard, resp.Body)
+	if err == nil {
+		t.Fatalf("the download finished after the link stopped, %d more bytes", n)
+	}
+}

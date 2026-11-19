@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/sprytnyk/loka/internal/transfer"
@@ -72,7 +73,26 @@ func serveFile(w http.ResponseWriter, r *http.Request, t *transfer.Transfer) {
 	defer f.Close()
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", attachment(info.Name()))
-	http.ServeContent(w, r, "", info.ModTime(), f)
+	http.ServeContent(w, r, "", info.ModTime(), stoppableFile{r.Context(), f})
+}
+
+// stoppableFile reads a file until ctx ends. Being a plain reader rather
+// than an *os.File also keeps the kernel from sending the file in one go,
+// which would not notice the stop.
+type stoppableFile struct {
+	ctx context.Context
+	f   *os.File
+}
+
+func (s stoppableFile) Read(b []byte) (int, error) {
+	if err := s.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return s.f.Read(b)
+}
+
+func (s stoppableFile) Seek(offset int64, whence int) (int64, error) {
+	return s.f.Seek(offset, whence)
 }
 
 // attachment returns a Content-Disposition value that downloads as name,
