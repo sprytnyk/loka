@@ -86,9 +86,15 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	return first
 }
 
-// Handler answers the page, the page's API, other devices and download links.
+// Handler answers download links and, on a device with an identity, the
+// page, the page's API and other devices. Without one, as for loka share,
+// there is nobody to accept a transfer, so only the links are served.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /download/{token}", s.download)
+	if s.Trust == nil {
+		return mux
+	}
 	mux.HandleFunc("POST /peer/offer", s.offer)
 	mux.HandleFunc("GET /peer/status/{id}", s.peer(s.peerStatus))
 	mux.HandleFunc("POST /peer/cancel/{id}", s.peer(s.peerCancel))
@@ -98,15 +104,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/state", s.local(s.state))
 	mux.HandleFunc("POST /api/pick", s.local(s.pickPaths))
 	mux.HandleFunc("POST /api/upload", s.local(s.upload))
+	mux.HandleFunc("POST /api/send", s.local(s.send))
 	mux.HandleFunc("POST /api/accept", s.local(s.accept))
 	mux.HandleFunc("POST /api/cancel", s.local(s.cancel))
 	mux.HandleFunc("POST /api/share", s.local(s.share))
 	mux.HandleFunc("POST /api/qr", s.local(s.qrCode))
-	mux.HandleFunc("GET /download/{token}", s.download)
-	if s.Trust != nil { // sending needs this device's certificate
-		mux.HandleFunc("POST /api/send", s.local(s.send))
-		mux.HandleFunc("POST /api/forget", s.local(s.forget))
-	}
+	mux.HandleFunc("POST /api/forget", s.local(s.forget))
 	return mux
 }
 

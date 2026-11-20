@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -141,5 +142,22 @@ func TestQRCodeForALink(t *testing.T) {
 	}
 	if code := api(t, s, base, "/api/qr", map[string]string{"text": strings.Repeat("x", 300)}, &reply); code != http.StatusBadRequest || reply.Error == "" {
 		t.Fatalf("too long: got %d %+v", code, reply)
+	}
+}
+
+// TestWithoutAnIdentityOnlyLinksAreServed checks a server like loka share's,
+// which can't accept transfers, offers neither the page nor the phone view.
+func TestWithoutAnIdentityOnlyLinksAreServed(t *testing.T) {
+	ts := httptest.NewServer(New("share", "test").Handler())
+	t.Cleanup(ts.Close)
+	for _, path := range []string{"/", "/peer/offer"} {
+		resp, err := http.Post(ts.URL+path, "application/json", strings.NewReader("{}"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusMethodNotAllowed {
+			t.Errorf("%s answered %d", path, resp.StatusCode)
+		}
 	}
 }
