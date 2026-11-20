@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-mode="__LOKA_MODE__">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -13,7 +13,9 @@
   } catch {}
   if (theme !== 'light' && theme !== 'dark') theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   document.documentElement.dataset.theme = theme;
-  document.documentElement.dataset.mode = '__LOKA_MODE__';
+  // A download link opened over HTTPS shows the download. The server sends
+  // the phone page there, as the link's token never reaches it.
+  if (location.protocol === 'https:' && new URLSearchParams(location.hash.slice(1)).has('d')) document.documentElement.dataset.mode = 'check';
 })();
 </script>
 <style>
@@ -134,7 +136,7 @@ label.button{display:inline-block}
 </dialog>
 <script>
 const key = '__LOKA_KEY__';
-const mode = '__LOKA_MODE__';
+const mode = document.documentElement.dataset.mode;
 const hostName = __LOKA_NAME__; // the computer this page belongs to
 const caFingerprint = '__LOKA_CA_FINGERPRINT__'; // SHA-256 of this computer's authority, in hex
 const vouches = __LOKA_VOUCHES__; // whether installing the authority helps at this address
@@ -497,7 +499,7 @@ document.querySelector('.languages').onclick = e => {
   for (const card of $('transfers').querySelectorAll('.item')) card.remove();
   message('');
   applyLanguage();
-  if (mode !== 'phone') poll();
+  if (mode === 'desktop') poll();
 };
 
 // Themes
@@ -1157,7 +1159,10 @@ $('phone-directory-button').hidden = ios || !('webkitdirectory' in $('phone-dire
 // on at once, and otherwise it offers to install the certificate.
 
 const linkToken = new URLSearchParams(location.hash.slice(1)).get('d');
-const securePath = linkToken ? `/download/${encodeURIComponent(linkToken)}` : '/';
+// The page moves to HTTPS before a link's download starts. Phone browsers
+// call a download insecure when a plain HTTP page starts it, even one
+// that comes over HTTPS.
+const secureUrl = `https://${location.host}/${linkToken ? '#d=' + encodeURIComponent(linkToken) : ''}`;
 let checkStatus = '';
 function showCheckStatus(name) {
   checkStatus = name;
@@ -1176,7 +1181,7 @@ async function checkConnection() {
   showCheckStatus('checking');
   if (await trusted()) {
     showCheckStatus(linkToken ? 'downloadStarting' : '');
-    location.replace(`https://${location.host}${securePath}`);
+    location.replace(secureUrl);
     return;
   }
   showCheckStatus('');
@@ -1186,12 +1191,12 @@ if (!vouches) {
   for (const el of document.querySelectorAll('#check-install, #check-untrusted details')) el.hidden = true;
 }
 $('check-again').onclick = checkConnection;
-$('check-continue').href = `https://${location.host}${securePath}`;
+$('check-continue').href = secureUrl;
 
 applyLanguage();
 if (linkToken && location.protocol === 'https:') {
   showCheckStatus('downloadStarting');
-  location.replace(securePath);
+  location.replace(`/download/${encodeURIComponent(linkToken)}`);
 } else if (mode === 'check') {
   if (location.protocol === 'http:') checkConnection();
   else showCheckStatus('nothingShared');

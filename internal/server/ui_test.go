@@ -34,7 +34,7 @@ func TestPageCarriesKeyAndVersion(t *testing.T) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
-	if !strings.Contains(page, "const mode = 'desktop'") {
+	if !strings.Contains(page, `data-mode="desktop"`) {
 		t.Error("this device got the phone view")
 	}
 	// Another site or device gets, without the key, the view that moves
@@ -55,7 +55,7 @@ func TestPageCarriesKeyAndVersion(t *testing.T) {
 		}
 		body, _ = io.ReadAll(resp.Body)
 		page = string(body)
-		if resp.StatusCode != http.StatusOK || strings.Contains(page, s.key) || !strings.Contains(page, "const mode = '"+c.mode+"'") {
+		if resp.StatusCode != http.StatusOK || strings.Contains(page, s.key) || !strings.Contains(page, `data-mode="`+c.mode+`"`) {
 			t.Fatalf("%s: another site got %d, key shown %v", c.url, resp.StatusCode, strings.Contains(page, s.key))
 		}
 	}
@@ -82,7 +82,7 @@ func TestPlainHTTPGivesOtherDevicesOnlyTheWayToHTTPS(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 		return resp, body
 	}
-	if resp, body := fetch("/"); resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "const mode = 'check'") {
+	if resp, body := fetch("/"); resp.StatusCode != http.StatusOK || !strings.Contains(string(body), `data-mode="check"`) {
 		t.Fatalf("the page answered %d", resp.StatusCode)
 	}
 	resp, body := fetch(CAPath)
@@ -226,7 +226,7 @@ func TestShareOnlyServesLinks(t *testing.T) {
 		}
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		if !strings.Contains(string(body), "const mode = 'check'") {
+		if !strings.Contains(string(body), `data-mode="check"`) {
 			t.Errorf("%s gave another view", url)
 		}
 	}
