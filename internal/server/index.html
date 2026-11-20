@@ -211,8 +211,6 @@ const messages = {
     newDevice: 'New device: Loka hasn’t seen it before. Make sure you expect this transfer.',
     newReceiver: 'New device: Loka hasn’t sent to it before. Make sure it’s the one you meant.',
     code: 'Pairing code {code}. Check that the other device shows the same.',
-    forget: 'Forget this device',
-    forgotten: 'Forgotten. Its certificate will be trusted on the next transfer.',
     names: {one: '{n} name', other: '{n} names'},
     fileNames: 'File and directory names',
     speed: '{speed} Mbps',
@@ -319,8 +317,6 @@ const messages = {
     newDevice: 'Новий пристрій: Loka бачить його вперше. Переконайтеся, що чекаєте на це передавання.',
     newReceiver: 'Новий пристрій: Loka надсилає на нього вперше. Переконайтеся, що це саме той пристрій.',
     code: 'Код з’єднання {code}. Перевірте, що інший пристрій показує такий самий.',
-    forget: 'Забути цей пристрій',
-    forgotten: 'Забуто. Його сертифікату буде довіра під час наступного передавання.',
     names: {one: '{n} назва', few: '{n} назви', many: '{n} назв', other: '{n} назви'},
     fileNames: 'Назви файлів і тек',
     speed: '{speed} Мбіт/с',
@@ -410,7 +406,7 @@ const serverMessages = {
     [/^Could not reach the other device: (.*)$/s, 'Не вдалося зв’язатися з іншим пристроєм: $1'],
     [/^Could not connect securely to the other device\. Check that it runs the latest Loka$/, 'Не вдалося встановити захищене з’єднання з іншим пристроєм. Перевірте, чи на ньому остання версія Loka'],
     [/^The other device's certificate changed during the transfer$/, 'Сертифікат іншого пристрою змінився під час передавання'],
-    [/^(.*) showed a different certificate than before, so another device may be posing as it\. To trust it anyway, forget it and try again$/s, '$1 показав інший сертифікат, ніж раніше, тож інший пристрій може видавати себе за нього. Щоб однаково довіряти йому, забудьте його й спробуйте знову'],
+    [/^(.*) showed a different certificate than before, so another device is probably posing as it\. Loka refused it$/s, '$1 показав інший сертифікат, ніж раніше, тож, імовірно, інший пристрій видає себе за нього. Loka його відхилила'],
     [/^Phones can't trust Loka at (.*), as its certificate is older than support for this address\. To fix it, delete (.*), restart Loka and install its certificate on phones again$/s, 'Телефони не можуть довіряти Loka за адресою $1, бо її сертифікат старіший за підтримку такої адреси. Щоб це виправити, видаліть $2, перезапустіть Loka й знову встановіть її сертифікат на телефонах'],
     [/^Phones can't trust Loka at (.*), as it isn't a local network address\. They can still open Loka past the browser's warning$/s, 'Телефони не можуть довіряти Loka за адресою $1, бо це не адреса локальної мережі. Вони все одно можуть відкрити Loka, минувши попередження браузера'],
     [/^Another device answered at this address, not the one you picked\. It may be posing as it$/, 'За цією адресою відповів інший пристрій, а не той, який ви вибрали. Можливо, він видає себе за нього'],
@@ -718,17 +714,7 @@ $('share').onclick = e => run(e.target, async () => {
   await api('/api/share', {paths: await paths()});
   await refresh();
 });
-const forgotten = new Set(); // device IDs forgotten from this page
 $('transfers').onclick = e => {
-  const forget = e.target.closest('button[data-forget]');
-  if (forget) {
-    run(forget, async () => {
-      await api('/api/forget', {id: forget.dataset.forget});
-      forgotten.add(forget.dataset.forget);
-      await refresh();
-    });
-    return;
-  }
   const button = e.target.closest('button[data-cancel]');
   if (!button) return;
   run(button, async () => {
@@ -830,8 +816,7 @@ function renderTransfers(transfers) {
       card.innerHTML = `<div class="row"><strong>${escapeHtml(peerName(transfer))}</strong><span class="transfer-status"></span></div>
         ${fileNames(transfer.items || [])}
         <p class="transfer-code" hidden></p><p class="notice" hidden></p><progress max="100" hidden></progress>
-        <button class="secondary" data-cancel="${escapeHtml(transfer.id)}" hidden>${escapeHtml(t('cancel'))}</button>
-        <button class="secondary" data-forget="${escapeHtml(transfer.forget_id || '')}" hidden>${escapeHtml(t('forget'))}</button>`;
+        <button class="secondary" data-cancel="${escapeHtml(transfer.id)}" hidden>${escapeHtml(t('cancel'))}</button>`;
       if (previousCard) previousCard.after(card);
       else list.prepend(card);
     }
@@ -854,8 +839,6 @@ function renderTransfers(transfers) {
     progress.value = transfer.progress;
     progress.hidden = !active;
     card.querySelector('button[data-cancel]').hidden = waiting || !active;
-    card.querySelector('button[data-forget]').hidden = !transfer.forget_id || forgotten.has(transfer.forget_id);
-    if (transfer.forget_id && forgotten.has(transfer.forget_id)) error.textContent = t('forgotten');
   }
   for (const card of cards.values()) card.remove();
 }

@@ -17,7 +17,7 @@ var commands = []command{
 	{"receive", "wait for transfers and answer them in the terminal"},
 	{"devices", "list devices running Loka nearby"},
 	{"share", "print a download link for paths: loka share PATH..."},
-	{"forget", "forget a remembered device, to trust a new certificate: loka forget NAME|ID"},
+	{"forget", "forget a remembered device: loka forget NAME|ID"},
 }
 
 func isCommand(name string) bool {

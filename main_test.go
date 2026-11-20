@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sprytnyk/loka/internal/network"
+	"github.com/sprytnyk/loka/internal/server"
 	"github.com/sprytnyk/loka/internal/treetest"
 	"github.com/sprytnyk/loka/internal/trust"
 )
@@ -331,5 +333,47 @@ func TestForgetCommand(t *testing.T) {
 	out.Reset()
 	if code := run(context.Background(), []string{"forget", "old laptop"}, nil, &out, &out); code != 1 || !strings.Contains(out.String(), `no remembered device has the name or ID "old laptop"`) {
 		t.Fatalf("got %d %q", code, out.String())
+	}
+}
+
+// TestDevicesChecksRememberedCertificates runs a device and checks that
+// loka devices labels it remembered only when its certificate matches.
+func TestDevicesChecksRememberedCertificates(t *testing.T) {
+	store, err := openTrust()
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := trust.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := server.New("desk", "test")
+	s.Trust = other
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan error, 1)
+	go func() { served <- s.Serve(ctx, ln) }()
+	stop := sync.OnceFunc(func() { cancel(); <-served })
+	t.Cleanup(stop)
+	p := network.Peer{ID: other.ID, Name: "desk", Host: "127.0.0.1", Port: ln.Addr().(*net.TCPAddr).Port}
+	t.Cleanup(func() { store.Forget(func(d trust.Device) bool { return d.ID == other.ID }) })
+
+	store.Remember(trust.Device{ID: other.ID, Name: "desk", Fingerprint: other.Fingerprint()})
+	if got := rememberedLabel(store, p); got != "  (remembered)" {
+		t.Fatalf("matching certificate: %q", got)
+	}
+	posing := p
+	posing.ID = "the ID of another remembered device"
+	store.Remember(trust.Device{ID: posing.ID, Name: "laptop", Fingerprint: "its certificate"})
+	if got := rememberedLabel(store, posing); !strings.Contains(got, "posing") {
+		t.Fatalf("another device's ID: %q", got)
+	}
+	store.Forget(func(d trust.Device) bool { return d.ID == posing.ID })
+	stop()
+	if got := rememberedLabel(store, p); !strings.Contains(got, "could not check") {
+		t.Fatalf("unreachable: %q", got)
 	}
 }

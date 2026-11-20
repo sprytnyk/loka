@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"cmp"
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -233,9 +235,6 @@ func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
 	stop := context.AfterFunc(ctx, t.Stop)
 	defer stop()
 	v := follow(t, stdout)
-	if v.ForgetID != "" {
-		return fmt.Errorf("%s\nTo trust it, run: loka forget %s", v.Error, v.ForgetID)
-	}
 	if v.Status != transfer.Complete {
 		return errors.New(cmp.Or(v.Error, string(v.Status)))
 	}
@@ -305,9 +304,12 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 		case <-ticker.C:
 		}
 		for _, t := range s.Transfers.All() {
-			if v := t.View(); v.ForgetID != "" && !told[t.ID] {
-				told[t.ID] = true
-				fmt.Fprintf(stdout, "\nRefused a transfer: %s\nTo trust it, run: loka forget %s\n", v.Error, v.ForgetID)
+			// Offers from Lokas refused before the person saw them.
+			if t.Direction == transfer.Incoming && t.DeviceID != "" && t.Destination() == "" && !told[t.ID] {
+				if v := t.View(); v.Status == transfer.Failed {
+					told[t.ID] = true
+					fmt.Fprintf(stdout, "\nRefused a transfer from %s: %s\n", v.Name, v.Error)
+				}
 			}
 		}
 		t := firstWaiting(s)
@@ -393,21 +395,50 @@ func devicesCommand(ctx context.Context, stdout io.Writer) error {
 	if len(peers) == 0 {
 		fmt.Fprintln(stdout, "No devices found.")
 	}
-	remembered := map[string]bool{}
+	labels := make([]string, len(peers))
 	if store, err := openTrust(); err == nil {
+		remembered := map[string]bool{}
 		devices, _ := store.Devices()
 		for _, d := range devices {
 			remembered[d.ID] = true
 		}
-	}
-	for _, p := range peers {
-		line := fmt.Sprintf("%s  %s:%d", p.Name, p.Host, p.Port)
-		if remembered[p.ID] {
-			line += "  (remembered)"
+		var wg sync.WaitGroup
+		for i, p := range peers {
+			if remembered[p.ID] {
+				wg.Go(func() { labels[i] = rememberedLabel(store, p) })
+			}
 		}
-		fmt.Fprintln(stdout, line)
+		wg.Wait()
+	}
+	for i, p := range peers {
+		fmt.Fprintf(stdout, "%s  %s:%d%s\n", p.Name, p.Host, p.Port, labels[i])
 	}
 	return nil
+}
+
+// rememberedLabel connects to a device that announces a remembered ID, as
+// anyone can, and labels it by the certificate it shows.
+func rememberedLabel(store *trust.Store, p network.Peer) string {
+	var standing trust.Standing
+	var shown string
+	config := store.ClientConfig(func(id, fingerprint string) error {
+		shown = id
+		var err error
+		standing, _, err = store.Check(id, fingerprint)
+		return err
+	})
+	dialer := &tls.Dialer{NetDialer: &net.Dialer{Timeout: 2 * time.Second}, Config: config}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(p.Host, strconv.Itoa(p.Port)))
+	if err != nil {
+		return "  (remembered ID, could not check it)"
+	}
+	conn.Close()
+	if shown == p.ID && standing == trust.Known {
+		return "  (remembered)"
+	}
+	return "  (not the remembered device: another device may be posing as it)"
 }
 
 // forgetCommand forgets the remembered device with this ID, or every one

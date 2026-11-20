@@ -58,9 +58,13 @@ other's:
 | Remembered | Different | Refuses it, since another device may be posing as it |
 
 Both devices remember each other once the receiver accepts a transfer.
-`loka forget NAME` or `loka forget ID` drops a remembered device, so Loka
-trusts its new certificate next time. The first time, there is nothing
-to compare yet, which is what the pairing code below is for.
+A reinstalled Loka makes a new ID. So a changed certificate means another
+device is using a remembered ID, which anyone can read from the
+announcements. Loka refuses it, shows the refusal once per device, and
+never suggests forgetting the device. `loka forget NAME` or
+`loka forget ID` drops a remembered device. The first time two devices
+meet, there is nothing to compare yet, which is what the pairing code below
+is for.
 
 The certificate authority may only vouch for local addresses: `10/8`,
 `172.16/12`, `192.168/16`, `100.64/10`, `169.254/16`, `127/8`, `fc00::/7`,

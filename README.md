@@ -111,8 +111,9 @@ loka forget my-laptop
 transfer; leave the answer empty to decline. It also prints the address and QR
 code a phone can send from. `share` prints a link and its QR code for each
 local address, plus a `curl` command, and the link works until you press
-Ctrl+C. `--address` limits it to one address. `devices` marks the devices Loka
-remembers, and `forget` forgets one (see below).
+Ctrl+C. `--address` limits it to one address. `devices` lists nearby devices
+and marks a device as remembered only when it shows the certificate Loka knows
+for it. `forget` forgets a device.
 
 The `curl` command uses `-k`, since curl doesn't know Loka's certificate. To
 check it instead, download the certificate from the help on the page, convert
@@ -145,10 +146,9 @@ random number from each side. If another device sits between them and passes
 the transfer on, the codes differ. Check them that first time.
 
 After the first transfer, Loka remembers the other device's certificate. If a
-remembered device shows a different one, another device may be posing as it,
-and Loka refuses the transfer. To trust it anyway, select **Forget this
-device**, or run the `loka forget` command Loka prints. A reinstalled Loka
-shows up as a new device instead.
+remembered device shows a different one, another device is probably posing as
+it, and Loka refuses the transfer. A reinstalled Loka shows up as a new device
+instead, so there is nothing to forget.
 
 Browsers can't remember a certificate that way, so each Loka also makes its own
 certificate authority, kept in the same folder. Installed on a phone, it lets

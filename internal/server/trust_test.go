@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -151,8 +150,8 @@ func waitForIncomingStatus(t *testing.T, s *Server, status transfer.Status) *tra
 
 // TestReceiverRefusesASenderWithANewCertificate has the receiver remember
 // the sender's ID with another certificate, as when another device poses
-// as it, and checks both sides refuse, until the
-// receiver forgets it.
+// as it, and checks both sides refuse, once on the receiver however often
+// it tries, until the receiver forgets it.
 func TestReceiverRefusesASenderWithANewCertificate(t *testing.T) {
 	receiver, host, port, _ := startRecorded(t)
 	sender := openTrust(t)
@@ -162,19 +161,23 @@ func TestReceiverRefusesASenderWithANewCertificate(t *testing.T) {
 
 	out := sendFrom(t, sender, []string{file}, host, port)
 	v := waitForEnd(t, out)
-	if v.Status != transfer.Failed || !strings.Contains(v.Error, "different certificate") || v.ForgetID != "" {
+	if v.Status != transfer.Failed || !strings.Contains(v.Error, "different certificate") {
 		t.Fatalf("sender ended %+v", v)
 	}
 	refused := waitForIncomingStatus(t, receiver, transfer.Failed).View()
 	// The name it gave, laptop, is not proven, so the refusal names the
 	// device it claims to be.
-	if refused.ForgetID != sender.ID || refused.Name != "old laptop" || !strings.HasPrefix(refused.Error, "old laptop showed a different certificate") {
+	if refused.Name != "old laptop" || !strings.HasPrefix(refused.Error, "old laptop showed a different certificate") || strings.Contains(refused.Error, "forget") {
 		t.Fatalf("receiver shows %+v", refused)
 	}
+	waitForEnd(t, sendFrom(t, sender, []string{file}, host, port))
+	if n := len(receiver.Transfers.All()); n != 1 {
+		t.Fatalf("receiver shows %d refusals, want 1", n)
+	}
 
-	base := "http://" + net.JoinHostPort(host, strconv.Itoa(port))
-	if code := api(t, receiver, base, "/api/forget", map[string]string{"id": refused.ForgetID}, nil); code != http.StatusOK {
-		t.Fatalf("forget answered %d", code)
+	// As loka forget does.
+	if _, err := receiver.Trust.Forget(func(d trust.Device) bool { return d.ID == sender.ID }); err != nil {
+		t.Fatal(err)
 	}
 	sendFrom(t, sender, []string{file}, host, port)
 	if in := waitForIncomingStatus(t, receiver, transfer.Waiting); !in.NewDevice() {
@@ -183,8 +186,7 @@ func TestReceiverRefusesASenderWithANewCertificate(t *testing.T) {
 }
 
 // TestSenderRefusesAReceiverWithANewCertificate is the same from the
-// sending side: the transfer fails before anything is offered, and the
-// page can forget the receiver.
+// sending side: the transfer fails before anything is offered.
 func TestSenderRefusesAReceiverWithANewCertificate(t *testing.T) {
 	receiver, host, port, _ := startRecorded(t)
 	sender := openTrust(t)
@@ -193,7 +195,7 @@ func TestSenderRefusesAReceiverWithANewCertificate(t *testing.T) {
 	treetest.Write(t, filepath.Dir(file), map[string]string{"file": "abc"})
 
 	v := waitForEnd(t, sendFrom(t, sender, []string{file}, host, port))
-	if v.Status != transfer.Failed || v.ForgetID != receiver.Trust.ID || !strings.HasPrefix(v.Error, "desktop showed a different certificate") {
+	if v.Status != transfer.Failed || !strings.HasPrefix(v.Error, "desktop showed a different certificate") {
 		t.Fatalf("sender ended %+v", v)
 	}
 	if len(receiver.Transfers.All()) != 0 {
@@ -213,7 +215,7 @@ func TestSenderRefusesAnotherDeviceThanPicked(t *testing.T) {
 	treetest.Write(t, filepath.Dir(file), map[string]string{"file": "abc"})
 
 	v := waitForEnd(t, sendPicked(t, sender, []string{file}, host, port, picked.ID))
-	if v.Status != transfer.Failed || v.Error != errNotPicked.Error() || v.ForgetID != "" {
+	if v.Status != transfer.Failed || v.Error != errNotPicked.Error() {
 		t.Fatalf("sender ended %+v", v)
 	}
 	if n := len(other.Transfers.All()); n != 0 {

@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,6 +41,8 @@ type Server struct {
 	OnlyLinks   bool                   // serve only download links, as loka share does
 	Devices     *network.Discovery     // nil when not looking for devices
 	destination atomic.Pointer[string] // the last accepted destination
+
+	offerMu sync.Mutex // makes checking and adding an offer one step
 }
 
 // New makes a server that names this device name to other devices.
@@ -144,7 +147,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/cancel", s.local(s.cancel))
 	mux.HandleFunc("POST /api/share", s.local(s.share))
 	mux.HandleFunc("POST /api/qr", s.local(s.qrCode))
-	mux.HandleFunc("POST /api/forget", s.local(s.forget))
 	return handler
 }
 
@@ -253,11 +255,10 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if standing == trust.Changed {
-		// Show the refusal here, where the device can be forgotten, under
-		// the name it is remembered by: the name it gave is not proven.
-		t.Peer = known.Name
-		s.Transfers.Add(t)
-		t.Finish(&trust.ChangedError{Device: known})
+		// Show the refusal under the name the device is remembered by: the
+		// name it gave is not proven. Show it once per device, as anyone
+		// can make one.
+		s.refuseChanged(t, known)
 		writeError(w, http.StatusForbidden, errors.New("The receiver remembers this device with a different certificate and refused the transfer"))
 		return
 	}
@@ -265,6 +266,22 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		t.MarkNewDevice()
 	}
 	s.addOffer(w, t)
+}
+
+// refuseChanged shows that a device posing as a remembered one was
+// refused, unless that is already shown.
+func (s *Server) refuseChanged(t *transfer.Transfer, known trust.Device) {
+	refusal := &trust.ChangedError{Device: known}
+	s.offerMu.Lock()
+	defer s.offerMu.Unlock()
+	for _, other := range s.Transfers.All() {
+		if other.Direction == transfer.Incoming && other.DeviceID == known.ID && other.Status() == transfer.Failed && other.View().Error == refusal.Error() {
+			return
+		}
+	}
+	t.Peer = known.Name
+	s.Transfers.Add(t)
+	t.Finish(refusal)
 }
 
 func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
@@ -431,23 +448,6 @@ func (s *Server) Accept(t *transfer.Transfer, destination string) bool {
 		s.Trust.Remember(trust.Device{ID: t.DeviceID, Name: t.Peer, Fingerprint: t.Fingerprint})
 	}
 	return true
-}
-
-// forget drops a remembered device, so its new certificate is trusted
-// next time.
-func (s *Server) forget(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ID string `json:"id"`
-	}
-	if err := readJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	if _, err := s.Trust.Forget(func(d trust.Device) bool { return d.ID == req.ID }); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) cancel(w http.ResponseWriter, r *http.Request) {

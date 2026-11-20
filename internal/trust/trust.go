@@ -356,11 +356,13 @@ func (s *Store) write(devices []Device) error {
 
 // ChangedError is a remembered device showing a different certificate.
 // A reinstalled Loka gets a new ID too, and shows as a new device, so this
-// means another device is using the remembered one's ID.
+// means another device is using the remembered one's ID. IDs are announced
+// to the whole network, so anyone can do that. The error therefore never
+// suggests forgetting the device.
 type ChangedError struct {
 	Device Device
 }
 
 func (e *ChangedError) Error() string {
-	return fmt.Sprintf("%s showed a different certificate than before, so another device may be posing as it. To trust it anyway, forget it and try again", e.Device.Name)
+	return fmt.Sprintf("%s showed a different certificate than before, so another device is probably posing as it. Loka refused it", e.Device.Name)
 }

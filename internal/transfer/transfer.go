@@ -11,8 +11,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/sprytnyk/loka/internal/trust"
 )
 
 // Status is a step in a transfer's life.
@@ -74,7 +72,6 @@ type Transfer struct {
 	mu          sync.Mutex
 	status      Status
 	err         string
-	forgetID    string // the device to forget to trust its new certificate
 	newDevice   bool   // the other Loka has not been remembered yet
 	code        string // the pairing code, once both nonces are known
 	destination string
@@ -172,9 +169,6 @@ func (t *Transfer) Finish(err error) {
 	default:
 		t.status = Failed
 		t.err = err.Error()
-		if changed, ok := errors.AsType[*trust.ChangedError](err); ok {
-			t.forgetID = changed.Device.ID
-		}
 	}
 }
 
@@ -229,7 +223,6 @@ type View struct {
 	SpeedMbps *float64  `json:"speed_mbps,omitempty"` // only while bytes move
 	Browser   bool      `json:"browser,omitempty"`
 	NewDevice bool      `json:"new_device,omitempty"`
-	ForgetID  string    `json:"forget_id,omitempty"`
 	Code      string    `json:"code,omitempty"` // the pairing code, between Lokas
 }
 
@@ -237,7 +230,7 @@ type View struct {
 // speed, which reading the view measures.
 func (t *Transfer) View() View {
 	t.mu.Lock()
-	status, err, forgetID, newDevice, code := t.status, t.err, t.forgetID, t.newDevice, t.code
+	status, err, newDevice, code := t.status, t.err, t.newDevice, t.code
 	var speed *float64
 	if status == Sending || status == Receiving {
 		mbps := t.speed.read(t.Done.Load(), time.Now())
@@ -257,7 +250,6 @@ func (t *Transfer) View() View {
 		SpeedMbps: speed,
 		Browser:   t.Browser,
 		NewDevice: newDevice,
-		ForgetID:  forgetID,
 		Code:      code,
 	}
 }
