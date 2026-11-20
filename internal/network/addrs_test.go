@@ -10,6 +10,7 @@ func TestOrderAddresses(t *testing.T) {
 		lan    = "192.168.50.7"
 		vpn    = "10.23.0.2"
 		bridge = "172.17.0.1"
+		mesh   = "100.101.102.103"
 	)
 	for _, c := range []struct {
 		name  string
@@ -46,6 +47,12 @@ func TestOrderAddresses(t *testing.T) {
 			[]localAddress{{bridge, false}, {vpn, false}},
 			vpn,
 			[]string{vpn, bridge},
+		},
+		{
+			"tailscale kept beside the local network, after it",
+			[]localAddress{{mesh, false}, {vpn, false}, {lan, true}},
+			mesh,
+			[]string{lan, mesh},
 		},
 		{
 			"loopback and duplicates dropped",

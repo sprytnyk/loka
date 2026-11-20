@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"maps"
 	"net"
+	"net/netip"
 	"slices"
 	"strings"
 )
@@ -38,9 +39,15 @@ func routeAddress() string {
 	return conn.LocalAddr().(*net.UDPAddr).IP.String()
 }
 
+// meshRange holds the addresses that Tailscale and similar VPNs give each
+// of a person's devices. Unlike other VPN addresses, a phone on the same
+// VPN can reach them from anywhere.
+var meshRange = netip.MustParsePrefix("100.64.0.0/10")
+
 // orderAddresses drops loopback addresses, and VPN and virtual ones unless
-// there is nothing else. It puts the route address first, then the rest in
-// text order.
+// there is nothing else, but keeps addresses in meshRange. It puts local
+// network addresses first, the route address first among them, then the
+// rest in text order.
 func orderAddresses(found []localAddress, route string) []string {
 	lan := map[string]bool{}
 	for _, a := range found {
@@ -51,15 +58,21 @@ func orderAddresses(found []localAddress, route string) []string {
 	}
 	ips := slices.Collect(maps.Keys(lan))
 	if slices.ContainsFunc(ips, func(ip string) bool { return lan[ip] }) {
-		ips = slices.DeleteFunc(ips, func(ip string) bool { return !lan[ip] })
+		ips = slices.DeleteFunc(ips, func(ip string) bool { return !lan[ip] && !inMesh(ip) })
 	}
 	slices.SortFunc(ips, func(a, b string) int {
 		return cmp.Or(
+			cmp.Compare(boolInt(!lan[a]), boolInt(!lan[b])),
 			cmp.Compare(boolInt(a != route), boolInt(b != route)),
 			strings.Compare(a, b),
 		)
 	})
 	return ips
+}
+
+func inMesh(ip string) bool {
+	addr, err := netip.ParseAddr(ip)
+	return err == nil && meshRange.Contains(addr)
 }
 
 func boolInt(b bool) int {

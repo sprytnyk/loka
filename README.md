@@ -77,8 +77,9 @@ for Android and iPhone. Do it once, and from then on the page opens over HTTPS
 without a warning. You can also continue without it: the connection is still
 encrypted, but the browser warns that it can't check it's really your computer.
 
-A computer with several networks shows an address and QR code for each. Use
-the one on the same network as the phone.
+A computer with several networks shows an address and QR code for each,
+including a Tailscale address. Use the one on the same network as the phone.
+Other VPN addresses only show up when there is no local network.
 
 ## Download links
 
