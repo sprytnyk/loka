@@ -286,11 +286,15 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 
 	answers := make(chan string)
 	go func() {
-		scanner := bufio.NewScanner(stdin)
-		for scanner.Scan() {
-			answers <- scanner.Text()
+		r := bufio.NewReader(stdin)
+		for {
+			line, err := readLine(r)
+			if err != nil {
+				close(answers)
+				return
+			}
+			answers <- line
 		}
-		close(answers)
 	}()
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
@@ -327,6 +331,27 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 		}
 		if !answerOffer(ctx, s, t, answers, stdout) {
 			return <-served
+		}
+	}
+}
+
+// maxAnswer is how much of a line readLine keeps, well past the longest
+// path a system allows.
+const maxAnswer = 64 << 10
+
+// readLine reads a line of any length, keeping at most maxAnswer bytes of
+// it. A longer line is then an answer like any other, which fails as a
+// directory, rather than the end of all answers.
+func readLine(r *bufio.Reader) (string, error) {
+	var line []byte
+	for {
+		part, more, err := r.ReadLine()
+		if err != nil {
+			return "", err
+		}
+		line = append(line, part[:min(len(part), maxAnswer-len(line))]...)
+		if !more {
+			return string(line), nil
 		}
 	}
 }

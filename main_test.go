@@ -242,8 +242,11 @@ func TestSendAndReceiveCommands(t *testing.T) {
 	sent, _, sendCode := runLoka(t, nil, "send", filepath.Join(source, "dir"), "--to", "127.0.0.1", "--peer-port", port)
 
 	code := received.wait(t, `wants to send: dir\nPairing code (\d{3} \d{3})\. Check that the sender shows the same\.\nDestination directory`)[1]
-	io.WriteString(answer, filepath.Join(destination, "missing")+"\n")
+	// A line longer than any path is a wrong answer, not the last one.
+	go io.WriteString(answer, strings.Repeat("x", 1<<20)+"\n")
 	received.wait(t, `must be an existing directory\nDestination directory`)
+	io.WriteString(answer, filepath.Join(destination, "missing")+"\n")
+	received.wait(t, `must be an existing directory\nDestination directory \(empty to decline\): The destination must be an existing directory\nDestination directory`)
 	io.WriteString(answer, destination+"\n")
 	if c := <-sendCode; c != 0 || !strings.Contains(sent.String(), "complete: 100%") {
 		t.Fatalf("send exited %d, output %q", c, sent.String())
