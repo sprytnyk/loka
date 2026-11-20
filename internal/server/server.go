@@ -234,7 +234,9 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if standing == trust.Changed {
-		// Show the refusal here, where the device can be forgotten.
+		// Show the refusal here, where the device can be forgotten, under
+		// the name it is remembered by: the name it gave is not proven.
+		t.Peer = known.Name
 		s.Transfers.Add(t)
 		t.Finish(&trust.ChangedError{Device: known})
 		writeError(w, http.StatusForbidden, errors.New("The receiver remembers this device with a different certificate and refused the transfer"))

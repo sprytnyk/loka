@@ -148,7 +148,7 @@ func waitForIncomingStatus(t *testing.T, s *Server, status transfer.Status) *tra
 func TestReceiverRefusesASenderWithANewCertificate(t *testing.T) {
 	receiver, host, port, _ := startRecorded(t)
 	sender := openTrust(t)
-	receiver.Trust.Remember(trust.Device{ID: sender.ID, Name: "laptop", Fingerprint: "an older certificate"})
+	receiver.Trust.Remember(trust.Device{ID: sender.ID, Name: "old laptop", Fingerprint: "an older certificate"})
 	file := filepath.Join(t.TempDir(), "file")
 	treetest.Write(t, filepath.Dir(file), map[string]string{"file": "abc"})
 
@@ -158,7 +158,9 @@ func TestReceiverRefusesASenderWithANewCertificate(t *testing.T) {
 		t.Fatalf("sender ended %+v", v)
 	}
 	refused := waitForIncomingStatus(t, receiver, transfer.Failed).View()
-	if refused.ForgetID != sender.ID || !strings.Contains(refused.Error, "laptop showed a different certificate") {
+	// The name it gave, laptop, is not proven, so the refusal names the
+	// device it claims to be.
+	if refused.ForgetID != sender.ID || refused.Name != "old laptop" || !strings.HasPrefix(refused.Error, "old laptop showed a different certificate") {
 		t.Fatalf("receiver shows %+v", refused)
 	}
 
