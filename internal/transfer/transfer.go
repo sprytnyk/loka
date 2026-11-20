@@ -172,6 +172,17 @@ func (t *Transfer) Finish(err error) {
 	}
 }
 
+// Expire fails the transfer with err if it is still at status.
+func (t *Transfer) Expire(status Status, err error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.status != status {
+		return
+	}
+	t.cancel()
+	t.status, t.err = Failed, err.Error()
+}
+
 // Final reports whether a transfer at this status has ended.
 func (s Status) Final() bool {
 	switch s {

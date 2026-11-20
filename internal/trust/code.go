@@ -26,6 +26,9 @@ func Nonce() string {
 	return hex.EncodeToString(b)
 }
 
+// CommitmentSize is the length of what Commit returns.
+const CommitmentSize = 2 * sha256.Size
+
 // Commit returns the commitment to a nonce, which the sender sends first.
 func Commit(nonce string) string {
 	sum := sha256.Sum256([]byte("loka commit\x00" + nonce))

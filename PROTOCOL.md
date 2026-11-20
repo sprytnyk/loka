@@ -100,7 +100,7 @@ sequenceDiagram
 ```
 
 - The offer lists up to 100 top-level names and the total size of the
-  files.
+  files. Up to 16 offers can wait at once, and more get `503`.
 - Every later request carries the `secret` in an `X-Transfer-Secret`
   header.
 - The upload is a tar stream: a header per directory or file, then its
@@ -125,7 +125,8 @@ not to another device that sits between them and passes everything on.
 Each side picks a nonce, a random 32-byte number written in hex.
 
 1. The offer carries `commitment`, the SHA-256 of `loka commit\0`
-   followed by the sender's nonce.
+   followed by the sender's nonce, written as 64 hex digits. An offer with
+   any other length gets `400`.
 2. The receiver answers with its own nonce.
 3. The sender reveals its nonce. If it doesn't match the commitment, the
    receiver stops the transfer.
@@ -143,7 +144,18 @@ codes start from different fingerprints. To make them match anyway, it
 would need to choose one nonce after seeing the other. It can't. The
 sender commits to its nonce before it sees the receiver's, and the
 receiver sends its nonce before it sees the sender's. That leaves the
-device in between one chance in a million.
+device in between one chance in a million per offer.
+
+The device in between could still offer to the receiver again and again,
+work out the receiver's code from each answer, and reveal only the offer
+whose code matches. So each offer from a Loka spends one of 10 tries. A try
+comes back when the person accepts, and one more every 30 seconds. All new
+devices share one set of tries, since anyone can make a new device ID. Each
+remembered device has its own set, so it can still send when the others run
+out. A remembered device, such as a guest's laptop, could also be the device
+in between, so its own tries run out too. With no tries left, offers get
+`429` and the receiver warns the person. An offer fails if its sender
+doesn't reveal within 10 seconds.
 
 On both sides a transfer between Lokas starts as `pairing` and moves to
 `waiting` once that side knows the code. The receiver asks the person only

@@ -42,7 +42,8 @@ type Server struct {
 	Devices     *network.Discovery     // nil when not looking for devices
 	destination atomic.Pointer[string] // the last accepted destination
 
-	offerMu sync.Mutex // makes checking and adding an offer one step
+	offerMu  sync.Mutex // makes counting and adding an offer one step
+	pairings pairingLimits
 }
 
 // New makes a server that names this device name to other devices.
@@ -212,6 +213,19 @@ var errOldLoka = errors.New("This device runs a newer Loka. Update Loka to send 
 // declined or cancelled, whichever request it was making.
 var errDeclined = errors.New("The receiver declined or cancelled")
 
+// errTooManyOffers refuses an offer while many others wait for an answer.
+var errTooManyOffers = errors.New("The receiver has too many offers waiting. Try again later")
+
+// errPairingLimit refuses a Loka while the pairing budget is spent.
+var errPairingLimit = errors.New("The receiver refuses Lokas it hasn't seen before for a minute, as several didn't finish pairing. Try again later")
+
+// errPairingLimitKnown refuses a remembered Loka while its own pairing
+// budget is spent.
+var errPairingLimitKnown = errors.New("The receiver refuses this device for a minute, as it started pairing several times and didn't finish. Try again later")
+
+// errPairingTimeout ends an offer whose sender didn't reveal its nonce.
+var errPairingTimeout = errors.New("The sender didn't finish pairing in time")
+
 // errCodeMismatch ends a transfer whose sender revealed a nonce other
 // than the one it committed to.
 var errCodeMismatch = errors.New("The pairing code didn't check out, so the transfer stopped")
@@ -244,6 +258,10 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 	}
 	if o.Commitment == "" {
 		writeError(w, http.StatusUpgradeRequired, errOldLoka)
+		return
+	}
+	if len(o.Commitment) != trust.CommitmentSize {
+		writeError(w, http.StatusBadRequest, errors.New("Invalid offer"))
 		return
 	}
 	t := transfer.New(transfer.Incoming, cmp.Or(truncate(o.Name, 255), host), items, o.Size, transfer.Pairing)
@@ -284,10 +302,157 @@ func (s *Server) refuseChanged(t *transfer.Transfer, known trust.Device) {
 	t.Finish(refusal)
 }
 
+// maxOffers is how many incoming offers may wait at once, in pairing or
+// for the person's answer.
+const maxOffers = 16
+
+// pairingTimeout is how long a Loka has to reveal its nonce after the
+// receiver answers its offer. A Loka reveals at once.
+var pairingTimeout = 10 * time.Second
+
+// addOffer adds an incoming offer, unless too many others wait. An offer
+// from a Loka spends a pairing try and fails if its sender doesn't reveal
+// in time.
 func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
+	s.offerMu.Lock()
+	defer s.offerMu.Unlock()
+	waiting := 0
+	for _, other := range s.Transfers.All() {
+		if other.Direction == transfer.Incoming && (other.Status() == transfer.Pairing || other.Status() == transfer.Waiting) {
+			waiting++
+		}
+	}
+	if waiting >= maxOffers {
+		writeError(w, http.StatusServiceUnavailable, errTooManyOffers)
+		return
+	}
+	if t.Status() == transfer.Pairing {
+		if !s.pairings.take(t, time.Now()) {
+			err := errPairingLimitKnown
+			if t.NewDevice() {
+				err = errPairingLimit
+			}
+			writeError(w, http.StatusTooManyRequests, err)
+			return
+		}
+		time.AfterFunc(pairingTimeout, func() { t.Expire(transfer.Pairing, errPairingTimeout) })
+	}
 	t.Secret = transfer.RandomToken(24)
 	s.Transfers.Add(t)
 	writeJSON(w, http.StatusOK, offerReply{t.ID, t.Secret, s.name, t.Nonce})
+}
+
+// Pairing limits. A device in the middle can work out the receiver's
+// code from each answer to an offer, and reveal only the offer whose code
+// matches the sender's. So each offer from a Loka spends a try, and only
+// the person accepting it gives the try back. Tries also come back slowly
+// on their own. New devices share one budget, as anyone can make a new
+// one. Each remembered device has its own, so a flood of offers from
+// others can't hold it off, and it can't keep trying either.
+const pairingTries = 10
+
+var pairingRefill = 30 * time.Second
+
+// warnFor is how long the page warns after a budget ran out.
+const warnFor = 10 * time.Minute
+
+type pairingLimits struct {
+	mu      sync.Mutex
+	budgets map[string]*pairingBudget // by device ID, "" for new devices
+}
+
+type pairingBudget struct {
+	used      int       // tries spent and not yet back
+	since     time.Time // when the last try came back on its own
+	exhausted time.Time // when an offer last found no try left
+}
+
+// budgetFor returns the key of the budget an offer from t spends.
+func budgetFor(t *transfer.Transfer) string {
+	if t.NewDevice() {
+		return ""
+	}
+	return t.DeviceID
+}
+
+func (l *pairingLimits) take(t *transfer.Transfer, now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	key := budgetFor(t)
+	b := l.budgets[key]
+	if b == nil {
+		if l.budgets == nil {
+			l.budgets = map[string]*pairingBudget{}
+		}
+		b = &pairingBudget{}
+		l.budgets[key] = b
+	}
+	return b.take(now)
+}
+
+func (l *pairingLimits) giveBack(t *transfer.Transfer) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if b := l.budgets[budgetFor(t)]; b != nil {
+		b.used = max(b.used-1, 0)
+	}
+}
+
+func (b *pairingBudget) take(now time.Time) bool {
+	for b.used > 0 && now.Sub(b.since) >= pairingRefill {
+		b.used--
+		b.since = b.since.Add(pairingRefill)
+	}
+	if b.used >= pairingTries {
+		b.exhausted = now
+		return false
+	}
+	if b.used == 0 {
+		b.since = now
+	}
+	b.used++
+	return true
+}
+
+// exhausted returns the key of a budget that ran out lately, the new
+// devices' one first, and whether there is one.
+func (l *pairingLimits) exhausted(now time.Time) (key string, ok bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for k, b := range l.budgets {
+		if !b.exhausted.IsZero() && now.Sub(b.exhausted) < warnFor && (!ok || k < key) {
+			key, ok = k, true
+		}
+	}
+	return key, ok
+}
+
+// errPairingWarning tells the person why new Lokas are refused for a
+// while.
+var errPairingWarning = errors.New("Several Lokas started pairing here and didn't finish. Another device may be trying to sit between two Lokas, so Lokas not seen before wait for a minute")
+
+// pairingWarning tells the person why a remembered device is refused for
+// a while.
+func pairingWarning(name string) string {
+	return fmt.Sprintf("%s started pairing here several times and didn't finish. It may be trying to sit between two Lokas, so it waits for a minute", name)
+}
+
+// Warning is what the person should know about this device, if anything.
+func (s *Server) Warning() string {
+	key, ok := s.pairings.exhausted(time.Now())
+	if !ok {
+		return ""
+	}
+	if key == "" {
+		return errPairingWarning.Error()
+	}
+	devices, _ := s.Trust.Devices()
+	for _, d := range devices {
+		if d.ID == key {
+			return pairingWarning(d.Name)
+		}
+	}
+	return pairingWarning("A remembered device")
 }
 
 // peerReveal takes the nonce a Loka committed to in its offer, which
@@ -360,6 +525,9 @@ type state struct {
 
 func (s *Server) state(w http.ResponseWriter, _ *http.Request) {
 	st := state{Name: s.name, Peers: []network.Peer{}, Transfers: []transfer.View{}, Addresses: network.LocalAddresses()}
+	if w := s.Warning(); w != "" {
+		st.Warnings = append(st.Warnings, w)
+	}
 	st.Warnings = append(st.Warnings, s.Trust.AddressProblems(st.Addresses)...)
 	if s.Devices != nil {
 		peers, problem := s.Devices.List()
@@ -444,6 +612,7 @@ func (s *Server) Accept(t *transfer.Transfer, destination string) bool {
 	}
 	s.destination.Store(&destination)
 	if t.DeviceID != "" {
+		s.pairings.giveBack(t)
 		// A failure only means the sender counts as new next time.
 		s.Trust.Remember(trust.Device{ID: t.DeviceID, Name: t.Peer, Fingerprint: t.Fingerprint})
 	}
