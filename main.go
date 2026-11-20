@@ -267,6 +267,10 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 	served := make(chan error, 1)
 	go func() { served <- s.Serve(ctx, ln) }()
 	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d (Ctrl+C to stop)\n", version, port)
+	if addresses := network.LocalAddresses(); len(addresses) > 0 {
+		fmt.Fprintln(stdout, "To send from a phone, open this in its browser (not encrypted):")
+		printLinks(stdout, addresses, port, "/")
+	}
 
 	answers := make(chan string)
 	go func() {
