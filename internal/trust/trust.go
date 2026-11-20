@@ -1,0 +1,291 @@
+// Package trust holds this device's certificate and the devices it has
+// sent to or received from before. Lokas talk to each other over TLS with
+// these certificates. A device is trusted the first time, then remembered
+// by its certificate, and refused if that certificate ever changes.
+package trust
+
+import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/hex"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"io/fs"
+	"math/big"
+	"os"
+	"path/filepath"
+	"slices"
+	"sync"
+	"time"
+)
+
+// Device is another Loka this device remembers.
+type Device struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Fingerprint string `json:"fingerprint"` // SHA-256 of its certificate
+}
+
+// Standing is what this device knows of another.
+type Standing int
+
+const (
+	New     Standing = iota // never remembered
+	Known                   // remembered with this certificate
+	Changed                 // remembered with another certificate
+)
+
+// Store is this device's identity and the devices it remembers. The list
+// of devices is read from disk on every check, so a device forgotten by
+// another Loka process, such as loka forget, takes effect at once.
+type Store struct {
+	ID   string // this device, also its certificate's common name
+	cert tls.Certificate
+
+	mu      sync.Mutex // serialises changes to the devices file
+	devices string     // the devices file
+}
+
+const (
+	identityFile = "identity.pem"
+	devicesFile  = "devices.json"
+)
+
+// Open reads the identity in dir, making one the first time.
+func Open(dir string) (*Store, error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("could not make the settings directory: %w", err)
+	}
+	path := filepath.Join(dir, identityFile)
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		data, err = create(path)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("could not read this device's identity in %s: %w", path, err)
+	}
+	cert, err := tls.X509KeyPair(data, data)
+	if err != nil {
+		return nil, fmt.Errorf("could not read this device's identity in %s: %w", path, err)
+	}
+	return &Store{ID: cert.Leaf.Subject.CommonName, cert: cert, devices: filepath.Join(dir, devicesFile)}, nil
+}
+
+// create makes a key and a self-signed certificate naming a new random ID,
+// and saves both, readable only by this user, in one file at path.
+func create(path string) ([]byte, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, err
+	}
+	// Peers pin the certificate itself and never check its dates.
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: rand.Text()},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		return nil, err
+	}
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	data := slices.Concat(
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
+		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}),
+	)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, fs.ErrExist) {
+		return os.ReadFile(path) // another Loka made it first
+	}
+	if err != nil {
+		return nil, err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(path)
+		return nil, err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(path)
+		return nil, err
+	}
+	return data, nil
+}
+
+// Identify returns the ID and fingerprint a peer's certificate shows.
+func Identify(cert *x509.Certificate) (id, fingerprint string) {
+	sum := sha256.Sum256(cert.Raw)
+	return cert.Subject.CommonName, hex.EncodeToString(sum[:])
+}
+
+// ServerConfig is for this device's port: it asks every TLS client for a
+// certificate, and the handlers check it.
+func (s *Store) ServerConfig() *tls.Config {
+	return &tls.Config{
+		Certificates: []tls.Certificate{s.cert},
+		ClientAuth:   tls.RequireAnyClientCert,
+		MinVersion:   tls.VersionTLS13,
+	}
+}
+
+// ClientConfig is for connecting to another device. check sees the other
+// device's ID and fingerprint and can refuse it. The usual certificate
+// checks are off because certificates here are self-signed; check pins
+// them instead. The handshake still proves the other device holds its
+// certificate's key.
+func (s *Store) ClientConfig(check func(id, fingerprint string) error) *tls.Config {
+	return &tls.Config{
+		Certificates:       []tls.Certificate{s.cert},
+		InsecureSkipVerify: true,
+		MinVersion:         tls.VersionTLS13,
+		VerifyConnection: func(cs tls.ConnectionState) error {
+			if len(cs.PeerCertificates) == 0 {
+				return errors.New("the other device sent no certificate")
+			}
+			return check(Identify(cs.PeerCertificates[0]))
+		},
+	}
+}
+
+// Check says whether the device with this ID is new, known with this
+// certificate, or known with another one. When it is not new, it also
+// returns the device as remembered.
+func (s *Store) Check(id, fingerprint string) (Standing, Device, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	devices, err := s.read()
+	if err != nil {
+		return New, Device{}, err
+	}
+	i := slices.IndexFunc(devices, func(d Device) bool { return d.ID == id })
+	switch {
+	case i < 0:
+		return New, Device{}, nil
+	case devices[i].Fingerprint == fingerprint:
+		return Known, devices[i], nil
+	default:
+		return Changed, devices[i], nil
+	}
+}
+
+// Remember saves a device, or its new name. It never replaces a device's
+// certificate: that takes Forget first.
+func (s *Store) Remember(d Device) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	devices, err := s.read()
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(devices, func(old Device) bool { return old.ID == d.ID })
+	switch {
+	case i < 0:
+		devices = append(devices, d)
+	case devices[i].Fingerprint != d.Fingerprint:
+		return fmt.Errorf("%s is remembered with another certificate", devices[i].Name)
+	case devices[i].Name == d.Name:
+		return nil
+	default:
+		devices[i].Name = d.Name
+	}
+	return s.write(devices)
+}
+
+// Forget drops the devices that match and returns them.
+func (s *Store) Forget(match func(Device) bool) ([]Device, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	devices, err := s.read()
+	if err != nil {
+		return nil, err
+	}
+	var forgotten []Device
+	devices = slices.DeleteFunc(devices, func(d Device) bool {
+		if match(d) {
+			forgotten = append(forgotten, d)
+			return true
+		}
+		return false
+	})
+	if len(forgotten) == 0 {
+		return nil, nil
+	}
+	return forgotten, s.write(devices)
+}
+
+// Devices returns the remembered devices.
+func (s *Store) Devices() ([]Device, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.read()
+}
+
+func (s *Store) read() ([]Device, error) {
+	data, err := os.ReadFile(s.devices)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("could not read the remembered devices: %w", err)
+	}
+	var devices []Device
+	if err := json.Unmarshal(data, &devices); err != nil {
+		return nil, fmt.Errorf("could not read the remembered devices in %s: %w", s.devices, err)
+	}
+	return devices, nil
+}
+
+// write replaces the devices file in one step, so a reader never sees half
+// of it.
+func (s *Store) write(devices []Device) error {
+	data, err := json.MarshalIndent(devices, "", "  ")
+	if err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(s.devices), ".devices-*")
+	if err != nil {
+		return fmt.Errorf("could not save the remembered devices: %w", err)
+	}
+	_, err = f.Write(append(data, '\n'))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), s.devices)
+	}
+	if err != nil {
+		os.Remove(f.Name())
+		return fmt.Errorf("could not save the remembered devices: %w", err)
+	}
+	return nil
+}
+
+// ChangedError is a remembered device showing a different certificate:
+// it was reinstalled, or another device is posing as it.
+type ChangedError struct {
+	Device Device
+}
+
+func (e *ChangedError) Error() string {
+	return fmt.Sprintf("%s has a different certificate than last time. If it was reinstalled, forget it and try again; otherwise another device may be posing as it", e.Device.Name)
+}
+
+// ForgetID names the device to forget to trust its new certificate.
+func (e *ChangedError) ForgetID() string { return e.Device.ID }
