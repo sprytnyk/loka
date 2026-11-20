@@ -124,7 +124,9 @@ func TestOpenSSLAgrees(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name string, der []byte) string {
 		path := filepath.Join(dir, name)
-		os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644)
+		if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		return path
 	}
 	ca := write("ca.pem", s.CA())
