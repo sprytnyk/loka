@@ -43,6 +43,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		"__LOKA_MODE__", mode,
 		"__LOKA_NAME__", string(name),
 		"__LOKA_VERSION__", label,
+		"__LOKA_CA_FINGERPRINT__", s.Trust.CAFingerprint(),
 	).Replace(page)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
