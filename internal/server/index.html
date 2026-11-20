@@ -38,7 +38,7 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .drop{flex:none;border:1.5px dashed var(--drop-line);border-radius:12px;background:var(--drop);padding:18px 16px 14px;text-align:center;margin-bottom:14px}.drop.over{border-color:var(--drop-over-line);background:var(--drop-over)}.drop-icon{display:grid;place-items:center;width:38px;height:38px;margin:0 auto 8px;border-radius:12px;background:var(--soft);color:var(--icon)}.drop-title{margin:0;font-weight:650;font-size:14px}.drop .row{justify-content:center;margin-top:10px}
 #selection{margin:10px 0 0;color:var(--muted);font-size:12px}
 .field-label{display:block;margin:0 var(--action-inset) 7px;font-size:12px;font-weight:650;color:var(--label)}.manual{flex:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.manual .row{align-items:stretch}#port{flex:0 1 84px;min-width:68px}#selected{margin:12px 0 0;padding:0 var(--action-inset);list-style:none;overflow-wrap:anywhere}#selected:empty{display:none}#selected li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}#selected button{flex:none;padding:5px 9px;font-size:12px}
-#peers>p,#transfers>p{margin:0;color:var(--muted);font-size:13px}.item{background:var(--item);border:1px solid var(--item-line);border-radius:10px;padding:var(--row-padding);margin-top:10px;overflow-wrap:anywhere}.item:first-child{margin-top:0}.item strong{color:var(--strong)}.item .row{justify-content:space-between}.item small,.muted,small{color:var(--muted)}.item button{margin-top:5px}.item .row button{margin-top:0}.notice{color:var(--notice)}progress{width:100%;height:.45rem;accent-color:var(--accent)}a{color:var(--link);overflow-wrap:anywhere}#message:empty,#incoming-error:empty{display:none}#message{flex:none;margin-bottom:16px;padding:12px 15px;background:var(--message);border:1px solid var(--message-line);border-radius:10px;color:var(--message-ink);overflow-wrap:anywhere}
+#peers>p,#transfers>p{margin:0;color:var(--muted);font-size:13px}.item{background:var(--item);border:1px solid var(--item-line);border-radius:10px;padding:var(--row-padding);margin-top:10px;overflow-wrap:anywhere}.item:first-child{margin-top:0}.item strong{color:var(--strong)}.item .row{justify-content:space-between}.item small,.muted,small{color:var(--muted)}.item button{margin-top:5px}.item .row button{margin-top:0}.notice{color:var(--notice)}progress{width:100%;height:.45rem;accent-color:var(--accent)}a{color:var(--link);overflow-wrap:anywhere}#message:empty,#incoming-error:empty,#incoming-warning:empty{display:none}#message{flex:none;margin-bottom:16px;padding:12px 15px;background:var(--message);border:1px solid var(--message-line);border-radius:10px;color:var(--message-ink);overflow-wrap:anywhere}
 #links:not(:empty){margin-top:12px}
 .qr-list{display:flex;flex-wrap:wrap;gap:14px}.qr-entry{display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:100%;font-size:13px}
 .qr-code{display:block;width:150px;height:150px;border-radius:10px;overflow:hidden;background:#fff}.qr-code svg{display:block;width:100%;height:100%}
@@ -83,10 +83,10 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 <section class="card device-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><h2 data-i18n="sendToDevice">Send to a device</h2></div><div id="peers"><p data-i18n="lookingForDevices">Looking for devices...</p></div><div class="manual"><label class="field-label" for="address" data-i18n="orEnterAddress">Or enter a device address</label><div class="row action-row"><input id="address" data-i18n-placeholder="deviceAddress" placeholder="Device address"><input id="port" value="45873" data-i18n-label="devicePort" aria-label="Device port"><button id="send" data-i18n="send">Send</button></div></div></section>
 <section class="card link-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></svg></span><div><h2 data-i18n="shareLink">Share a download link</h2><p data-i18n="shareLinkHint">The recipient can open the link in a browser.</p></div></div><div class="row action-row"><button id="share" data-i18n="createLink">Create link</button></div><div id="links"></div></section>
 <section class="card transfers-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3"/></svg></span><h2 data-i18n="transfers">Transfers</h2></div><div id="transfers"><p data-i18n="noTransfers">No transfers yet.</p></div></section>
-</div><footer class="footer-note"><p data-i18n="notEncrypted">Transfers are not encrypted. Use Loka on a network you trust.</p><a href="https://github.com/sprytnyk/loka" data-i18n="source">Source on GitHub</a></footer>
+</div><footer class="footer-note"><p data-i18n="notEncrypted">Transfers between Loka devices are encrypted. Uploads from a browser and download links are not.</p><a href="https://github.com/sprytnyk/loka" data-i18n="source">Source on GitHub</a></footer>
 </main>
 <dialog id="incoming" aria-labelledby="incoming-title">
-<h2 id="incoming-title" data-i18n="incomingTitle">Incoming transfer</h2><p id="incoming-details"></p><div id="incoming-files"></div>
+<h2 id="incoming-title" data-i18n="incomingTitle">Incoming transfer</h2><p id="incoming-details"></p><p id="incoming-warning" class="notice"></p><div id="incoming-files"></div>
 <div class="row"><input id="destination" data-i18n-placeholder="destination" placeholder="Destination directory" data-i18n-label="destination" aria-label="Destination directory"><button type="button" class="secondary" id="choose-destination" data-i18n="browse">Browse</button></div>
 <p id="incoming-error" class="notice" role="alert"></p>
 <div class="row"><button type="button" id="accept-incoming" data-i18n="accept">Accept</button><button type="button" class="secondary" id="decline-incoming" data-i18n="decline">Decline</button></div>
@@ -157,12 +157,17 @@ const messages = {
     transfers: 'Transfers',
     noTransfers: 'No transfers yet.',
     from: 'From {name}',
+    fromBrowser: 'From a browser at {name}',
     to: 'To {name}',
+    newDevice: 'New device: Loka hasn’t seen it before. Make sure you expect this transfer.',
+    browserUpload: 'Sent from a browser, so it isn’t encrypted.',
+    forget: 'Forget this device',
+    forgotten: 'Forgotten. Its certificate will be trusted on the next transfer.',
     names: {one: '{n} name', other: '{n} names'},
     fileNames: 'File and directory names',
     speed: '{speed} Mbps',
     cancel: 'Cancel',
-    notEncrypted: 'Transfers are not encrypted. Use Loka on a network you trust.',
+    notEncrypted: 'Transfers between Loka devices are encrypted. Uploads from a browser and download links are not.',
     source: 'Source on GitHub',
     incomingTitle: 'Incoming transfer',
     destination: 'Destination directory',
@@ -213,12 +218,17 @@ const messages = {
     transfers: 'Передавання',
     noTransfers: 'Передавань ще немає.',
     from: 'Від {name}',
+    fromBrowser: 'Від браузера за адресою {name}',
     to: 'До {name}',
+    newDevice: 'Новий пристрій: Loka бачить його вперше. Переконайтеся, що чекаєте на це передавання.',
+    browserUpload: 'Надіслано з браузера, тож без шифрування.',
+    forget: 'Забути цей пристрій',
+    forgotten: 'Забуто. Його сертифікату буде довіра під час наступного передавання.',
     names: {one: '{n} назва', few: '{n} назви', many: '{n} назв', other: '{n} назви'},
     fileNames: 'Назви файлів і тек',
     speed: '{speed} Мбіт/с',
     cancel: 'Скасувати',
-    notEncrypted: 'Передавання не шифруються. Користуйтеся Loka лише в мережі, якій довіряєте.',
+    notEncrypted: 'Передавання між пристроями з Loka шифруються. Надсилання з браузера й посилання для завантаження — ні.',
     source: 'Код на GitHub',
     incomingTitle: 'Вхідне передавання',
     destination: 'Тека призначення',
@@ -258,6 +268,10 @@ const serverMessages = {
     [/^The file picker answered (.*)$/s, 'Вікно вибору файлів відповіло $1'],
     [/^The other device answered (.*)$/s, 'Інший пристрій відповів: $1'],
     [/^Could not reach the other device: (.*)$/s, 'Не вдалося зв’язатися з іншим пристроєм: $1'],
+    [/^Could not connect securely to the other device\. Check that it runs the latest Loka$/, 'Не вдалося встановити захищене з’єднання з іншим пристроєм. Перевірте, чи на ньому остання версія Loka'],
+    [/^The other device's certificate changed during the transfer$/, 'Сертифікат іншого пристрою змінився під час передавання'],
+    [/^(.*) showed a different certificate than before, so another device may be posing as it\. To trust it anyway, forget it and try again$/s, '$1 показав інший сертифікат, ніж раніше, тож інший пристрій може видавати себе за нього. Щоб однаково довіряти йому, забудьте його й спробуйте знову'],
+    [/^The receiver remembers this device with a different certificate and refused the transfer$/, 'Отримувач пам’ятає цей пристрій з іншим сертифікатом і відхилив передавання'],
     [/^Choose one or more files or directories$/, 'Виберіть один чи кілька файлів або тек'],
     [/^Cannot send (.*): only files and directories can be sent$/s, 'Не можна надіслати $1: надсилати можна лише файли й теки'],
     [/^Cannot send (.*): choose a directory inside it$/s, 'Не можна надіслати $1: виберіть теку всередині'],
@@ -548,7 +562,17 @@ $('share').onclick = e => run(e.target, async () => {
   await api('/api/share', {paths: await paths()});
   await refresh();
 });
+const forgotten = new Set(); // device IDs forgotten from this page
 $('transfers').onclick = e => {
+  const forget = e.target.closest('button[data-forget]');
+  if (forget) {
+    run(forget, async () => {
+      await api('/api/forget', {id: forget.dataset.forget});
+      forgotten.add(forget.dataset.forget);
+      await refresh();
+    });
+    return;
+  }
   const button = e.target.closest('button[data-cancel]');
   if (!button) return;
   run(button, async () => {
@@ -642,10 +666,11 @@ function renderTransfers(transfers) {
       card = document.createElement('div');
       card.className = 'item';
       card.dataset.transfer = transfer.id;
-      card.innerHTML = `<div class="row"><strong>${escapeHtml(t(transfer.direction === 'incoming' ? 'from' : 'to', {name: transfer.name}))}</strong><span class="transfer-status"></span></div>
+      card.innerHTML = `<div class="row"><strong>${escapeHtml(peerName(transfer))}</strong><span class="transfer-status"></span></div>
         ${fileNames(transfer.items || [])}
         <p class="notice" hidden></p><progress max="100" hidden></progress>
-        <button class="secondary" data-cancel="${escapeHtml(transfer.id)}" hidden>${escapeHtml(t('cancel'))}</button>`;
+        <button class="secondary" data-cancel="${escapeHtml(transfer.id)}" hidden>${escapeHtml(t('cancel'))}</button>
+        <button class="secondary" data-forget="${escapeHtml(transfer.forget_id || '')}" hidden>${escapeHtml(t('forget'))}</button>`;
       if (previousCard) previousCard.after(card);
       else list.prepend(card);
     }
@@ -664,6 +689,8 @@ function renderTransfers(transfers) {
     progress.value = transfer.progress;
     progress.hidden = !active;
     card.querySelector('button[data-cancel]').hidden = waiting || !active;
+    card.querySelector('button[data-forget]').hidden = !transfer.forget_id || forgotten.has(transfer.forget_id);
+    if (transfer.forget_id && forgotten.has(transfer.forget_id)) error.textContent = t('forgotten');
   }
   for (const card of cards.values()) card.remove();
 }
@@ -682,8 +709,15 @@ function forgetSentItems(transfers) {
     }
   }
 }
+// peerName says who a transfer is with.
+function peerName(transfer) {
+  if (transfer.direction !== 'incoming') return t('to', {name: transfer.name});
+  return t(transfer.browser ? 'fromBrowser' : 'from', {name: transfer.name});
+}
 function renderIncomingDetails() {
-  $('incoming-details').textContent = t('from', {name: incoming.name});
+  const warning = incoming.browser ? t('browserUpload') : incoming.new_device ? t('newDevice') : '';
+  $('incoming-details').textContent = peerName(incoming);
+  $('incoming-warning').textContent = warning;
   $('incoming-files').innerHTML = fileNames(incoming.items || []);
 }
 // renderIncoming opens the dialog for the first waiting offer, and closes

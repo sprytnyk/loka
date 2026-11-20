@@ -17,7 +17,20 @@ import (
 	"time"
 
 	"github.com/sprytnyk/loka/internal/treetest"
+	"github.com/sprytnyk/loka/internal/trust"
 )
+
+// TestMain keeps the tests' identities out of the real settings directory.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "loka-test-")
+	if err != nil {
+		panic(err)
+	}
+	configDir = func() (string, error) { return dir, nil }
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
 
 // output is a buffer the command writes to while the test reads it.
 type output struct {
@@ -92,6 +105,9 @@ func TestParse(t *testing.T) {
 		{[]string{"send", "a"}, "", nil, "", 2},
 		{[]string{"share"}, "", nil, "", 2},
 		{[]string{"devices", "x"}, "", nil, "", 2},
+		{[]string{"forget", "my laptop"}, "forget", []string{"my laptop"}, "", -1},
+		{[]string{"forget"}, "", nil, "", 2},
+		{[]string{"forget", "a", "b"}, "", nil, "", 2},
 		{[]string{"--bogus"}, "", nil, "", 2},
 		{[]string{"--port", "65536"}, "", nil, "", 2},
 		{[]string{"send", "a", "--to", "h", "--peer-port", "0"}, "", nil, "", 2},
@@ -246,5 +262,25 @@ func TestReceiveStopsAfterAccepting(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("receive kept running after it was stopped, output %q", received.String())
+	}
+}
+
+func TestForgetCommand(t *testing.T) {
+	store, err := openTrust()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"a", "b"} {
+		if err := store.Remember(trust.Device{ID: id, Name: "old laptop", Fingerprint: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out bytes.Buffer
+	if code := run(context.Background(), []string{"forget", "old laptop"}, nil, &out, &out); code != 0 || out.String() != "Forgot 2 devices named old laptop.\n" {
+		t.Fatalf("got %d %q", code, out.String())
+	}
+	out.Reset()
+	if code := run(context.Background(), []string{"forget", "old laptop"}, nil, &out, &out); code != 1 || !strings.Contains(out.String(), `no remembered device is named "old laptop"`) {
+		t.Fatalf("got %d %q", code, out.String())
 	}
 }

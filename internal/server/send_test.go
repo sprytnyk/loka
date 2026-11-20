@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -44,7 +43,7 @@ func startSending(t *testing.T, from string, paths []string, host string, port i
 		t.Fatal(err)
 	}
 	out := transfer.New(transfer.Outgoing, host, items, size, transfer.Waiting)
-	go func() { out.Finish(SendTo(out, entries, from, host, port)) }()
+	go func() { out.Finish(SendTo(out, entries, openTrust(t), from, host, port)) }()
 	return out
 }
 
@@ -182,17 +181,18 @@ func TestSenderCancelEndsBothSides(t *testing.T) {
 // waiting instead of showing the offer forever.
 func TestSenderFailureEndsTheOffer(t *testing.T) {
 	receiver := New("receiver", "test")
+	receiver.Trust = openTrust(t)
 	var failed atomic.Bool
-	handler := receiver.Handler()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/peer/status/") && !failed.Swap(true) {
-			http.Error(w, `{"error":"lost"}`, http.StatusBadGateway)
-			return
-		}
-		handler.ServeHTTP(w, r)
-	}))
-	t.Cleanup(ts.Close)
-	host, port := hostPort(t, ts.URL)
+	base := serve(t, receiver, func(handler http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/peer/status/") && !failed.Swap(true) {
+				http.Error(w, `{"error":"lost"}`, http.StatusBadGateway)
+				return
+			}
+			handler.ServeHTTP(w, r)
+		})
+	})
+	host, port := hostPort(t, base)
 	root := t.TempDir()
 	treetest.Write(t, root, map[string]string{"file": "abc"})
 	out := startSending(t, "sender", []string{filepath.Join(root, "file")}, host, port)
@@ -207,10 +207,10 @@ func TestSenderFailureEndsTheOffer(t *testing.T) {
 func TestPeerRoutesNeedTheSecret(t *testing.T) {
 	receiver, base := startServer(t)
 	var reply offerReply
-	if err := call(t.Context(), http.MethodPost, base+"/peer/offer", "", offer{Name: "x", Items: []string{"f"}, Size: 1}, &reply); err != nil {
+	if err := call(t.Context(), http.DefaultClient, http.MethodPost, base+"/peer/offer", "", offer{Name: "x", Items: []string{"f"}, Size: 1}, &reply); err != nil {
 		t.Fatal(err)
 	}
-	if err := call(t.Context(), http.MethodPost, base+"/peer/cancel/"+reply.ID, "wrong", nil, nil); err == nil {
+	if err := call(t.Context(), http.DefaultClient, http.MethodPost, base+"/peer/cancel/"+reply.ID, "wrong", nil, nil); err == nil {
 		t.Fatal("cancel worked without the secret")
 	}
 	if got := receiver.Transfers.Get(reply.ID).Status(); got != transfer.Waiting {
@@ -236,7 +236,7 @@ func TestDestinationKeepsSpaces(t *testing.T) {
 func TestOffersMustNameItemsAndASize(t *testing.T) {
 	receiver, receiverURL := startServer(t)
 	for _, o := range []offer{{Name: "x", Size: 1}, {Name: "x", Items: []string{"f"}, Size: -1}} {
-		if err := call(t.Context(), http.MethodPost, receiverURL+"/peer/offer", "", o, nil); err == nil {
+		if err := call(t.Context(), http.DefaultClient, http.MethodPost, receiverURL+"/peer/offer", "", o, nil); err == nil {
 			t.Errorf("accepted %+v", o)
 		}
 	}
@@ -315,7 +315,7 @@ func TestReceiverCancelDuringUpload(t *testing.T) {
 	data := stream.Bytes()
 
 	var reply offerReply
-	if err := call(t.Context(), http.MethodPost, base+"/peer/offer", "", offer{Name: "s", Items: []string{"file"}, Size: size}, &reply); err != nil {
+	if err := call(t.Context(), http.DefaultClient, http.MethodPost, base+"/peer/offer", "", offer{Name: "s", Items: []string{"file"}, Size: size}, &reply); err != nil {
 		t.Fatal(err)
 	}
 	api(t, receiver, base, "/api/accept", map[string]string{"id": reply.ID, "destination": destination}, nil)

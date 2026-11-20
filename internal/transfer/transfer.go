@@ -11,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sprytnyk/loka/internal/trust"
 )
 
 // Status is a step in a transfer's life.
@@ -50,9 +52,15 @@ type Transfer struct {
 	Items     []string // the top-level names, for display
 	Size      int64    // bytes of file content
 
-	Secret string       // proves a remote sender owns an incoming transfer
-	Token  string       // the download link token, only for links
-	shared []sharedItem // what a link serves, only for links
+	Secret string // proves a remote sender owns an incoming transfer
+	// Who sent an incoming transfer: a browser over plain HTTP, or a Loka
+	// over TLS with this ID and certificate fingerprint.
+	Browser     bool
+	DeviceID    string
+	Fingerprint string
+	NewDevice   bool         // the Loka has not been remembered yet
+	Token       string       // the download link token, only for links
+	shared      []sharedItem // what a link serves, only for links
 
 	Done atomic.Int64 // bytes of file content moved so far
 
@@ -62,6 +70,7 @@ type Transfer struct {
 	mu          sync.Mutex
 	status      Status
 	err         string
+	forgetID    string // the device to forget to trust its new certificate
 	destination string
 	speed       speedometer
 }
@@ -157,6 +166,9 @@ func (t *Transfer) Finish(err error) {
 	default:
 		t.status = Failed
 		t.err = err.Error()
+		if changed, ok := errors.AsType[*trust.ChangedError](err); ok {
+			t.forgetID = changed.Device.ID
+		}
 	}
 }
 
@@ -181,13 +193,16 @@ type View struct {
 	Error     string    `json:"error,omitempty"`
 	Token     string    `json:"token,omitempty"`
 	SpeedMbps *float64  `json:"speed_mbps,omitempty"` // only while bytes move
+	Browser   bool      `json:"browser,omitempty"`
+	NewDevice bool      `json:"new_device,omitempty"`
+	ForgetID  string    `json:"forget_id,omitempty"`
 }
 
 // View returns what the page shows now. While bytes move it includes the
 // speed, which reading the view measures.
 func (t *Transfer) View() View {
 	t.mu.Lock()
-	status, err := t.status, t.err
+	status, err, forgetID := t.status, t.err, t.forgetID
 	var speed *float64
 	if status == Sending || status == Receiving {
 		mbps := t.speed.read(t.Done.Load(), time.Now())
@@ -205,6 +220,9 @@ func (t *Transfer) View() View {
 		Error:     err,
 		Token:     t.Token,
 		SpeedMbps: speed,
+		Browser:   t.Browser,
+		NewDevice: t.NewDevice,
+		ForgetID:  forgetID,
 	}
 }
 

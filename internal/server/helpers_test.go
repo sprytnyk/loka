@@ -2,23 +2,62 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/sprytnyk/loka/internal/network"
 	"github.com/sprytnyk/loka/internal/transfer"
+	"github.com/sprytnyk/loka/internal/trust"
 )
 
-// startServer runs a server on a loopback port and returns it with its URL.
+// openTrust makes a device identity for a test.
+func openTrust(t *testing.T) *trust.Store {
+	t.Helper()
+	store, err := trust.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store
+}
+
+// startServer runs a server on a loopback port, as Loka does, and returns
+// it with its plain HTTP URL.
 func startServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	s := New("receiver", "test")
-	ts := httptest.NewServer(s.Handler())
-	t.Cleanup(ts.Close)
-	return s, ts.URL
+	s.Trust = openTrust(t)
+	return s, serve(t, s, nil)
+}
+
+// serve runs s on a loopback port until the test ends, through wrap when
+// it is not nil, and returns the plain HTTP URL.
+func serve(t *testing.T, s *Server, wrap func(http.Handler) http.Handler) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan error, 1)
+	if wrap == nil {
+		go func() { served <- s.Serve(ctx, ln) }()
+	} else {
+		srv := &http.Server{Handler: wrap(s.Handler())}
+		plain, secure := network.Split(ln, s.Trust.ServerConfig())
+		go srv.Serve(plain)
+		go func() { served <- srv.Serve(secure) }()
+		context.AfterFunc(ctx, func() { srv.Close() })
+	}
+	t.Cleanup(func() {
+		cancel()
+		<-served
+	})
+	return "http://" + ln.Addr().String()
 }
 
 // api calls the page API of the server at url and decodes the reply into

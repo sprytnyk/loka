@@ -2,7 +2,9 @@ package server
 
 import (
 	"bytes"
+	"cmp"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,30 +13,38 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/sprytnyk/loka/internal/transfer"
+	"github.com/sprytnyk/loka/internal/trust"
 )
 
 // pollEvery is how often a sender asks whether the receiver has answered.
 var pollEvery = time.Second
 
 // SendTo offers entries to the device at host and port, waits for it to
-// accept, then streams them. It returns why the transfer ended, if not
-// complete.
-func SendTo(t *transfer.Transfer, entries []transfer.Entry, from, host string, port int) error {
-	base := "http://" + net.JoinHostPort(host, strconv.Itoa(port))
+// accept, then streams them, all over TLS. It returns why the transfer
+// ended, if not complete. The receiver is remembered once it accepts.
+func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, from, host string, port int) error {
+	base := "https://" + net.JoinHostPort(host, strconv.Itoa(port))
+	receiver := &pinned{store: store}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = store.ClientConfig(receiver.check)
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport}
+
 	var reply offerReply
 	o := offer{Name: from, Items: t.Items[:min(len(t.Items), transfer.MaxOfferItems)], Size: t.Size}
-	if err := call(t.Context(), http.MethodPost, base+"/peer/offer", "", o, &reply); err != nil {
+	if err := call(t.Context(), client, http.MethodPost, base+"/peer/offer", "", o, &reply); err != nil {
 		return err
 	}
 	tellReceiver := sync.OnceFunc(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		call(ctx, http.MethodPost, base+"/peer/cancel/"+reply.ID, reply.Secret, nil, nil)
+		call(ctx, client, http.MethodPost, base+"/peer/cancel/"+reply.ID, reply.Secret, nil, nil)
 	})
 	// Tell the receiver when this side cancels, before dropping the stream,
 	// so it shows the transfer as cancelled rather than failed.
@@ -46,27 +56,65 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, from, host string, p
 	})
 	defer stop()
 
-	if err := waitForAnswer(t.Context(), base+"/peer/status/"+reply.ID, reply.Secret); err != nil {
+	if err := waitForAnswer(t.Context(), client, base+"/peer/status/"+reply.ID, reply.Secret); err != nil {
 		// Otherwise the receiver would show the offer as waiting forever.
 		tellReceiver()
 		return err
 	}
+	// Remembering is a convenience: a failure only means the receiver
+	// counts as new next time.
+	store.Remember(receiver.device(cmp.Or(truncate(reply.Name, 255), host)))
 	if !t.Move(transfer.Sending, transfer.Waiting) {
 		return context.Canceled
 	}
-	return upload(uploadCtx, base+"/peer/upload/"+reply.ID, reply.Secret, entries, &t.Done)
+	return upload(uploadCtx, client, base+"/peer/upload/"+reply.ID, reply.Secret, entries, &t.Done)
+}
+
+// pinned is the receiver as its first connection showed it. Every later
+// connection of the same transfer must show the same certificate.
+type pinned struct {
+	store *trust.Store
+
+	mu              sync.Mutex
+	id, fingerprint string
+}
+
+func (p *pinned) check(id, fingerprint string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.fingerprint != "" {
+		if id != p.id || fingerprint != p.fingerprint {
+			return errors.New("The other device's certificate changed during the transfer")
+		}
+		return nil
+	}
+	standing, known, err := p.store.Check(id, fingerprint)
+	if err != nil {
+		return err
+	}
+	if standing == trust.Changed {
+		return &trust.ChangedError{Device: known}
+	}
+	p.id, p.fingerprint = id, fingerprint
+	return nil
+}
+
+func (p *pinned) device(name string) trust.Device {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return trust.Device{ID: p.id, Name: name, Fingerprint: p.fingerprint}
 }
 
 // waitForAnswer polls the receiver until it accepts or turns the transfer
 // down.
-func waitForAnswer(ctx context.Context, url, secret string) error {
+func waitForAnswer(ctx context.Context, client *http.Client, url, secret string) error {
 	ticker := time.NewTicker(pollEvery)
 	defer ticker.Stop()
 	for {
 		var reply struct {
 			Status transfer.Status `json:"status"`
 		}
-		if err := call(ctx, http.MethodGet, url, secret, nil, &reply); err != nil {
+		if err := call(ctx, client, http.MethodGet, url, secret, nil, &reply); err != nil {
 			return err
 		}
 		switch reply.Status {
@@ -85,7 +133,7 @@ func waitForAnswer(ctx context.Context, url, secret string) error {
 }
 
 // upload streams the entries to the receiver.
-func upload(ctx context.Context, url, secret string, entries []transfer.Entry, done *atomic.Int64) error {
+func upload(ctx context.Context, client *http.Client, url, secret string, entries []transfer.Entry, done *atomic.Int64) error {
 	pr, pw := io.Pipe()
 	defer pr.Close()
 	writeErr := make(chan error, 1)
@@ -99,7 +147,7 @@ func upload(ctx context.Context, url, secret string, entries []transfer.Entry, d
 		return err
 	}
 	req.Header.Set("X-Transfer-Secret", secret)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		pr.CloseWithError(err)
 		if werr := <-writeErr; werr != nil && !errors.Is(werr, io.ErrClosedPipe) {
@@ -115,7 +163,7 @@ func upload(ctx context.Context, url, secret string, entries []transfer.Entry, d
 }
 
 // call makes a small JSON request to another device.
-func call(ctx context.Context, method, url, secret string, body, reply any) error {
+func call(ctx context.Context, client *http.Client, method, url, secret string, body, reply any) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var payload io.Reader
@@ -134,7 +182,7 @@ func call(ctx context.Context, method, url, secret string, body, reply any) erro
 	if secret != "" {
 		req.Header.Set("X-Transfer-Secret", secret)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return connectionError(ctx, err)
 	}
@@ -167,6 +215,15 @@ func replyError(resp *http.Response) error {
 func connectionError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	if changed, ok := errors.AsType[*trust.ChangedError](err); ok {
+		return changed
+	}
+	// An answer that isn't TLS: Loka 0.1, or not Loka at all. Go's client
+	// reports a plain HTTP answer only in words.
+	_, notTLS := errors.AsType[tls.RecordHeaderError](err)
+	if notTLS || strings.Contains(err.Error(), "server gave HTTP response to HTTPS client") {
+		return errors.New("Could not connect securely to the other device. Check that it runs the latest Loka")
 	}
 	if urlErr, ok := errors.AsType[*url.Error](err); ok {
 		err = urlErr.Err

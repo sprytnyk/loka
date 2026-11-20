@@ -20,6 +20,7 @@ import (
 	"github.com/sprytnyk/loka/internal/desktop"
 	"github.com/sprytnyk/loka/internal/network"
 	"github.com/sprytnyk/loka/internal/transfer"
+	"github.com/sprytnyk/loka/internal/trust"
 )
 
 // Server answers the page on this device and other devices on the network.
@@ -32,6 +33,7 @@ type Server struct {
 	temp      string // holds files dropped on the page, made when needed
 
 	Transfers   transfer.Registry
+	Trust       *trust.Store           // nil when not talking to other devices
 	Devices     *network.Discovery     // nil when not looking for devices
 	destination atomic.Pointer[string] // the last accepted destination
 }
@@ -53,6 +55,37 @@ func (s *Server) Close() {
 	os.RemoveAll(s.temp)
 }
 
+// Serve answers on ln until ctx is done: other Lokas over TLS and browsers
+// over plain HTTP, on the same port. Without a trust store, it answers
+// only plain HTTP.
+func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
+	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	listeners := []net.Listener{ln}
+	if s.Trust != nil {
+		plain, secure := network.Split(ln, s.Trust.ServerConfig())
+		listeners = []net.Listener{plain, secure}
+	}
+	stop := context.AfterFunc(ctx, func() {
+		shutdown, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		srv.Shutdown(shutdown)
+		srv.Close()
+	})
+	defer stop()
+	ended := make(chan error, len(listeners))
+	for _, l := range listeners {
+		go func() { ended <- srv.Serve(l) }()
+	}
+	var first error
+	for range listeners {
+		if err := <-ended; !errors.Is(err, http.ErrServerClosed) && first == nil {
+			first = err
+			srv.Close() // stop the other listener too
+		}
+	}
+	return first
+}
+
 // Handler answers the page, the page's API, other devices and download links.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -65,12 +98,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/state", s.local(s.state))
 	mux.HandleFunc("POST /api/pick", s.local(s.pickPaths))
 	mux.HandleFunc("POST /api/upload", s.local(s.upload))
-	mux.HandleFunc("POST /api/send", s.local(s.send))
 	mux.HandleFunc("POST /api/accept", s.local(s.accept))
 	mux.HandleFunc("POST /api/cancel", s.local(s.cancel))
 	mux.HandleFunc("POST /api/share", s.local(s.share))
 	mux.HandleFunc("POST /api/qr", s.local(s.qrCode))
 	mux.HandleFunc("GET /download/{token}", s.download)
+	if s.Trust != nil { // sending needs this device's certificate
+		mux.HandleFunc("POST /api/send", s.local(s.send))
+		mux.HandleFunc("POST /api/forget", s.local(s.forget))
+	}
 	return mux
 }
 
@@ -123,6 +159,7 @@ type offer struct {
 type offerReply struct {
 	ID     string `json:"id"`
 	Secret string `json:"secret"`
+	Name   string `json:"name"` // the receiver's, so the sender can remember it
 }
 
 func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
@@ -140,10 +177,35 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		items[i] = truncate(items[i], 255)
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		// A browser, or a Loka too old to encrypt. The page says so.
+		t := transfer.New(transfer.Incoming, host, items, o.Size, transfer.Waiting)
+		t.Browser = true
+		s.addOffer(w, t)
+		return
+	}
 	t := transfer.New(transfer.Incoming, cmp.Or(truncate(o.Name, 255), host), items, o.Size, transfer.Waiting)
+	t.DeviceID, t.Fingerprint = trust.Identify(r.TLS.PeerCertificates[0])
+	standing, known, err := s.Trust.Check(t.DeviceID, t.Fingerprint)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if standing == trust.Changed {
+		// Show the refusal here, where the device can be forgotten.
+		s.Transfers.Add(t)
+		t.Finish(&trust.ChangedError{Device: known})
+		writeError(w, http.StatusForbidden, errors.New("The receiver remembers this device with a different certificate and refused the transfer"))
+		return
+	}
+	t.NewDevice = standing == trust.New
+	s.addOffer(w, t)
+}
+
+func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
 	t.Secret = transfer.RandomToken(24)
 	s.Transfers.Add(t)
-	writeJSON(w, http.StatusOK, offerReply{t.ID, t.Secret})
+	writeJSON(w, http.StatusOK, offerReply{t.ID, t.Secret, s.name})
 }
 
 func (s *Server) peerStatus(w http.ResponseWriter, _ *http.Request, t *transfer.Transfer) {
@@ -232,7 +294,7 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 	}
 	t := transfer.New(transfer.Outgoing, req.Host, items, size, transfer.Waiting)
 	s.Transfers.Add(t)
-	go func() { t.Finish(SendTo(t, entries, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort))) }()
+	go func() { t.Finish(SendTo(t, entries, s.Trust, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort))) }()
 	writeJSON(w, http.StatusOK, map[string]string{"id": t.ID})
 }
 
@@ -263,14 +325,36 @@ func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
 }
 
 // Accept accepts a waiting incoming transfer into destination and offers
-// that destination for the next one. It reports false when the transfer
-// was no longer waiting.
+// that destination for the next one. It remembers a sending Loka, so a
+// later change of its certificate is caught. It reports false when the
+// transfer was no longer waiting.
 func (s *Server) Accept(t *transfer.Transfer, destination string) bool {
 	if !t.Accept(destination) {
 		return false
 	}
 	s.destination.Store(&destination)
+	if t.DeviceID != "" {
+		// A failure only means the sender counts as new next time.
+		s.Trust.Remember(trust.Device{ID: t.DeviceID, Name: t.Peer, Fingerprint: t.Fingerprint})
+	}
 	return true
+}
+
+// forget drops a remembered device, so its new certificate is trusted
+// next time.
+func (s *Server) forget(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := readJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if _, err := s.Trust.Forget(func(d trust.Device) bool { return d.ID == req.ID }); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) cancel(w http.ResponseWriter, r *http.Request) {

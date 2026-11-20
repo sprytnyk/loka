@@ -11,9 +11,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -24,6 +24,7 @@ import (
 	"github.com/sprytnyk/loka/internal/qr"
 	"github.com/sprytnyk/loka/internal/server"
 	"github.com/sprytnyk/loka/internal/transfer"
+	"github.com/sprytnyk/loka/internal/trust"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -67,6 +68,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		err = devicesCommand(ctx, stdout)
 	case "share":
 		err = shareCommand(ctx, o, stdout)
+	case "forget":
+		err = forgetCommand(o.paths[0], stdout)
 	}
 	if err != nil {
 		printError(stderr, err.Error())
@@ -132,9 +135,11 @@ func parse(args []string, stdout, stderr io.Writer) (options, int) {
 		return fail("send needs --to ADDRESS and one or more paths")
 	case o.command == "share" && len(o.paths) == 0:
 		return fail("share needs one or more paths")
+	case o.command == "forget" && len(o.paths) != 1:
+		return fail("forget needs the name of one device")
 	case !named && len(o.paths) > 0:
 		return fail("unknown command %q", o.paths[0])
-	case o.command != "send" && o.command != "share" && len(o.paths) > 0:
+	case o.command != "send" && o.command != "share" && o.command != "forget" && len(o.paths) > 0:
 		return fail("%s takes no paths", o.command)
 	}
 	return o, -1
@@ -161,31 +166,38 @@ func listenOn(port int) (net.Listener, int, error) {
 	return ln, ln.Addr().(*net.TCPAddr).Port, nil
 }
 
-// serveUntil serves handler on ln until ctx is done.
-func serveUntil(ctx context.Context, ln net.Listener, handler http.Handler) error {
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
-	stop := context.AfterFunc(ctx, func() {
-		shutdown, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		srv.Shutdown(shutdown)
-		srv.Close()
-	})
-	defer stop()
-	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
-		return err
+// configDir holds this device's identity and the devices it remembers.
+var configDir = func() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("could not find the settings directory: %w", err)
 	}
-	return nil
+	return filepath.Join(dir, "loka"), nil
+}
+
+// openTrust reads this device's identity, making one the first time.
+func openTrust() (*trust.Store, error) {
+	dir, err := configDir()
+	if err != nil {
+		return nil, err
+	}
+	return trust.Open(dir)
 }
 
 // startDevice runs the server with discovery, as serve and receive do.
 func startDevice(ctx context.Context, port int) (*server.Server, net.Listener, int, error) {
+	store, err := openTrust()
+	if err != nil {
+		return nil, nil, 0, err
+	}
 	ln, port, err := listenOn(port)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 	name := hostname()
 	s := server.New(name, version)
-	s.Devices = network.New(network.Announcement{ID: transfer.RandomToken(16), Name: name, Port: port})
+	s.Trust = store
+	s.Devices = network.New(network.Announcement{ID: store.ID, Name: name, Port: port})
 	go s.Devices.Listen(ctx)
 	go s.Devices.Announce(ctx)
 	return s, ln, port, nil
@@ -204,7 +216,7 @@ func serve(ctx context.Context, o options, stdout io.Writer) error {
 			fmt.Fprintf(stdout, "Open %s in your browser.\n", url)
 		}
 	}
-	return serveUntil(ctx, ln, s.Handler())
+	return s.Serve(ctx, ln)
 }
 
 func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
@@ -212,8 +224,12 @@ func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	store, err := openTrust()
+	if err != nil {
+		return err
+	}
 	t := transfer.New(transfer.Outgoing, o.to, items, size, transfer.Waiting)
-	go func() { t.Finish(server.SendTo(t, entries, hostname(), o.to, o.peerPort)) }()
+	go func() { t.Finish(server.SendTo(t, entries, store, hostname(), o.to, o.peerPort)) }()
 	stop := context.AfterFunc(ctx, t.Stop)
 	defer stop()
 	v := follow(t, stdout)
@@ -249,7 +265,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 	}
 	defer s.Close()
 	served := make(chan error, 1)
-	go func() { served <- serveUntil(ctx, ln, s.Handler()) }()
+	go func() { served <- s.Serve(ctx, ln) }()
 	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d (Ctrl+C to stop)\n", version, port)
 
 	answers := make(chan string)
@@ -262,6 +278,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 	}()
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
+	told := map[string]bool{} // refusals already printed
 	for {
 		select {
 		case <-ctx.Done():
@@ -270,11 +287,17 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 			return err
 		case <-ticker.C:
 		}
+		for _, t := range s.Transfers.All() {
+			if v := t.View(); v.ForgetID != "" && !told[t.ID] {
+				told[t.ID] = true
+				fmt.Fprintf(stdout, "\nRefused a transfer: %s\nTo trust it, run: loka forget %q\n", v.Error, t.Peer)
+			}
+		}
 		t := firstWaiting(s)
 		if t == nil {
 			continue
 		}
-		fmt.Fprintf(stdout, "\n%s wants to send: %s\n", t.Peer, strings.Join(t.Items, ", "))
+		fmt.Fprintf(stdout, "\n%s wants to send: %s\n", sender(t), strings.Join(t.Items, ", "))
 		if !answerOffer(ctx, s, t, answers, stdout) {
 			return <-served
 		}
@@ -317,6 +340,18 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 	}
 }
 
+// sender names who offers t, and warns when it isn't encrypted or comes
+// from a device Loka hasn't seen before.
+func sender(t *transfer.Transfer) string {
+	switch {
+	case t.Browser:
+		return "A browser at " + t.Peer + " (not encrypted)"
+	case t.NewDevice:
+		return t.Peer + " (new device, not seen before)"
+	}
+	return t.Peer
+}
+
 func firstWaiting(s *server.Server) *transfer.Transfer {
 	for _, t := range s.Transfers.All() {
 		if t.Direction == transfer.Incoming && t.Status() == transfer.Waiting {
@@ -338,8 +373,41 @@ func devicesCommand(ctx context.Context, stdout io.Writer) error {
 	if len(peers) == 0 {
 		fmt.Fprintln(stdout, "No devices found.")
 	}
+	remembered := map[string]bool{}
+	if store, err := openTrust(); err == nil {
+		devices, _ := store.Devices()
+		for _, d := range devices {
+			remembered[d.ID] = true
+		}
+	}
 	for _, p := range peers {
-		fmt.Fprintf(stdout, "%s  %s:%d\n", p.Name, p.Host, p.Port)
+		line := fmt.Sprintf("%s  %s:%d", p.Name, p.Host, p.Port)
+		if remembered[p.ID] {
+			line += "  (remembered)"
+		}
+		fmt.Fprintln(stdout, line)
+	}
+	return nil
+}
+
+// forgetCommand forgets every remembered device with this name, so a new
+// certificate of theirs is trusted on the next transfer.
+func forgetCommand(name string, stdout io.Writer) error {
+	store, err := openTrust()
+	if err != nil {
+		return err
+	}
+	forgotten, err := store.Forget(func(d trust.Device) bool { return d.Name == name })
+	if err != nil {
+		return err
+	}
+	switch len(forgotten) {
+	case 0:
+		return fmt.Errorf("no remembered device is named %q", name)
+	case 1:
+		fmt.Fprintf(stdout, "Forgot %s.\n", name)
+	default:
+		fmt.Fprintf(stdout, "Forgot %d devices named %s.\n", len(forgotten), name)
 	}
 	return nil
 }
@@ -363,7 +431,7 @@ func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
 	s := server.New(hostname(), version)
 	s.Transfers.Add(link)
 	printLinks(stdout, addresses, port, "/download/"+link.Token)
-	return serveUntil(ctx, ln, s.Handler())
+	return s.Serve(ctx, ln)
 }
 
 // printLinks prints path at each address, each under its QR code when
