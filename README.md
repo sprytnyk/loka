@@ -40,8 +40,9 @@ Run `loka` on both computers. It opens in your browser.
    enter a path.
 2. Select the receiving device. If it doesn't show up, enter its address and
    port.
-3. On the receiver, choose an existing directory and accept. Both computers
-   show a pairing code. The first time, check it's the same on both.
+3. On the receiver, choose an existing directory and accept within a minute.
+   Both computers show a pairing code. The first time, check it's the same
+   on both.
 
 Several transfers can arrive at once, and each shows its speed. Loka remembers
 the last destination until it stops.

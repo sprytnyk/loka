@@ -325,6 +325,8 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 		if t == nil {
 			continue
 		}
+		told[t.ID] = true // answerOffer says how it ends
+		skipStaleAnswer(answers)
 		fmt.Fprintf(stdout, "\n%s wants to send: %s\n", sender(t), strings.Join(t.Items, ", "))
 		if v := t.View(); v.Code != "" {
 			fmt.Fprintf(stdout, "Pairing code %s. Check that the sender shows the same.\n", v.Code)
@@ -368,6 +370,10 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 		case <-ctx.Done():
 			t.Stop()
 			return false
+		case <-t.Context().Done():
+			fmt.Fprintln(stdout)
+			fmt.Fprintln(stdout, offerEnded(t))
+			return true
 		case answer, ok = <-answers:
 		}
 		answer = strings.TrimSpace(answer)
@@ -382,7 +388,7 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 			continue
 		}
 		if !s.Accept(t, destination) {
-			fmt.Fprintln(stdout, "The sender cancelled.")
+			fmt.Fprintln(stdout, offerEnded(t))
 			return true
 		}
 		stop := context.AfterFunc(ctx, t.Stop)
@@ -390,6 +396,24 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 		follow(t, stdout)
 		return ctx.Err() == nil
 	}
+}
+
+// skipStaleAnswer drops a line typed while no offer was asked about, such
+// as just after one ended, so it can't answer the next offer before the
+// person sees it. A closed channel stays closed.
+func skipStaleAnswer(answers <-chan string) {
+	select {
+	case <-answers:
+	default:
+	}
+}
+
+// offerEnded says why an offer ended before it was accepted.
+func offerEnded(t *transfer.Transfer) string {
+	if err := t.View().Error; err != "" {
+		return err + "."
+	}
+	return "The sender cancelled."
 }
 
 // sender names who offers t, and warns when it comes from a device Loka

@@ -228,6 +228,9 @@ var errPairingLimitKnown = errors.New("The receiver refuses this device for a mi
 // errPairingTimeout ends an offer whose sender didn't reveal its nonce.
 var errPairingTimeout = errors.New("The sender didn't finish pairing in time")
 
+// errNoAnswer ends an offer nobody accepted or declined in time.
+var errNoAnswer = errors.New("Nobody answered the offer within a minute")
+
 // errCodeMismatch ends a transfer whose sender revealed a nonce other
 // than the one it committed to.
 var errCodeMismatch = errors.New("The pairing code didn't check out, so the transfer stopped")
@@ -308,13 +311,23 @@ func (s *Server) refuseChanged(t *transfer.Transfer, known trust.Device) {
 // for the person's answer.
 const maxOffers = 16
 
+// answerTimeout is how long an offer waits for the person to answer.
+// Anyone on the network can offer from a browser, so offers left waiting
+// would soon block all others.
+var answerTimeout = time.Minute
+
+// waitForPerson fails t if nobody answers it in time.
+func waitForPerson(t *transfer.Transfer) {
+	time.AfterFunc(answerTimeout, func() { t.Expire(transfer.Waiting, errNoAnswer) })
+}
+
 // pairingTimeout is how long a Loka has to reveal its nonce after the
 // receiver answers its offer. A Loka reveals at once.
 var pairingTimeout = 10 * time.Second
 
 // addOffer adds an incoming offer, unless too many others wait. An offer
 // from a Loka spends a pairing try and fails if its sender doesn't reveal
-// in time.
+// in time. Any offer fails if nobody answers it in time.
 func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
 	s.offerMu.Lock()
 	defer s.offerMu.Unlock()
@@ -338,6 +351,8 @@ func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
 			return
 		}
 		time.AfterFunc(pairingTimeout, func() { t.Expire(transfer.Pairing, errPairingTimeout) })
+	} else {
+		waitForPerson(t)
 	}
 	t.Secret = transfer.RandomToken(24)
 	s.Transfers.Add(t)
@@ -477,11 +492,19 @@ func (s *Server) peerReveal(w http.ResponseWriter, r *http.Request, t *transfer.
 		writeError(w, http.StatusConflict, errDeclined)
 		return
 	}
+	waitForPerson(t)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// statusReply tells a sender where its offer stands, and why it failed.
+type statusReply struct {
+	Status transfer.Status `json:"status"`
+	Error  string          `json:"error,omitempty"`
+}
+
 func (s *Server) peerStatus(w http.ResponseWriter, _ *http.Request, t *transfer.Transfer) {
-	writeJSON(w, http.StatusOK, map[string]transfer.Status{"status": t.Status()})
+	v := t.View()
+	writeJSON(w, http.StatusOK, statusReply{v.Status, v.Error})
 }
 
 func (s *Server) peerCancel(w http.ResponseWriter, _ *http.Request, t *transfer.Transfer) {

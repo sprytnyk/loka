@@ -411,6 +411,7 @@ const serverMessages = {
     [/^The receiver refuses Lokas it hasn't seen before for a minute, as several didn't finish pairing\. Try again later$/, 'Отримувач на хвилину відхиляє Loka, яких раніше не бачив, бо кілька з’єднань не завершилися. Спробуйте пізніше'],
     [/^The receiver refuses this device for a minute, as it started pairing several times and didn't finish\. Try again later$/, 'Отримувач на хвилину відхиляє цей пристрій, бо він кілька разів почав з’єднання й не завершив його. Спробуйте пізніше'],
     [/^(.*) started pairing here several times and didn't finish\. It may be trying to sit between two Lokas, so it waits for a minute$/s, '$1 кілька разів почав з’єднання тут і не завершив його. Можливо, він намагається стати між двома Loka, тож він зачекає хвилину'],
+    [/^Nobody answered the offer within a minute$/, 'Ніхто не відповів на пропозицію протягом хвилини'],
     [/^The sender didn't finish pairing in time$/, 'Відправник не завершив з’єднання вчасно'],
     [/^Phones can't trust Loka at (.*), as its certificate is older than support for this address\. To fix it, delete (.*), restart Loka and install its certificate on phones again$/s, 'Телефони не можуть довіряти Loka за адресою $1, бо її сертифікат старіший за підтримку такої адреси. Щоб це виправити, видаліть $2, перезапустіть Loka й знову встановіть її сертифікат на телефонах'],
     [/^Phones can't trust Loka at (.*), as it isn't a local network address\. They can still open Loka past the browser's warning$/s, 'Телефони не можуть довіряти Loka за адресою $1, бо це не адреса локальної мережі. Вони все одно можуть відкрити Loka, минувши попередження браузера'],
@@ -1117,7 +1118,7 @@ $('phone-send').onclick = e => run(e.target, async () => {
       if (current.cancelled) throw Error(t('cancelled'));
       const answer = await request(`/peer/status/${encodeURIComponent(reply.id)}`, {headers: {'X-Transfer-Secret': reply.secret}});
       if (answer.status === 'accepted') break;
-      if (answer.status !== 'waiting') throw Error(t('declined', {name: hostName}));
+      if (answer.status !== 'waiting') throw Error(answer.error ? fromServer(answer.error) : t('declined', {name: hostName}));
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     if (current.cancelled) throw Error(t('cancelled'));

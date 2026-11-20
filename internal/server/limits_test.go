@@ -198,6 +198,44 @@ func TestRememberedDevicesHaveTheirOwnTries(t *testing.T) {
 	}
 }
 
+// TestUnansweredOffersExpire fills every place for a waiting offer from
+// browsers, which anyone can do, and checks the offers fail once nobody
+// answers them, so others get through again.
+func TestUnansweredOffersExpire(t *testing.T) {
+	defer func(d time.Duration) { answerTimeout = d }(answerTimeout)
+	answerTimeout = 100 * time.Millisecond
+	receiver, base := startServer(t)
+	o := offer{Items: []string{"f"}, Size: 1}
+	for i := range maxOffers {
+		if err := call(t.Context(), browser(receiver), http.MethodPost, secure(base)+"/peer/offer", "", o, nil); err != nil {
+			t.Fatalf("offer %d: %v", i, err)
+		}
+	}
+	for _, tr := range receiver.Transfers.All() {
+		if v := waitForEnd(t, tr); v.Status != transfer.Failed || v.Error != errNoAnswer.Error() {
+			t.Fatalf("offer ended %s, %q", v.Status, v.Error)
+		}
+	}
+	if err := call(t.Context(), browser(receiver), http.MethodPost, secure(base)+"/peer/offer", "", o, nil); err != nil {
+		t.Fatalf("an offer after the others expired got %v", err)
+	}
+}
+
+// TestSenderLearnsNobodyAnswered sends to a Loka where nobody answers, and
+// checks the sender says so rather than that the offer was declined.
+func TestSenderLearnsNobodyAnswered(t *testing.T) {
+	defer func(d time.Duration) { answerTimeout = d }(answerTimeout)
+	answerTimeout = 100 * time.Millisecond
+	receiver, host, port, _ := startRecorded(t)
+	out := sendFrom(t, openTrust(t), []string{oneFile(t)}, host, port)
+	if v := waitForEnd(t, out); v.Status != transfer.Failed || v.Error != errNoAnswer.Error() {
+		t.Fatalf("the sender ended %s, %q", v.Status, v.Error)
+	}
+	if v := waitForEnd(t, waitForIncoming(t, receiver)); v.Error != errNoAnswer.Error() {
+		t.Fatalf("the receiver ended %s, %q", v.Status, v.Error)
+	}
+}
+
 // used is how many tries the budget at key has spent, for the tests.
 func (l *pairingLimits) used(key string) int {
 	l.mu.Lock()

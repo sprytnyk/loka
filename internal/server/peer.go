@@ -150,16 +150,16 @@ func waitForAnswer(ctx context.Context, client *http.Client, url, secret string)
 	ticker := time.NewTicker(pollEvery)
 	defer ticker.Stop()
 	for {
-		var reply struct {
-			Status transfer.Status `json:"status"`
-		}
+		var reply statusReply
 		if err := call(ctx, client, http.MethodGet, url, secret, nil, &reply); err != nil {
 			return err
 		}
-		switch reply.Status {
-		case transfer.Accepted:
+		switch {
+		case reply.Status == transfer.Accepted:
 			return nil
-		case transfer.Waiting:
+		case reply.Status == transfer.Waiting:
+		case reply.Error != "":
+			return errors.New(truncate(reply.Error, 255))
 		default:
 			return errDeclined
 		}
