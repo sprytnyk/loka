@@ -131,7 +131,8 @@ terminal. Set `NO_COLOR=1` to turn that off.
 | Download links | Yes |
 
 The page on your own computer opens at `http://127.0.0.1`, which never leaves
-it. The **?** button on the page explains the rest.
+it. The **?** button on the page explains the rest. [PROTOCOL.md](PROTOCOL.md)
+describes how devices talk, step by step.
 
 Each Loka makes a certificate on its first run and keeps it in your settings
 folder (`~/.config/loka` on Linux, `~/Library/Application Support/loka` on
