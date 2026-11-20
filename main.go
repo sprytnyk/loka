@@ -87,7 +87,7 @@ func parse(args []string, stdout, stderr io.Writer) (options, int) {
 	var o options
 	fs := flag.NewFlagSet("loka", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // help and errors are printed below
-	fs.StringVar(&o.to, "to", "", "receiver address for send")
+	fs.StringVar(&o.to, "to", "", "address of the device to send to")
 	fs.StringVar(&o.address, "address", "", "local address to put in a share link (default: every local address)")
 	fs.IntVar(&o.port, "port", network.DefaultPort, "port to listen on, 0 for any free port")
 	fs.IntVar(&o.peerPort, "peer-port", network.DefaultPort, "receiver port for send")
