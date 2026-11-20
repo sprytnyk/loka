@@ -63,10 +63,15 @@ trusts its new certificate next time. The first time, there is nothing
 to compare yet, which is what the pairing code below is for.
 
 The certificate authority may only vouch for local addresses: `10/8`,
-`172.16/12`, `192.168/16`, `169.254/16`, `127/8`, `fc00::/7`, `fe80::/10`
-and `::1`. Browsers reject anything else it signs, so someone who copied
-it still couldn't pose as a web site. For each address a browser
-connects to, Loka makes a certificate that lasts 397 days.
+`172.16/12`, `192.168/16`, `100.64/10`, `169.254/16`, `127/8`, `fc00::/7`,
+`fe80::/10` and `::1`. Browsers reject anything else it signs, so someone who
+copied it still couldn't pose as a web site. An authority keeps the ranges it
+was made with. Carrier NAT and Tailscale use `100.64/10`, which Loka added
+later, so an older authority has to be made again to cover it. For each of
+its addresses where phones can't trust it, Loka shows a warning, and the
+phone's page at that address doesn't offer the certificate. For each
+address a browser connects to, Loka makes a certificate that lasts 397
+days.
 
 ## Sending
 

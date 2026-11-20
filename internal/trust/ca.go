@@ -7,16 +7,20 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
+	"fmt"
 	"net"
 	"net/netip"
 	"os"
+	"slices"
 	"time"
 )
 
 // localRanges are the addresses the authority may vouch for: private,
-// link-local and loopback ones, which no public web site uses.
+// shared (carrier NAT and VPNs such as Tailscale), link-local and loopback
+// ones, which no public web site uses. An authority keeps the ranges it was
+// made with.
 var localRanges = []string{
-	"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "127.0.0.0/8",
+	"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "169.254.0.0/16", "127.0.0.0/8",
 	"fc00::/7", "fe80::/10", "::1/128",
 }
 
@@ -94,6 +98,38 @@ func (s *Store) BrowserCertificate(addr netip.Addr) (*tls.Certificate, error) {
 	c := &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: s.leafKey, Leaf: leaf}
 	s.leaves[addr] = c
 	return c, nil
+}
+
+// Vouches reports whether this device's authority may vouch for addr, so
+// that a phone which installed it trusts this device there.
+func (s *Store) Vouches(addr netip.Addr) bool {
+	return slices.ContainsFunc(s.ca.Leaf.PermittedIPRanges, func(n *net.IPNet) bool { return n.Contains(addr.Unmap().AsSlice()) })
+}
+
+// AddressProblem says why a phone can't trust this device at addr, or
+// returns nil when it can.
+func (s *Store) AddressProblem(addr netip.Addr) error {
+	if s.Vouches(addr) {
+		return nil
+	}
+	if slices.ContainsFunc(localRanges, func(r string) bool { return netip.MustParsePrefix(r).Contains(addr.Unmap()) }) {
+		return fmt.Errorf("Phones can't trust Loka at %s, as its certificate is older than support for this address. To fix it, delete %s, restart Loka and install its certificate on phones again", addr, s.caPath)
+	}
+	return fmt.Errorf("Phones can't trust Loka at %s, as it isn't a local network address. They can still open Loka past the browser's warning", addr)
+}
+
+// AddressProblems says, for each address where a phone can't trust this
+// device, why. It leaves out what isn't an IP address.
+func (s *Store) AddressProblems(addresses []string) []string {
+	var problems []string
+	for _, a := range addresses {
+		if addr, err := netip.ParseAddr(a); err == nil {
+			if err := s.AddressProblem(addr); err != nil {
+				problems = append(problems, err.Error())
+			}
+		}
+	}
+	return problems
 }
 
 // CA returns this device's authority certificate, for a phone to install.

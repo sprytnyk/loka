@@ -61,6 +61,7 @@ type Store struct {
 
 	mu      sync.Mutex // serialises changes to the devices file
 	devices string     // the devices file
+	caPath  string     // the authority's file
 }
 
 const (
@@ -94,6 +95,7 @@ func Open(dir string) (*Store, error) {
 		leafKey: leafKey,
 		leaves:  map[netip.Addr]*tls.Certificate{},
 		devices: filepath.Join(dir, devicesFile),
+		caPath:  filepath.Join(dir, caFile),
 	}, nil
 }
 

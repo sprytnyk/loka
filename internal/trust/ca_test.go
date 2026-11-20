@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -204,5 +205,40 @@ func TestLokasAndBrowsersGetTheirOwnCertificates(t *testing.T) {
 
 	if _, err := dial(&tls.Config{RootCAs: pool(client)}); err == nil {
 		t.Fatal("a browser trusting another authority connected")
+	}
+}
+
+// TestVouchesAgreesWithVerifying checks that Loka says a phone can trust
+// it at an address exactly when the browser certificate there verifies.
+func TestVouchesAgreesWithVerifying(t *testing.T) {
+	s := open(t, t.TempDir())
+	for _, addr := range []string{"192.168.1.20", "100.64.1.5", "100.127.255.1", "100.128.0.1", "203.0.113.5", "8.8.8.8", "fe80::1", "2001:db8::1"} {
+		ip := netip.MustParseAddr(addr)
+		c, err := s.BrowserCertificate(ip)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, verr := c.Leaf.Verify(x509.VerifyOptions{Roots: pool(s), DNSName: addr})
+		if s.Vouches(ip) != (verr == nil) || (s.AddressProblem(ip) == nil) != (verr == nil) {
+			t.Errorf("%s: vouches %v, problem %v, but verifying gave %v", addr, s.Vouches(ip), s.AddressProblem(ip), verr)
+		}
+	}
+}
+
+// TestOlderAuthorityNeedsRemaking opens an authority made before shared
+// addresses were allowed, and checks the problem says how to fix it.
+func TestOlderAuthorityNeedsRemaking(t *testing.T) {
+	dir := t.TempDir()
+	saved := localRanges
+	localRanges = slices.DeleteFunc(slices.Clone(localRanges), func(r string) bool { return r == "100.64.0.0/10" })
+	open(t, dir)
+	localRanges = saved
+	s := open(t, dir)
+	err := s.AddressProblem(netip.MustParseAddr("100.64.1.5"))
+	if err == nil || !strings.Contains(err.Error(), "older") || !strings.Contains(err.Error(), filepath.Join(dir, caFile)) {
+		t.Fatalf("got %v", err)
+	}
+	if err := s.AddressProblem(netip.MustParseAddr("203.0.113.5")); err == nil || !strings.Contains(err.Error(), "isn't a local network address") {
+		t.Fatalf("got %v", err)
 	}
 }

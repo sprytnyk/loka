@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sprytnyk/loka/internal/desktop"
@@ -39,12 +42,21 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		key, mode = s.key, "desktop"
 	}
 	name, _ := json.Marshal(s.name) // escapes <, > and &, so it is safe in a script
+	// Whether installing the authority helps at the address this browser
+	// reached.
+	vouches := true
+	if a, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
+		if ap, err := netip.ParseAddrPort(a.String()); err == nil {
+			vouches = s.Trust.Vouches(ap.Addr())
+		}
+	}
 	body := strings.NewReplacer(
 		"__LOKA_KEY__", key,
 		"__LOKA_MODE__", mode,
 		"__LOKA_NAME__", string(name),
 		"__LOKA_VERSION__", label,
 		"__LOKA_CA_FINGERPRINT__", s.Trust.CAFingerprint(),
+		"__LOKA_VOUCHES__", strconv.FormatBool(vouches),
 	).Replace(page)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

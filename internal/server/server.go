@@ -338,10 +338,12 @@ type state struct {
 	Addresses      []string        `json:"addresses"`
 	Destination    string          `json:"destination"`
 	DiscoveryError string          `json:"discovery_error"`
+	Warnings       []string        `json:"warnings,omitempty"`
 }
 
 func (s *Server) state(w http.ResponseWriter, _ *http.Request) {
 	st := state{Name: s.name, Peers: []network.Peer{}, Transfers: []transfer.View{}, Addresses: network.LocalAddresses()}
+	st.Warnings = append(st.Warnings, s.Trust.AddressProblems(st.Addresses)...)
 	if s.Devices != nil {
 		peers, problem := s.Devices.List()
 		st.DiscoveryError = problem

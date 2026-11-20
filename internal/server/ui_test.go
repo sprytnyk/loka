@@ -2,10 +2,13 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -225,6 +228,28 @@ func TestShareOnlyServesLinks(t *testing.T) {
 		resp.Body.Close()
 		if !strings.Contains(string(body), "const mode = 'check'") {
 			t.Errorf("%s gave another view", url)
+		}
+	}
+}
+
+// TestCheckPageSaysWhenTheCertificateCantHelp serves the check page at an
+// address Loka's authority can't vouch for, and checks it says so.
+func TestCheckPageSaysWhenTheCertificateCantHelp(t *testing.T) {
+	s := New("desktop", "test")
+	s.Trust = openTrust(t)
+	for _, c := range []struct {
+		local string
+		want  string
+	}{{"192.168.1.20:45873", "const vouches = true;"}, {"203.0.113.5:45873", "const vouches = false;"}} {
+		r := httptest.NewRequest(http.MethodGet, "http://"+c.local+"/", nil)
+		r.RemoteAddr = "192.168.1.30:50000"
+		local, _ := net.ResolveTCPAddr("tcp", c.local)
+		r = r.WithContext(context.WithValue(r.Context(), http.LocalAddrContextKey, local))
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		body := w.Body.String()
+		if !strings.Contains(body, c.want) || strings.Contains(body, "__LOKA_") {
+			t.Errorf("%s: page lacks %q or keeps a placeholder", c.local, c.want)
 		}
 	}
 }

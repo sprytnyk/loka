@@ -282,7 +282,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d (Ctrl+C to stop)\n", version, port)
 	if addresses := network.LocalAddresses(); len(addresses) > 0 {
 		fmt.Fprintln(stdout, "To send from a phone, open this in its browser:")
-		printLinks(stdout, addresses, port, "/")
+		printLinks(stdout, s.Trust, addresses, port, "/")
 	}
 
 	answers := make(chan string)
@@ -458,7 +458,7 @@ func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
 	s.OnlyLinks = true
 	s.Transfers.Add(link)
 	fmt.Fprintln(stdout, "Open this on a phone or in a browser:")
-	printLinks(stdout, addresses, port, "/#d="+link.Token)
+	printLinks(stdout, store, addresses, port, "/#d="+link.Token)
 	fmt.Fprintln(stdout, "With curl:")
 	for _, address := range addresses {
 		fmt.Fprintf(stdout, "curl -kOJ %s\n", hostURL("https", address, port, "/download/"+link.Token))
@@ -474,8 +474,9 @@ func hostURL(scheme, address string, port int, path string) string {
 // printLinks prints path at each address, each under its QR code when
 // stdout is a terminal, so a phone can open it by camera. The links are
 // plain HTTP: the page there moves the browser to HTTPS, or offers to
-// install Loka's certificate first.
-func printLinks(stdout io.Writer, addresses []string, port int, path string) {
+// install Loka's certificate first. It warns about the addresses where
+// installing the certificate won't help.
+func printLinks(stdout io.Writer, store *trust.Store, addresses []string, port int, path string) {
 	f, ok := stdout.(*os.File)
 	codes := ok && isTerminal(f)
 	for _, address := range addresses {
@@ -484,5 +485,8 @@ func printLinks(stdout io.Writer, addresses []string, port int, path string) {
 			fmt.Fprint(stdout, code.Text())
 		}
 		fmt.Fprintln(stdout, link)
+	}
+	for _, problem := range store.AddressProblems(addresses) {
+		fmt.Fprintln(stdout, problem)
 	}
 }

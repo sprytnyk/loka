@@ -137,6 +137,7 @@ const key = '__LOKA_KEY__';
 const mode = '__LOKA_MODE__';
 const hostName = __LOKA_NAME__; // the computer this page belongs to
 const caFingerprint = '__LOKA_CA_FINGERPRINT__'; // SHA-256 of this computer's authority, in hex
+const vouches = __LOKA_VOUCHES__; // whether installing the authority helps at this address
 const activeTransferStatuses = ['pairing', 'waiting', 'accepted', 'receiving', 'sending'];
 let selected = [];
 let incoming = null; // the offer the dialog shows
@@ -145,6 +146,7 @@ let renderedPeers;
 let deviceName = '';
 let actionMessage = '';
 let connectionMessage = '';
+let warningMessage = ''; // from the server, about this device
 
 const $ = id => document.getElementById(id);
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -261,6 +263,7 @@ const messages = {
     downloadStarting: 'The download should start now.',
     nothingShared: 'Open the link you were given, or scan its code.',
     untrusted: 'This browser doesn’t trust {name} yet. Install its certificate once, and Loka opens without a warning from then on.',
+    cantTrust: 'Browsers can’t trust {name} at this address, since Loka’s certificate only vouches for local network addresses. Installing it won’t help here.',
     installCertificate: 'Install certificate',
     tryAgain: 'Try again',
     android: 'Android',
@@ -368,6 +371,7 @@ const messages = {
     downloadStarting: 'Завантаження має от-от початися.',
     nothingShared: 'Відкрийте посилання, яке вам надіслали, або відскануйте його код.',
     untrusted: 'Цей браузер ще не довіряє {name}. Установіть його сертифікат один раз, і далі Loka відкриватиметься без попереджень.',
+    cantTrust: 'Браузери не можуть довіряти {name} за цією адресою, бо сертифікат Loka ручається лише за адреси локальних мереж. Установлення сертифіката тут не допоможе.',
     installCertificate: 'Установити сертифікат',
     tryAgain: 'Спробувати ще раз',
     android: 'Android',
@@ -407,6 +411,8 @@ const serverMessages = {
     [/^Could not connect securely to the other device\. Check that it runs the latest Loka$/, 'Не вдалося встановити захищене з’єднання з іншим пристроєм. Перевірте, чи на ньому остання версія Loka'],
     [/^The other device's certificate changed during the transfer$/, 'Сертифікат іншого пристрою змінився під час передавання'],
     [/^(.*) showed a different certificate than before, so another device may be posing as it\. To trust it anyway, forget it and try again$/s, '$1 показав інший сертифікат, ніж раніше, тож інший пристрій може видавати себе за нього. Щоб однаково довіряти йому, забудьте його й спробуйте знову'],
+    [/^Phones can't trust Loka at (.*), as its certificate is older than support for this address\. To fix it, delete (.*), restart Loka and install its certificate on phones again$/s, 'Телефони не можуть довіряти Loka за адресою $1, бо її сертифікат старіший за підтримку такої адреси. Щоб це виправити, видаліть $2, перезапустіть Loka й знову встановіть її сертифікат на телефонах'],
+    [/^Phones can't trust Loka at (.*), as it isn't a local network address\. They can still open Loka past the browser's warning$/s, 'Телефони не можуть довіряти Loka за адресою $1, бо це не адреса локальної мережі. Вони все одно можуть відкрити Loka, минувши попередження браузера'],
     [/^Another device answered at this address, not the one you picked\. It may be posing as it$/, 'За цією адресою відповів інший пристрій, а не той, який ви вибрали. Можливо, він видає себе за нього'],
     [/^The pairing code didn't check out, so the transfer stopped$/, 'Код з’єднання не збігся, тож передавання зупинено'],
     [/^The receiver runs an older Loka\. Update Loka on it$/, 'На отримувачі старіша версія Loka. Оновіть Loka на ньому'],
@@ -457,7 +463,7 @@ function renderDeviceName() {
   if (mode === 'phone') $('heading').textContent = t('phoneHeading', {name: hostName});
   if (mode === 'check') {
     $('heading').textContent = hostName;
-    $('check-untrusted-text').textContent = t('untrusted', {name: hostName});
+    $('check-untrusted-text').textContent = t(vouches ? 'untrusted' : 'cantTrust', {name: hostName});
     $('check-continue-text').textContent = t('continueText', {name: hostName});
     $('check-status').textContent = checkStatus && t(checkStatus, {name: hostName});
   }
@@ -519,7 +525,7 @@ darkScheme.addEventListener('change', e => {
 
 function renderMessage() {
   const notice = $('message');
-  const text = actionMessage || connectionMessage;
+  const text = actionMessage || connectionMessage || warningMessage;
   if (notice.textContent !== text) notice.textContent = text;
 }
 function message(text) {
@@ -944,6 +950,8 @@ async function refresh() {
   forgetSentItems(data.transfers);
   deviceName = data.name;
   addresses = data.addresses;
+  warningMessage = (data.warnings || []).map(fromServer).join(' ');
+  renderMessage();
   renderDeviceName();
   renderPeers(data);
   renderIncoming(data);
@@ -1184,6 +1192,9 @@ async function checkConnection() {
   }
   showCheckStatus('');
   $('check-untrusted').hidden = false;
+}
+if (!vouches) {
+  for (const el of document.querySelectorAll('#check-install, #check-untrusted details')) el.hidden = true;
 }
 $('check-again').onclick = checkConnection;
 $('check-continue').href = `https://${location.host}${securePath}`;
