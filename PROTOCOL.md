@@ -46,7 +46,7 @@ link while it runs.
 ## Who is who
 
 Each Loka makes two certificates on its first run and keeps them in its
-settings folder (`~/.config/loka` on Linux):
+settings directory, `~/.config/sprytnyk.dev/Loka` on Linux:
 
 | File | What | Lasts |
 | --- | --- | --- |

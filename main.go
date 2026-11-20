@@ -168,13 +168,14 @@ func listenOn(port int) (net.Listener, int, error) {
 	return ln, ln.Addr().(*net.TCPAddr).Port, nil
 }
 
-// configDir holds this device's identity and the devices it remembers.
+// configDir holds this device's identity and the devices it remembers,
+// beside the settings of other sprytnyk.dev apps.
 var configDir = func() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("could not find the settings directory: %w", err)
 	}
-	return filepath.Join(dir, "loka"), nil
+	return filepath.Join(dir, "sprytnyk.dev", "Loka"), nil
 }
 
 // openTrust reads this device's identity, making one the first time.

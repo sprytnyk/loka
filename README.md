@@ -142,8 +142,9 @@ it. The **?** button on the page explains the rest. [PROTOCOL.md](PROTOCOL.md)
 describes how devices talk, step by step.
 
 Each Loka makes a certificate on its first run and keeps it in your settings
-folder (`~/.config/loka` on Linux, `~/Library/Application Support/loka` on
-macOS, `%AppData%\loka` on Windows). Loka trusts the first transfer with
+directory: `~/.config/sprytnyk.dev/Loka` on Linux,
+`~/Library/Application Support/sprytnyk.dev/Loka` on macOS and
+`%AppData%\sprytnyk.dev\Loka` on Windows. Loka trusts the first transfer with
 another device as it is, and marks that device as new on both sides.
 
 Both devices show a six-digit pairing code, made from both certificates and a
