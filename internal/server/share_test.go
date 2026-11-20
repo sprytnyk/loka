@@ -119,7 +119,7 @@ func TestLinkServesASingleFileAsItself(t *testing.T) {
 	if string(body) != "hello world" {
 		t.Fatalf("got %q", body)
 	}
-	if got := resp.Header.Get("Content-Disposition"); got != "attachment; filename*=UTF-8''%D0%97%D0%B2%D1%96%D1%82%20100%25.txt" {
+	if got := resp.Header.Get("Content-Disposition"); got != `attachment; filename="____ 100_.txt"; filename*=UTF-8''%D0%97%D0%B2%D1%96%D1%82%20100%25.txt` {
 		t.Fatalf("Content-Disposition %q", got)
 	}
 	resp = get(t, base+"/download/"+link.Token, "Range", "bytes=6-")

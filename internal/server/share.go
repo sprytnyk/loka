@@ -135,15 +135,23 @@ func (s stoppableFile) Seek(offset int64, whence int) (int64, error) {
 }
 
 // attachment returns a Content-Disposition value that downloads as name,
-// encoded so any name survives (RFC 6266 and RFC 8187).
+// encoded so any name survives (RFC 6266 and RFC 8187). Browsers use the
+// encoded name. Programs that only read the plain one, such as curl -J,
+// get it with anything but plain ASCII as _.
 func attachment(name string) string {
-	var b strings.Builder
+	var plain, encoded strings.Builder
+	for _, r := range name {
+		if r < ' ' || r > '~' || r == '"' || r == '\\' || r == '%' {
+			r = '_'
+		}
+		plain.WriteRune(r)
+	}
 	for _, c := range []byte(name) {
 		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' || strings.IndexByte("!#$&+-.^_`|~", c) >= 0 {
-			b.WriteByte(c)
+			encoded.WriteByte(c)
 		} else {
-			fmt.Fprintf(&b, "%%%02X", c)
+			fmt.Fprintf(&encoded, "%%%02X", c)
 		}
 	}
-	return "attachment; filename*=UTF-8''" + b.String()
+	return `attachment; filename="` + plain.String() + `"; filename*=UTF-8''` + encoded.String()
 }
