@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -174,16 +175,29 @@ func publish(staged map[string]string, roots []string, destination string) error
 	return nil
 }
 
+// ErrInterrupted means the connection ended in the middle of a transfer.
+var ErrInterrupted = errors.New("The connection was interrupted")
+
 // transferError keeps a cancelled context as the reason, since reads after a
-// cancel fail in ways that hide it.
+// cancel fail in ways that hide it. A stream cut short or a connection
+// reset reads as interrupted, rather than as socket details.
 func transferError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if errors.Is(err, io.ErrUnexpectedEOF) {
-		return errors.New("The connection was interrupted")
+	if Interrupted(err) {
+		return ErrInterrupted
 	}
 	return err
+}
+
+// Interrupted reports whether err comes from a connection that broke
+// after it was made: cut short, reset, or closed.
+func Interrupted(err error) bool {
+	if opErr, ok := errors.AsType[*net.OpError](err); ok && opErr.Op != "dial" {
+		return true
+	}
+	return errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, net.ErrClosed)
 }
 
 func writeFile(ctx context.Context, target string, r io.Reader, done *atomic.Int64) error {

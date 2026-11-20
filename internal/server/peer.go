@@ -192,6 +192,11 @@ func upload(ctx context.Context, client *http.Client, url, secret string, entrie
 		if werr := <-writeErr; werr != nil && !errors.Is(werr, io.ErrClosedPipe) {
 			return werr // a local problem explains the failure better
 		}
+		// The receiver was reached for the offer, so a broken connection
+		// now means it dropped, unless it can't be reached again.
+		if transfer.Interrupted(err) && ctx.Err() == nil {
+			return transfer.ErrInterrupted
+		}
 		return connectionError(ctx, err)
 	}
 	defer resp.Body.Close()
