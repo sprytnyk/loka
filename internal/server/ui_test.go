@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/sprytnyk/loka/internal/desktop"
+	"github.com/sprytnyk/loka/internal/transfer"
 )
 
 func TestPageCarriesKeyAndVersion(t *testing.T) {
@@ -34,14 +34,70 @@ func TestPageCarriesKeyAndVersion(t *testing.T) {
 	if !strings.Contains(page, "const mode = 'desktop'") {
 		t.Error("this device got the phone view")
 	}
-	// Another site, or another device, gets the upload view without the key.
-	req, _ := http.NewRequest(http.MethodGet, base+"/", nil)
-	req.Host = "evil.example"
-	resp, _ = http.DefaultClient.Do(req)
-	body, _ = io.ReadAll(resp.Body)
-	page = string(body)
-	if resp.StatusCode != http.StatusOK || strings.Contains(page, s.key) || !strings.Contains(page, "const mode = 'phone'") {
-		t.Fatalf("another site got %d, key shown %v", resp.StatusCode, strings.Contains(page, s.key))
+	// Another site or device gets, without the key, the view that moves
+	// it to HTTPS, and over HTTPS the upload view.
+	for _, c := range []struct {
+		client *http.Client
+		url    string
+		mode   string
+	}{
+		{http.DefaultClient, base + "/", "check"},
+		{browser(s), secure(base) + "/", "phone"},
+	} {
+		req, _ := http.NewRequest(http.MethodGet, c.url, nil)
+		req.Host = "evil.example"
+		resp, err := c.client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ = io.ReadAll(resp.Body)
+		page = string(body)
+		if resp.StatusCode != http.StatusOK || strings.Contains(page, s.key) || !strings.Contains(page, "const mode = '"+c.mode+"'") {
+			t.Fatalf("%s: another site got %d, key shown %v", c.url, resp.StatusCode, strings.Contains(page, s.key))
+		}
+	}
+}
+
+// TestPlainHTTPGivesOtherDevicesOnlyTheWayToHTTPS checks that over plain
+// HTTP another device gets the page that moves it to HTTPS and the
+// certificate authority, and nothing else.
+func TestPlainHTTPGivesOtherDevicesOnlyTheWayToHTTPS(t *testing.T) {
+	s, base := startServer(t)
+	link, err := transfer.NewLink([]string{t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Transfers.Add(link)
+	fetch := func(path string) (*http.Response, []byte) {
+		req, _ := http.NewRequest(http.MethodGet, base+path, nil)
+		req.Host = "192.0.2.10:45873"
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return resp, body
+	}
+	if resp, body := fetch("/"); resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "const mode = 'check'") {
+		t.Fatalf("the page answered %d", resp.StatusCode)
+	}
+	resp, body := fetch(CAPath)
+	if resp.StatusCode != http.StatusOK || !bytes.Equal(body, s.Trust.CA()) || resp.Header.Get("Content-Type") != "application/x-x509-ca-cert" {
+		t.Fatalf("the certificate answered %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	for _, path := range []string{"/download/" + link.Token, "/api/state", "/peer/status/x"} {
+		if resp, _ := fetch(path); resp.StatusCode != http.StatusNotFound {
+			t.Errorf("%s answered %d", path, resp.StatusCode)
+		}
+	}
+	resp, err = browser(s).Get(secure(base) + "/download/" + link.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("over HTTPS the link answered %d", resp.StatusCode)
 	}
 }
 
@@ -145,19 +201,30 @@ func TestQRCodeForALink(t *testing.T) {
 	}
 }
 
-// TestWithoutAnIdentityOnlyLinksAreServed checks a server like loka share's,
-// which can't accept transfers, offers neither the page nor the phone view.
-func TestWithoutAnIdentityOnlyLinksAreServed(t *testing.T) {
-	ts := httptest.NewServer(New("share", "test").Handler())
-	t.Cleanup(ts.Close)
-	for _, path := range []string{"/", "/peer/offer"} {
-		resp, err := http.Post(ts.URL+path, "application/json", strings.NewReader("{}"))
+// TestShareOnlyServesLinks checks a server like loka share's, which can't
+// accept transfers, offers neither the page nor the phone view.
+func TestShareOnlyServesLinks(t *testing.T) {
+	s := New("share", "test")
+	s.Trust = openTrust(t)
+	s.OnlyLinks = true
+	base := serve(t, s, nil)
+	for _, url := range []string{base, secure(base)} {
+		resp, err := browser(s).Post(url+"/peer/offer", "application/json", strings.NewReader("{}"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusMethodNotAllowed {
-			t.Errorf("%s answered %d", path, resp.StatusCode)
+			t.Errorf("%s answered %d", url, resp.StatusCode)
+		}
+		resp, err = browser(s).Get(url + "/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if !strings.Contains(string(body), "const mode = 'check'") {
+			t.Errorf("%s gave another view", url)
 		}
 	}
 }

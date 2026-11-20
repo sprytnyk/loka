@@ -3,10 +3,13 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -58,6 +61,20 @@ func serve(t *testing.T, s *Server, wrap func(http.Handler) http.Handler) string
 		<-served
 	})
 	return "http://" + ln.Addr().String()
+}
+
+// browser is an HTTP client that trusts s's certificate authority, as a
+// phone that installed it does. It shows no certificate of its own.
+func browser(s *Server) *http.Client {
+	ca, _ := x509.ParseCertificate(s.Trust.CA())
+	roots := x509.NewCertPool()
+	roots.AddCert(ca)
+	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots}}}
+}
+
+// secure turns a server's plain HTTP URL into its HTTPS one.
+func secure(base string) string {
+	return "https" + strings.TrimPrefix(base, "http")
 }
 
 // api calls the page API of the server at url and decodes the reply into

@@ -207,10 +207,11 @@ func TestSenderFailureEndsTheOffer(t *testing.T) {
 func TestPeerRoutesNeedTheSecret(t *testing.T) {
 	receiver, base := startServer(t)
 	var reply offerReply
-	if err := call(t.Context(), http.DefaultClient, http.MethodPost, base+"/peer/offer", "", offer{Name: "x", Items: []string{"f"}, Size: 1}, &reply); err != nil {
+	client, base := browser(receiver), secure(base)
+	if err := call(t.Context(), client, http.MethodPost, base+"/peer/offer", "", offer{Name: "x", Items: []string{"f"}, Size: 1}, &reply); err != nil {
 		t.Fatal(err)
 	}
-	if err := call(t.Context(), http.DefaultClient, http.MethodPost, base+"/peer/cancel/"+reply.ID, "wrong", nil, nil); err == nil {
+	if err := call(t.Context(), client, http.MethodPost, base+"/peer/cancel/"+reply.ID, "wrong", nil, nil); err == nil {
 		t.Fatal("cancel worked without the secret")
 	}
 	if got := receiver.Transfers.Get(reply.ID).Status(); got != transfer.Waiting {
@@ -236,7 +237,7 @@ func TestDestinationKeepsSpaces(t *testing.T) {
 func TestOffersMustNameItemsAndASize(t *testing.T) {
 	receiver, receiverURL := startServer(t)
 	for _, o := range []offer{{Name: "x", Size: 1}, {Name: "x", Items: []string{"f"}, Size: -1}} {
-		if err := call(t.Context(), http.DefaultClient, http.MethodPost, receiverURL+"/peer/offer", "", o, nil); err == nil {
+		if err := call(t.Context(), browser(receiver), http.MethodPost, secure(receiverURL)+"/peer/offer", "", o, nil); err == nil {
 			t.Errorf("accepted %+v", o)
 		}
 	}
@@ -264,7 +265,7 @@ func TestPageAPIIsOnlyForThisDevicesPage(t *testing.T) {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
-		if resp.StatusCode != http.StatusForbidden {
+		if resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusNotFound {
 			t.Errorf("%s: answered %d", c.name, resp.StatusCode)
 		}
 	}
@@ -315,18 +316,19 @@ func TestReceiverCancelDuringUpload(t *testing.T) {
 	data := stream.Bytes()
 
 	var reply offerReply
-	if err := call(t.Context(), http.DefaultClient, http.MethodPost, base+"/peer/offer", "", offer{Name: "s", Items: []string{"file"}, Size: size}, &reply); err != nil {
+	client := browser(receiver)
+	if err := call(t.Context(), client, http.MethodPost, secure(base)+"/peer/offer", "", offer{Name: "s", Items: []string{"file"}, Size: size}, &reply); err != nil {
 		t.Fatal(err)
 	}
 	api(t, receiver, base, "/api/accept", map[string]string{"id": reply.ID, "destination": destination}, nil)
 
 	pr, pw := io.Pipe()
 	go pw.Write(data[:1024]) // the header and part of the file, then nothing
-	req, _ := http.NewRequest(http.MethodPost, base+"/peer/upload/"+reply.ID, pr)
+	req, _ := http.NewRequest(http.MethodPost, secure(base)+"/peer/upload/"+reply.ID, pr)
 	req.Header.Set("X-Transfer-Secret", reply.Secret)
 	answer := make(chan error, 1)
 	go func() {
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		if err == nil {
 			err = replyError(resp)
 			resp.Body.Close()

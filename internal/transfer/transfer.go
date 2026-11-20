@@ -53,8 +53,8 @@ type Transfer struct {
 	Size      int64    // bytes of file content
 
 	Secret string // proves a remote sender owns an incoming transfer
-	// Who sent an incoming transfer: a browser over plain HTTP, or a Loka
-	// over TLS with this ID and certificate fingerprint.
+	// Who sent an incoming transfer: a browser, which shows no certificate,
+	// or a Loka with this ID and certificate fingerprint.
 	Browser     bool
 	DeviceID    string
 	Fingerprint string

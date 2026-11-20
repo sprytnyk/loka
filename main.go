@@ -268,7 +268,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 	go func() { served <- s.Serve(ctx, ln) }()
 	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d (Ctrl+C to stop)\n", version, port)
 	if addresses := network.LocalAddresses(); len(addresses) > 0 {
-		fmt.Fprintln(stdout, "To send from a phone, open this in its browser (not encrypted):")
+		fmt.Fprintln(stdout, "To send from a phone, open this in its browser:")
 		printLinks(stdout, addresses, port, "/")
 	}
 
@@ -344,12 +344,12 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 	}
 }
 
-// sender names who offers t, and warns when it isn't encrypted or comes
-// from a device Loka hasn't seen before.
+// sender names who offers t, and warns when it comes from a device Loka
+// hasn't seen before.
 func sender(t *transfer.Transfer) string {
 	switch {
 	case t.Browser:
-		return "A browser at " + t.Peer + " (not encrypted)"
+		return "A browser at " + t.Peer
 	case t.NewDevice:
 		return t.Peer + " (new device, not seen before)"
 	}
@@ -428,23 +428,41 @@ func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	store, err := openTrust()
+	if err != nil {
+		return err
+	}
 	ln, port, err := listenOn(o.port)
 	if err != nil {
 		return err
 	}
 	s := server.New(hostname(), version)
+	s.Trust = store
+	s.OnlyLinks = true
 	s.Transfers.Add(link)
-	printLinks(stdout, addresses, port, "/download/"+link.Token)
+	fmt.Fprintln(stdout, "Open this on a phone or in a browser:")
+	printLinks(stdout, addresses, port, "/#d="+link.Token)
+	fmt.Fprintln(stdout, "With curl:")
+	for _, address := range addresses {
+		fmt.Fprintf(stdout, "curl -kOJ %s\n", hostURL("https", address, port, "/download/"+link.Token))
+	}
 	return s.Serve(ctx, ln)
 }
 
+// hostURL is the URL of path on this device at address.
+func hostURL(scheme, address string, port int, path string) string {
+	return scheme + "://" + net.JoinHostPort(address, strconv.Itoa(port)) + path
+}
+
 // printLinks prints path at each address, each under its QR code when
-// stdout is a terminal, so a phone can open it by camera.
+// stdout is a terminal, so a phone can open it by camera. The links are
+// plain HTTP: the page there moves the browser to HTTPS, or offers to
+// install Loka's certificate first.
 func printLinks(stdout io.Writer, addresses []string, port int, path string) {
 	f, ok := stdout.(*os.File)
 	codes := ok && isTerminal(f)
 	for _, address := range addresses {
-		link := "http://" + net.JoinHostPort(address, strconv.Itoa(port)) + path
+		link := hostURL("http", address, port, path)
 		if code, err := qr.Encode(link); codes && err == nil {
 			fmt.Fprint(stdout, code.Text())
 		}

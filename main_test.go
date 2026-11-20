@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"net"
 	"net/http"
@@ -185,8 +187,24 @@ func TestShareCommandServesUntilStopped(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "shared.txt")
 	os.WriteFile(file, []byte("hello"), 0o644)
 	out, stop, code := runLoka(t, nil, "share", "--address", "127.0.0.1", "--port", "0", file)
-	link := out.wait(t, `http://127\.0\.0\.1:\d+/download/\S+`)[0]
-	resp := get(t, link)
+	// The browser link keeps its token after #, which browsers never send.
+	m := out.wait(t, `(http://127\.0\.0\.1:\d+)/#d=(\S+)`)
+	base, token := m[1], m[2]
+	curl := out.wait(t, `curl -kOJ (https://127\.0\.0\.1:\d+/download/(\S+))`)
+	if curl[2] != token {
+		t.Fatalf("the curl line has another token: %q", curl[0])
+	}
+	// Another device gets nothing from the link over plain HTTP.
+	req, _ := http.NewRequest(http.MethodGet, base+"/download/"+token, nil)
+	req.Host = "192.0.2.10"
+	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("plain HTTP download answered %v %v", resp, err)
+	}
+	resp, err := browser(t).Get(curl[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
 	if body, _ := io.ReadAll(resp.Body); string(body) != "hello" {
 		t.Fatalf("got %q", body)
 	}
@@ -236,6 +254,20 @@ func TestSendAndReceiveCommands(t *testing.T) {
 	}
 }
 
+// browser is an HTTP client that trusts Loka's certificate authority, as a
+// phone that installed it does.
+func browser(t *testing.T) *http.Client {
+	t.Helper()
+	store, err := openTrust()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, _ := x509.ParseCertificate(store.CA())
+	roots := x509.NewCertPool()
+	roots.AddCert(ca)
+	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots}}}
+}
+
 // TestReceiveStopsAfterAccepting stops loka receive after it accepted an
 // offer whose sender never starts uploading.
 func TestReceiveStopsAfterAccepting(t *testing.T) {
@@ -245,7 +277,7 @@ func TestReceiveStopsAfterAccepting(t *testing.T) {
 	port := received.wait(t, `on port (\d+)`)[1]
 
 	offer := strings.NewReader(`{"name":"stalled","items":["x"],"size":1}`)
-	resp, err := http.Post("http://127.0.0.1:"+port+"/peer/offer", "application/json", offer)
+	resp, err := browser(t).Post("https://127.0.0.1:"+port+"/peer/offer", "application/json", offer)
 	if err != nil {
 		t.Fatal(err)
 	}

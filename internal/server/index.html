@@ -63,9 +63,11 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .footer-note{flex:none;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px;margin:auto 0 0;padding-top:14px;color:var(--muted);font-size:12px}.footer-note p{margin:0}
 dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);border-radius:1.5rem;background:var(--card);color:var(--ink);padding:26px;box-shadow:var(--dialog-shadow)}dialog::backdrop{background:var(--backdrop)}dialog h2{margin:0;color:var(--strong);font-size:20px;letter-spacing:-.03em}dialog p{color:var(--muted);font-size:14px}dialog .row{margin-top:16px}
 [hidden]{display:none!important}
-#phone{display:none}
-[data-mode=phone] .layout,[data-mode=phone] .device-badge{display:none}
-[data-mode=phone] #phone{display:flex;max-width:640px}
+#phone,#check{display:none}
+[data-mode=phone] .layout,[data-mode=phone] .device-badge,[data-mode=check] .layout,[data-mode=check] .device-badge{display:none}
+[data-mode=phone] #phone,[data-mode=check] #check{display:flex;max-width:640px}
+a.button{display:inline-block;text-decoration:none}
+#check ol{margin:8px 0 0;padding-inline-start:20px;color:var(--muted);font-size:13px;line-height:1.5}#check details{margin-top:12px;font-size:14px}#check summary{cursor:pointer;font-weight:650}#check p{font-size:14px}
 .visually-hidden{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
 label.button{display:inline-block}
 #phone-selection{margin:12px 0 0;color:var(--muted);font-size:12px}
@@ -90,6 +92,12 @@ label.button{display:inline-block}
 <p id="phone-selection" role="status">Nothing selected</p><ul id="phone-selected"></ul>
 <div class="row"><button id="phone-send" data-i18n="send">Send</button><button class="secondary" id="phone-cancel" data-i18n="cancel" hidden>Cancel</button></div>
 <p id="phone-status" role="status"></p><progress id="phone-progress" max="100" hidden></progress></section>
+<section class="card" id="check"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><div><h2 data-i18n="checkTitle">Secure connection</h2><p id="check-status" role="status"></p></div></div>
+<div id="check-untrusted" hidden><p id="check-untrusted-text"></p>
+<div class="row"><a class="button" id="check-install" href="/loka-ca.crt" data-i18n="installCertificate">Install certificate</a><button class="secondary" id="check-again" data-i18n="tryAgain">Try again</button></div>
+<details><summary data-i18n="android">Android</summary><ol><li data-i18n="android1"></li><li data-i18n="android2"></li><li data-i18n="android3"></li><li data-i18n="stepsDone"></li></ol></details>
+<details><summary data-i18n="iphone">iPhone and iPad</summary><ol><li data-i18n="iphone1"></li><li data-i18n="iphone2"></li><li data-i18n="iphone3"></li><li data-i18n="stepsDone"></li></ol></details>
+<p id="check-continue-text"></p><div class="row"><a class="button secondary" id="check-continue" data-i18n="continueAnyway">Continue anyway</a></div></div></section>
 <div class="layout">
 <section class="card choose-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><h2 data-i18n="itemsToShare">Items to share</h2></div>
 <div class="drop" id="drop"><span class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></span><p class="drop-title" data-i18n="dropHere">Drop files or a directory here</p>
@@ -99,7 +107,7 @@ label.button{display:inline-block}
 <section class="card device-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><h2 data-i18n="sendToDevice">Send to a device</h2></div><div id="peers"><p data-i18n="lookingForDevices">Looking for devices...</p></div><div class="manual"><label class="field-label" for="address" data-i18n="orEnterAddress">Or enter a device address</label><div class="row action-row"><input id="address" data-i18n-placeholder="deviceAddress" placeholder="Device address"><input id="port" value="45873" data-i18n-label="devicePort" aria-label="Device port"><button id="send" data-i18n="send">Send</button></div></div></section>
 <section class="card link-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></svg></span><div><h2 data-i18n="shareLink">Share a download link</h2><p data-i18n="shareLinkHint">The recipient can open the link in a browser.</p></div></div><div class="row action-row"><button id="share" data-i18n="createLink">Create link</button></div><div id="links"></div></section>
 <section class="card transfers-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3"/></svg></span><h2 data-i18n="transfers">Transfers</h2><button class="secondary" id="receive-phone" data-i18n="receivePhone">Receive from a phone</button></div><div id="transfers"><p data-i18n="noTransfers">No transfers yet.</p></div></section>
-</div><footer class="footer-note"><p data-i18n="notEncrypted">Transfers between Loka devices are encrypted. Uploads from a browser and download links are not.</p><a href="https://github.com/sprytnyk/loka" data-i18n="source">Source on GitHub</a></footer>
+</div><footer class="footer-note"><p data-i18n="notEncrypted">Transfers between Lokas, uploads from phones and download links are encrypted.</p><a href="https://github.com/sprytnyk/loka" data-i18n="source">Source on GitHub</a></footer>
 </main>
 <dialog id="incoming" aria-labelledby="incoming-title">
 <h2 id="incoming-title" data-i18n="incomingTitle">Incoming transfer</h2><p id="incoming-details"></p><p id="incoming-warning" class="notice"></p><div id="incoming-files"></div>
@@ -185,14 +193,13 @@ const messages = {
     fromBrowser: 'From a browser at {name}',
     to: 'To {name}',
     newDevice: 'New device: Loka hasn’t seen it before. Make sure you expect this transfer.',
-    browserUpload: 'Sent from a browser, so it isn’t encrypted.',
     forget: 'Forget this device',
     forgotten: 'Forgotten. Its certificate will be trusted on the next transfer.',
     names: {one: '{n} name', other: '{n} names'},
     fileNames: 'File and directory names',
     speed: '{speed} Mbps',
     cancel: 'Cancel',
-    notEncrypted: 'Transfers between Loka devices are encrypted. Uploads from a browser and download links are not.',
+    notEncrypted: 'Transfers between Lokas, uploads from phones and download links are encrypted.',
     source: 'Source on GitHub',
     incomingTitle: 'Incoming transfer',
     destination: 'Destination directory',
@@ -210,7 +217,7 @@ const messages = {
     chooseDestination: 'Choose or enter a destination directory.',
     statuses: {waiting: 'waiting', accepted: 'accepted', sending: 'sending', receiving: 'receiving', complete: 'complete', failed: 'failed', cancelled: 'cancelled'},
     receivePhone: 'Receive from a phone',
-    receivePhoneHint: 'Scan a code with the phone’s camera, or open the address in its browser. If there are several, use the one on the phone’s network. Loka asks here before saving anything. Uploads from a browser aren’t encrypted.',
+    receivePhoneHint: 'Scan a code with the phone’s camera, or open the address in its browser. If there are several, use the one on the phone’s network. Loka asks here before saving anything.',
     close: 'Close',
     phoneHeading: 'Send files to {name}',
     phoneTitle: 'Choose what to send',
@@ -220,6 +227,24 @@ const messages = {
     sentTo: 'Sent to {name}.',
     declined: '{name} declined or cancelled.',
     cancelled: 'Cancelled.',
+    checkTitle: 'Secure connection',
+    checking: 'Connecting securely to {name}…',
+    downloadStarting: 'The download should start now.',
+    nothingShared: 'Open the link you were given, or scan its code.',
+    untrusted: 'This browser doesn’t trust {name} yet. Install its certificate once, and Loka opens without a warning from then on.',
+    installCertificate: 'Install certificate',
+    tryAgain: 'Try again',
+    android: 'Android',
+    android1: 'Tap Install certificate to download it.',
+    android2: 'Open Settings and search for “CA certificate”. On many phones it’s under Security, More security settings, Install from storage.',
+    android3: 'Choose CA certificate, then pick loka-ca.crt from your downloads.',
+    iphone: 'iPhone and iPad',
+    iphone1: 'Tap Install certificate, then Allow.',
+    iphone2: 'Open Settings, General, VPN & Device Management, tap the Loka profile and install it.',
+    iphone3: 'Open Settings, General, About, Certificate Trust Settings and turn on full trust for Loka.',
+    stepsDone: 'Come back here and tap Try again.',
+    continueText: 'Or continue without it. The browser will warn that the connection isn’t private. It is still encrypted, but the browser can’t check that it’s really {name}.',
+    continueAnyway: 'Continue anyway',
   },
   uk: {
     title: 'Loka: обмін файлами в локальній мережі',
@@ -260,14 +285,13 @@ const messages = {
     fromBrowser: 'Від браузера за адресою {name}',
     to: 'До {name}',
     newDevice: 'Новий пристрій: Loka бачить його вперше. Переконайтеся, що чекаєте на це передавання.',
-    browserUpload: 'Надіслано з браузера, тож без шифрування.',
     forget: 'Забути цей пристрій',
     forgotten: 'Забуто. Його сертифікату буде довіра під час наступного передавання.',
     names: {one: '{n} назва', few: '{n} назви', many: '{n} назв', other: '{n} назви'},
     fileNames: 'Назви файлів і тек',
     speed: '{speed} Мбіт/с',
     cancel: 'Скасувати',
-    notEncrypted: 'Передавання між пристроями з Loka шифруються. Надсилання з браузера й посилання для завантаження — ні.',
+    notEncrypted: 'Передавання між пристроями з Loka, надсилання з телефонів і посилання для завантаження шифруються.',
     source: 'Код на GitHub',
     incomingTitle: 'Вхідне передавання',
     destination: 'Тека призначення',
@@ -285,7 +309,7 @@ const messages = {
     chooseDestination: 'Виберіть або введіть теку призначення.',
     statuses: {waiting: 'очікує', accepted: 'прийнято', sending: 'надсилання', receiving: 'отримання', complete: 'завершено', failed: 'помилка', cancelled: 'скасовано'},
     receivePhone: 'Отримати з телефона',
-    receivePhoneHint: 'Відскануйте код камерою телефона або відкрийте адресу в його браузері. Якщо адрес кілька, виберіть ту, що в мережі телефона. Loka спитає тут, перш ніж щось зберегти. Надсилання з браузера не шифрується.',
+    receivePhoneHint: 'Відскануйте код камерою телефона або відкрийте адресу в його браузері. Якщо адрес кілька, виберіть ту, що в мережі телефона. Loka спитає тут, перш ніж щось зберегти.',
     close: 'Закрити',
     phoneHeading: 'Надіслати файли на {name}',
     phoneTitle: 'Виберіть, що надіслати',
@@ -295,6 +319,24 @@ const messages = {
     sentTo: 'Надіслано на {name}.',
     declined: '{name} відхилив або скасував.',
     cancelled: 'Скасовано.',
+    checkTitle: 'Захищене з’єднання',
+    checking: 'Встановлюю захищене з’єднання з {name}…',
+    downloadStarting: 'Завантаження має от-от початися.',
+    nothingShared: 'Відкрийте посилання, яке вам надіслали, або відскануйте його код.',
+    untrusted: 'Цей браузер ще не довіряє {name}. Установіть його сертифікат один раз, і далі Loka відкриватиметься без попереджень.',
+    installCertificate: 'Установити сертифікат',
+    tryAgain: 'Спробувати ще раз',
+    android: 'Android',
+    android1: 'Натисніть «Установити сертифікат», щоб завантажити його.',
+    android2: 'Відкрийте Налаштування й пошукайте «сертифікат ЦС». На багатьох телефонах це в розділі Безпека, Інші налаштування безпеки, Установити зі сховища.',
+    android3: 'Виберіть «Сертифікат ЦС», а потім файл loka-ca.crt серед завантажень.',
+    iphone: 'iPhone та iPad',
+    iphone1: 'Натисніть «Установити сертифікат», а потім «Дозволити».',
+    iphone2: 'Відкрийте Параметри, Загальні, VPN і керування пристроями, торкніться профілю Loka й установіть його.',
+    iphone3: 'Відкрийте Параметри, Загальні, Про пристрій, Параметри довіри сертифікатам і ввімкніть повну довіру для Loka.',
+    stepsDone: 'Поверніться сюди й натисніть «Спробувати ще раз».',
+    continueText: 'Або продовжте без нього. Браузер попередить, що з’єднання не приватне. Воно все одно зашифроване, але браузер не може перевірити, що це справді {name}.',
+    continueAnyway: 'Продовжити однаково',
   },
 };
 // Messages from the server come in English. These are the ones it sends,
@@ -366,6 +408,12 @@ function fromServer(text) {
 function renderDeviceName() {
   $('hostname').textContent = deviceName ? t('thisDevice', {name: deviceName}) : t('connecting');
   if (mode === 'phone') $('heading').textContent = t('phoneHeading', {name: hostName});
+  if (mode === 'check') {
+    $('heading').textContent = hostName;
+    $('check-untrusted-text').textContent = t('untrusted', {name: hostName});
+    $('check-continue-text').textContent = t('continueText', {name: hostName});
+    $('check-status').textContent = checkStatus && t(checkStatus, {name: hostName});
+  }
 }
 function applyLanguage() {
   document.documentElement.lang = language;
@@ -772,7 +820,7 @@ function peerName(transfer) {
   return t(transfer.browser ? 'fromBrowser' : 'from', {name: transfer.name});
 }
 function renderIncomingDetails() {
-  const warning = incoming.browser ? t('browserUpload') : incoming.new_device ? t('newDevice') : '';
+  const warning = incoming.new_device ? t('newDevice') : '';
   $('incoming-details').textContent = peerName(incoming);
   $('incoming-warning').textContent = warning;
   $('incoming-files').innerHTML = fileNames(incoming.items || []);
@@ -794,7 +842,8 @@ function renderIncoming(data) {
   }
 }
 // addressUrls gives a path on this device at each of its local addresses,
-// since the other device may be on any of those networks.
+// since the other device may be on any of those networks. They are plain
+// HTTP: the page there moves the browser to HTTPS.
 function addressUrls(addresses, path) {
   const hosts = addresses.length ? addresses : [location.hostname];
   return hosts.map(host => `http://${host}:${location.port}${path}`);
@@ -823,7 +872,7 @@ const linkUrls = new Map(); // shared transfer id -> its link at each address
 function renderLinks(shared, addresses) {
   linkUrls.clear();
   const markup = shared.map(transfer => {
-    const urls = addressUrls(addresses, `/download/${transfer.token}`);
+    const urls = addressUrls(addresses, `/#d=${transfer.token}`);
     linkUrls.set(transfer.id, urls);
     const id = escapeHtml(transfer.id);
     return `<div class="item">${fileNames(transfer.items || [])}<div class="link-urls">${urls.map(url => `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`).join('')}</div>
@@ -1045,6 +1094,49 @@ addEventListener('pagehide', phoneCancel);
 const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 $('phone-folder-button').hidden = ios || !('webkitdirectory' in $('phone-folder'));
 
+// Moving to HTTPS. A share link carries its token after #, which browsers
+// never send, so it doesn't cross the network before the connection is
+// encrypted. Over plain HTTP the page first checks, in the background,
+// whether the browser trusts this computer's certificate: then it moves
+// on at once, and otherwise it offers to install the certificate.
+
+const linkToken = new URLSearchParams(location.hash.slice(1)).get('d');
+const securePath = linkToken ? `/download/${encodeURIComponent(linkToken)}` : '/';
+let checkStatus = '';
+function showCheckStatus(name) {
+  checkStatus = name;
+  renderDeviceName();
+}
+async function trusted() {
+  try {
+    await fetch(`https://${location.host}/`, {method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(5000)});
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function checkConnection() {
+  $('check-untrusted').hidden = true;
+  showCheckStatus('checking');
+  if (await trusted()) {
+    showCheckStatus(linkToken ? 'downloadStarting' : '');
+    location.replace(`https://${location.host}${securePath}`);
+    return;
+  }
+  showCheckStatus('');
+  $('check-untrusted').hidden = false;
+}
+$('check-again').onclick = checkConnection;
+$('check-continue').href = `https://${location.host}${securePath}`;
+
 applyLanguage();
-if (mode !== 'phone') pollPeriodically();
+if (linkToken && location.protocol === 'https:') {
+  showCheckStatus('downloadStarting');
+  location.replace(securePath);
+} else if (mode === 'check') {
+  if (location.protocol === 'http:') checkConnection();
+  else showCheckStatus('nothingShared');
+} else if (mode === 'desktop') {
+  pollPeriodically();
+}
 </script></body></html>

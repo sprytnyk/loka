@@ -191,12 +191,13 @@ func TestSenderRefusesAReceiverWithANewCertificate(t *testing.T) {
 	}
 }
 
-// TestPlainHTTPOffersAreFromABrowser checks an offer without TLS, as a
-// phone's browser makes, is labelled by address and never remembered.
-func TestPlainHTTPOffersAreFromABrowser(t *testing.T) {
+// TestBrowserOffersAreLabelled checks an offer over TLS without a
+// certificate, as a phone's browser makes, is labelled by address, whatever
+// name it gives, and never remembered.
+func TestBrowserOffersAreLabelled(t *testing.T) {
 	receiver, base := startServer(t)
 	var reply offerReply
-	if err := call(t.Context(), http.DefaultClient, http.MethodPost, base+"/peer/offer", "", offer{Name: "posing as laptop", Items: []string{"f"}, Size: 1}, &reply); err != nil {
+	if err := call(t.Context(), browser(receiver), http.MethodPost, secure(base)+"/peer/offer", "", offer{Name: "posing as laptop", Items: []string{"f"}, Size: 1}, &reply); err != nil {
 		t.Fatal(err)
 	}
 	in := receiver.Transfers.Get(reply.ID)
@@ -206,6 +207,30 @@ func TestPlainHTTPOffersAreFromABrowser(t *testing.T) {
 	receiver.Accept(in, t.TempDir())
 	if devices, _ := receiver.Trust.Devices(); len(devices) != 0 {
 		t.Fatalf("remembered %+v", devices)
+	}
+}
+
+// TestPlainHTTPOffersAreRefused has Loka 0.1, which sends without TLS,
+// offer a file, and checks it is told to update and nothing is shown.
+func TestPlainHTTPOffersAreRefused(t *testing.T) {
+	receiver, base := startServer(t)
+	for _, host := range []string{"", "192.0.2.10:45873"} { // this device, and another
+		req, _ := http.NewRequest(http.MethodPost, base+"/peer/offer", strings.NewReader(`{"name":"old","items":["f"],"size":1}`))
+		if host != "" {
+			req.Host = host
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = replyError(resp) // as Loka 0.1 reads it
+		resp.Body.Close()
+		if err == nil || err.Error() != "This device runs a newer Loka. Update Loka to send to it." {
+			t.Fatalf("host %q: got %v", host, err)
+		}
+	}
+	if n := len(receiver.Transfers.All()); n != 0 {
+		t.Fatalf("%d offers shown", n)
 	}
 }
 

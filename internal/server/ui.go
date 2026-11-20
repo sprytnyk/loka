@@ -21,16 +21,21 @@ import (
 var page string
 
 // index serves the page. This device gets it with the key it uses for the
-// API. Other devices, such as phones, get its upload view, which sends the
-// way another Loka does and needs no key.
+// API. Other devices, such as phones, get its upload view over HTTPS,
+// which sends the way another Loka does and needs no key. Over plain HTTP,
+// and on a server that only shares links, they get the view that checks
+// whether the browser trusts this device and moves it to HTTPS.
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	label := s.version
 	if label != "" && label[0] >= '0' && label[0] <= '9' {
 		label = "v" + label
 	}
-	key, mode := s.key, "desktop"
-	if !fromThisDevice(r) {
-		key, mode = "", "phone"
+	key, mode := "", "phone"
+	switch {
+	case s.OnlyLinks || r.TLS == nil && !fromThisDevice(r):
+		mode = "check"
+	case fromThisDevice(r):
+		key, mode = s.key, "desktop"
 	}
 	name, _ := json.Marshal(s.name) // escapes <, > and &, so it is safe in a script
 	body := strings.NewReplacer(
@@ -42,6 +47,14 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	io.WriteString(w, body)
+}
+
+// caCertificate serves this device's certificate authority, in the form
+// phones offer to install.
+func (s *Server) caCertificate(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+	w.Header().Set("Content-Disposition", attachment(CAPath[1:]))
+	w.Write(s.Trust.CA())
 }
 
 // pickPaths opens the system's picker for files, a directory or a

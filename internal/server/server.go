@@ -33,7 +33,8 @@ type Server struct {
 	temp      string // holds files dropped on the page, made when needed
 
 	Transfers   transfer.Registry
-	Trust       *trust.Store           // nil when not talking to other devices
+	Trust       *trust.Store           // this device's certificates
+	OnlyLinks   bool                   // serve only download links, as loka share does
 	Devices     *network.Discovery     // nil when not looking for devices
 	destination atomic.Pointer[string] // the last accepted destination
 }
@@ -55,16 +56,12 @@ func (s *Server) Close() {
 	os.RemoveAll(s.temp)
 }
 
-// Serve answers on ln until ctx is done: other Lokas over TLS and browsers
-// over plain HTTP, on the same port. Without a trust store, it answers
-// only plain HTTP.
+// Serve answers on ln until ctx is done, over TLS and plain HTTP on the
+// same port.
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
-	listeners := []net.Listener{ln}
-	if s.Trust != nil {
-		plain, secure := network.Split(ln, s.Trust.ServerConfig())
-		listeners = []net.Listener{plain, secure}
-	}
+	plain, secure := network.Split(ln, s.Trust.ServerConfig())
+	listeners := []net.Listener{plain, secure}
 	stop := context.AfterFunc(ctx, func() {
 		shutdown, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -86,21 +83,39 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	return first
 }
 
-// Handler answers download links and, on a device with an identity, the
-// page, the page's API and other devices. Without one, as for loka share,
-// there is nobody to accept a transfer, so only the links are served.
+// CAPath is where browsers download this device's certificate authority.
+const CAPath = "/loka-ca.crt"
+
+// Handler answers the page, its API, other Lokas and browsers. Browsers
+// on other devices must use HTTPS: over plain HTTP they get only the page
+// that moves them to it and the certificate authority to install. With
+// OnlyLinks, as for loka share, nobody can accept a transfer, so only the
+// links are served.
 func (s *Server) Handler() http.Handler {
+	plain := http.NewServeMux()
+	plain.HandleFunc("GET /{$}", s.index)
+	plain.HandleFunc("GET "+CAPath, s.caCertificate)
+
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", s.index)
+	mux.HandleFunc("GET "+CAPath, s.caCertificate)
 	mux.HandleFunc("GET /download/{token}", s.download)
-	if s.Trust == nil {
-		return mux
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.TLS == nil && !fromThisDevice(r) {
+			plain.ServeHTTP(w, r)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
+	if s.OnlyLinks {
+		return handler
 	}
+	plain.HandleFunc("POST /peer/offer", s.offer) // to tell an old Loka why it can't send
 	mux.HandleFunc("POST /peer/offer", s.offer)
 	mux.HandleFunc("GET /peer/status/{id}", s.peer(s.peerStatus))
 	mux.HandleFunc("POST /peer/cancel/{id}", s.peer(s.peerCancel))
 	mux.HandleFunc("POST /peer/upload/{id}", s.peer(s.peerUpload))
 
-	mux.HandleFunc("GET /{$}", s.index)
 	mux.HandleFunc("GET /api/state", s.local(s.state))
 	mux.HandleFunc("POST /api/pick", s.local(s.pickPaths))
 	mux.HandleFunc("POST /api/upload", s.local(s.upload))
@@ -110,7 +125,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/share", s.local(s.share))
 	mux.HandleFunc("POST /api/qr", s.local(s.qrCode))
 	mux.HandleFunc("POST /api/forget", s.local(s.forget))
-	return mux
+	return handler
 }
 
 // fromThisDevice reports whether a request comes from this device, under a
@@ -166,6 +181,11 @@ type offerReply struct {
 }
 
 func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
+	if r.TLS == nil {
+		// Only Loka 0.1 sends offers without TLS. It shows this message.
+		writeError(w, http.StatusUpgradeRequired, errors.New("This device runs a newer Loka. Update Loka to send to it."))
+		return
+	}
 	var o offer
 	if err := readJSON(w, r, &o); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -180,8 +200,8 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		items[i] = truncate(items[i], 255)
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-		// A browser, or a Loka too old to encrypt. The page says so.
+	if len(r.TLS.PeerCertificates) == 0 {
+		// A browser: it can't show which device it is.
 		t := transfer.New(transfer.Incoming, host, items, o.Size, transfer.Waiting)
 		t.Browser = true
 		s.addOffer(w, t)
