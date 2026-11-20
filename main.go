@@ -82,7 +82,7 @@ func parse(args []string, stdout, stderr io.Writer) (options, int) {
 	fs := flag.NewFlagSet("loka", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // help and errors are printed below
 	fs.StringVar(&o.to, "to", "", "receiver address for send")
-	fs.StringVar(&o.address, "address", "", "local address to put in a share link (default: detected)")
+	fs.StringVar(&o.address, "address", "", "local address to put in a share link (default: every local address)")
 	fs.IntVar(&o.port, "port", network.DefaultPort, "port to listen on, 0 for any free port")
 	fs.IntVar(&o.peerPort, "peer-port", network.DefaultPort, "receiver port for send")
 	fs.BoolVar(&o.noBrowser, "no-browser", false, "do not open the browser")
@@ -344,13 +344,12 @@ func devicesCommand(ctx context.Context, stdout io.Writer) error {
 }
 
 func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
-	address := o.address
-	if address == "" {
-		addresses := network.LocalAddresses()
-		if len(addresses) == 0 {
-			return errors.New("could not find a local address; give one with --address")
-		}
-		address = addresses[0]
+	addresses := network.LocalAddresses()
+	if o.address != "" {
+		addresses = []string{o.address}
+	}
+	if len(addresses) == 0 {
+		return errors.New("could not find a local address; give one with --address")
 	}
 	link, err := transfer.NewLink(o.paths)
 	if err != nil {
@@ -362,6 +361,8 @@ func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
 	}
 	s := server.New(hostname(), version)
 	s.Transfers.Add(link)
-	fmt.Fprintf(stdout, "http://%s/download/%s\n", net.JoinHostPort(address, strconv.Itoa(port)), link.Token)
+	for _, address := range addresses {
+		fmt.Fprintf(stdout, "http://%s/download/%s\n", net.JoinHostPort(address, strconv.Itoa(port)), link.Token)
+	}
 	return serveUntil(ctx, ln, s.Handler())
 }

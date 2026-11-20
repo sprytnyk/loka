@@ -78,7 +78,7 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 <p id="selection" role="status">Nothing selected</p></div>
 <label class="field-label" for="paths" data-i18n="addByPath">Add by path</label><div class="row action-row"><input id="paths" data-i18n-placeholder="pathPlaceholder" placeholder="File or directory path"><button class="secondary" id="add-path" data-i18n="addPath">Add path</button></div><ul id="selected"></ul></section>
 <section class="card device-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><h2 data-i18n="sendToDevice">Send to a device</h2></div><div id="peers"><p data-i18n="lookingForDevices">Looking for devices...</p></div><div class="manual"><label class="field-label" for="address" data-i18n="orEnterAddress">Or enter a device address</label><div class="row action-row"><input id="address" data-i18n-placeholder="deviceAddress" placeholder="Device address"><input id="port" value="45873" data-i18n-label="devicePort" aria-label="Device port"><button id="send" data-i18n="send">Send</button></div></div></section>
-<section class="card link-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></svg></span><div><h2 data-i18n="shareLink">Share a download link</h2><p data-i18n="shareLinkHint">The recipient can open the link in a browser.</p></div></div><label class="field-label" for="link-address" data-i18n="localAddress">Your local address</label><div class="row action-row"><input id="link-address" data-i18n-placeholder="localAddress" placeholder="Your local address"><button id="share" data-i18n="createLink">Create link</button></div><div id="links"></div></section>
+<section class="card link-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></svg></span><div><h2 data-i18n="shareLink">Share a download link</h2><p data-i18n="shareLinkHint">The recipient can open the link in a browser.</p></div></div><div class="row action-row"><button id="share" data-i18n="createLink">Create link</button></div><div id="links"></div></section>
 <section class="card transfers-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3"/></svg></span><h2 data-i18n="transfers">Transfers</h2></div><div id="transfers"><p data-i18n="noTransfers">No transfers yet.</p></div></section>
 </div><footer class="footer-note"><p data-i18n="notEncrypted">Transfers are not encrypted. Use Loka on a network you trust.</p><a href="https://github.com/sprytnyk/loka" data-i18n="source">Source on GitHub</a></footer>
 </main>
@@ -92,7 +92,6 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 const key = '__LOKA_KEY__';
 const activeTransferStatuses = ['waiting', 'accepted', 'receiving', 'sending'];
 let selected = [];
-let addressEdited = false;
 let incoming = null; // the offer the dialog shows
 let pendingSelections = new Map(); // transfer id -> the items it sends
 let renderedPeers;
@@ -149,7 +148,6 @@ const messages = {
     send: 'Send',
     shareLink: 'Share a download link',
     shareLinkHint: 'The recipient can open the link in a browser.',
-    localAddress: 'Your local address',
     createLink: 'Create link',
     stopSharing: 'Stop sharing',
     transfers: 'Transfers',
@@ -205,7 +203,6 @@ const messages = {
     send: 'Надіслати',
     shareLink: 'Посилання для завантаження',
     shareLinkHint: 'Отримувач відкриє його в браузері.',
-    localAddress: 'Ваша локальна адреса',
     createLink: 'Створити посилання',
     stopSharing: 'Закрити доступ',
     transfers: 'Передавання',
@@ -697,11 +694,17 @@ function renderIncoming(data) {
     dialog.close();
   }
 }
-function renderLinks(shared) {
-  const address = $('link-address').value.trim();
+// addressUrls gives a path on this device at each of its local addresses,
+// since the other device may be on any of those networks.
+function addressUrls(addresses, path) {
+  const hosts = addresses.length ? addresses : [location.hostname];
+  return hosts.map(host => `http://${host}:${location.port}${path}`);
+}
+function renderLinks(shared, addresses) {
   $('links').innerHTML = shared.map(transfer => {
-    const url = `http://${address}:${location.port}/download/${transfer.token}`;
-    return `<div class="item"><a href="${escapeHtml(url)}">${escapeHtml(url)}</a><div><button class="secondary" data-unshare="${escapeHtml(transfer.id)}">${escapeHtml(t('stopSharing'))}</button></div></div>`;
+    const urls = addressUrls(addresses, `/download/${transfer.token}`)
+      .map(url => `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`).join('<br>');
+    return `<div class="item">${urls}<div><button class="secondary" data-unshare="${escapeHtml(transfer.id)}">${escapeHtml(t('stopSharing'))}</button></div></div>`;
   }).join('');
 }
 // refresh shows the latest state and reports whether a transfer is under
@@ -711,14 +714,10 @@ async function refresh() {
   forgetSentItems(data.transfers);
   deviceName = data.name;
   renderDeviceName();
-  const suggestedAddress = data.addresses[0] || '';
-  if (!addressEdited && $('link-address').value !== suggestedAddress) {
-    $('link-address').value = suggestedAddress;
-  }
   renderPeers(data);
   renderIncoming(data);
   renderTransfers(data.transfers.filter(transfer => transfer.status !== 'shared'));
-  renderLinks(data.transfers.filter(transfer => transfer.status === 'shared'));
+  renderLinks(data.transfers.filter(transfer => transfer.status === 'shared'), data.addresses);
   return data.transfers.some(transfer => activeTransferStatuses.includes(transfer.status));
 }
 // poll refreshes the page and reports whether a transfer is under way.
@@ -739,10 +738,6 @@ async function pollPeriodically() {
   const active = await poll();
   setTimeout(pollPeriodically, active ? 1000 : 3000);
 }
-$('link-address').oninput = () => {
-  addressEdited = true;
-  poll();
-};
 applyLanguage();
 pollPeriodically();
 </script></body></html>
