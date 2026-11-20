@@ -173,13 +173,6 @@ On both sides a transfer between Lokas starts as `pairing` and moves to
 `waiting` once that side knows the code. The receiver asks the person only
 then, and both sides show the code while they wait.
 
-## Older versions
-
-| Sender | Receiver | What happens |
-| --- | --- | --- |
-| Loka 0.2.0 | This version | The offer has no commitment and gets `426` and a message asking to update |
-| This version | Loka 0.2.0 | The reply has no nonce, so the sender cancels and asks to update the receiver |
-
 ## Download links
 
 A link looks like `http://192.0.2.10:45873/#d=TOKEN`. Browsers never send

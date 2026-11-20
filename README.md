@@ -169,9 +169,6 @@ phone's certificate details with the one in the page's help. Once it's
 installed, you can open `https://` and the address directly. Anyone with a link
 can download while you're sharing.
 
-Loka 0.2.0 can't receive from this version, and this version refuses what it
-sends and tells it to update. Update Loka on every device.
-
 An interrupted transfer starts over. If no bytes move for a minute, for
 example because a laptop went to sleep, the transfer stops. Loka skips
 symbolic links inside the directories you choose.
