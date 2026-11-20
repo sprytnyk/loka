@@ -58,7 +58,6 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
    scrolling box. */
 #selected,#peers,#transfers,#links{overflow-y:auto;margin-inline:-5px;padding-inline:5px;padding-block:5px}
 #peers{max-height:14rem}
-#links{max-height:30rem}
 #selected{max-height:24rem}
 #transfers{max-height:32rem}
 .footer-note{flex:none;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px;margin:auto 0 0;padding-top:14px;color:var(--muted);font-size:12px}.footer-note p{margin:0}
@@ -73,7 +72,7 @@ label.button{display:inline-block}
 #phone-selected{margin:8px 0 12px;padding:0;list-style:none;max-height:20rem;overflow-y:auto;overflow-wrap:anywhere}#phone-selected:empty{display:none}#phone-selected li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}#phone-selected button{flex:none;padding:5px 9px;font-size:12px}
 #phone-status{margin:12px 0 6px;font-size:14px}#phone-status:empty{display:none}
 .transfers-card .card-heading{align-items:center}#receive-phone{margin-inline-start:auto;padding:6px 10px;font-size:12px}
-#phone-codes{margin-top:8px}
+#qr-codes{margin-top:8px}.link-urls{display:flex;flex-direction:column;gap:4px;font-size:13px}.link-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.link-buttons button{margin-top:0}
 @media(min-width:1240px){.layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;grid-template-areas:"choose device transfers" "choose link transfers"}#peers{max-height:max(14rem,100vh - 26rem);max-height:max(14rem,100dvh - 26rem)}}
 @media(max-width:720px){main{padding:0 16px 24px}header{flex-wrap:wrap;padding:14px 0}.intro{padding:24px 0 18px}.layout{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-template-areas:"choose" "device" "transfers" "link";gap:14px}#message{margin-bottom:14px}#transfers{max-height:24rem}}
 @media(max-width:400px){.device-badge{font-size:11px}}
@@ -108,9 +107,9 @@ label.button{display:inline-block}
 <p id="incoming-error" class="notice" role="alert"></p>
 <div class="row"><button type="button" id="accept-incoming" data-i18n="accept">Accept</button><button type="button" class="secondary" id="decline-incoming" data-i18n="decline">Decline</button></div>
 </dialog>
-<dialog id="phone-dialog" aria-labelledby="phone-dialog-title">
-<h2 id="phone-dialog-title" data-i18n="receivePhone">Receive from a phone</h2><p data-i18n="receivePhoneHint">Scan a code with the phone's camera, or open the address in its browser. If there are several, use the one on the phone's network. Loka asks here before saving anything. Uploads from a browser aren't encrypted.</p><div id="phone-codes"></div>
-<div class="row"><button type="button" class="secondary" id="close-phone-dialog" data-i18n="close">Close</button></div>
+<dialog id="qr-dialog" aria-labelledby="qr-dialog-title">
+<h2 id="qr-dialog-title"></h2><p id="qr-dialog-hint"></p><div id="qr-codes"></div>
+<div class="row"><button type="button" class="secondary" id="close-qr-dialog" data-i18n="close">Close</button></div>
 </dialog>
 <script>
 const key = '__LOKA_KEY__';
@@ -177,6 +176,9 @@ const messages = {
     createLink: 'Create link',
     stopSharing: 'Stop sharing',
     qrFor: 'QR code for {url}',
+    qrCode: 'QR code',
+    downloadByPhone: 'Download on a phone',
+    downloadByPhoneHint: 'Scan a code with the phone’s camera. If there are several, use the one on the phone’s network.',
     transfers: 'Transfers',
     noTransfers: 'No transfers yet.',
     from: 'From {name}',
@@ -249,6 +251,9 @@ const messages = {
     createLink: 'Створити посилання',
     stopSharing: 'Закрити доступ',
     qrFor: 'QR-код для {url}',
+    qrCode: 'QR-код',
+    downloadByPhone: 'Завантажити на телефон',
+    downloadByPhoneHint: 'Відскануйте код камерою телефона. Якщо кодів кілька, виберіть той, що в мережі телефона.',
     transfers: 'Передавання',
     noTransfers: 'Передавань ще немає.',
     from: 'Від {name}',
@@ -628,6 +633,11 @@ $('transfers').onclick = e => {
   });
 };
 $('links').onclick = e => {
+  const qr = e.target.closest('button[data-link-qr]');
+  if (qr) {
+    showQrCodes(t('downloadByPhone'), t('downloadByPhoneHint'), linkUrls.get(qr.dataset.linkQr) || []);
+    return;
+  }
   const button = e.target.closest('button[data-unshare]');
   if (!button) return;
   run(button, async () => {
@@ -809,15 +819,19 @@ function drawQrCodes(container) {
   }
 }
 let renderedLinks;
+const linkUrls = new Map(); // shared transfer id -> its link at each address
 function renderLinks(shared, addresses) {
+  linkUrls.clear();
   const markup = shared.map(transfer => {
     const urls = addressUrls(addresses, `/download/${transfer.token}`);
-    return `<div class="item">${qrList(urls)}<div><button class="secondary" data-unshare="${escapeHtml(transfer.id)}">${escapeHtml(t('stopSharing'))}</button></div></div>`;
+    linkUrls.set(transfer.id, urls);
+    const id = escapeHtml(transfer.id);
+    return `<div class="item">${fileNames(transfer.items || [])}<div class="link-urls">${urls.map(url => `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`).join('')}</div>
+      <div class="link-buttons"><button class="secondary" data-link-qr="${id}">${escapeHtml(t('qrCode'))}</button><button class="secondary" data-unshare="${id}">${escapeHtml(t('stopSharing'))}</button></div></div>`;
   }).join('');
   if (markup === renderedLinks) return;
   $('links').innerHTML = markup;
   renderedLinks = markup;
-  drawQrCodes($('links'));
 }
 // refresh shows the latest state and reports whether a transfer is under
 // way.
@@ -855,12 +869,16 @@ async function pollPeriodically() {
 // the phone view below.
 
 let addresses = []; // this device's local addresses, from the server
-$('receive-phone').onclick = () => {
-  $('phone-codes').innerHTML = qrList(addressUrls(addresses, '/'));
-  drawQrCodes($('phone-codes'));
-  $('phone-dialog').showModal();
-};
-$('close-phone-dialog').onclick = () => $('phone-dialog').close();
+// showQrCodes opens the dialog with a QR code for each url.
+function showQrCodes(title, hint, urls) {
+  $('qr-dialog-title').textContent = title;
+  $('qr-dialog-hint').textContent = hint;
+  $('qr-codes').innerHTML = qrList(urls);
+  drawQrCodes($('qr-codes'));
+  $('qr-dialog').showModal();
+}
+$('receive-phone').onclick = () => showQrCodes(t('receivePhone'), t('receivePhoneHint'), addressUrls(addresses, '/'));
+$('close-qr-dialog').onclick = () => $('qr-dialog').close();
 
 // The phone view sends the chosen files the way another Loka does: an
 // offer, a wait for the computer to accept, then a tar stream the browser
