@@ -288,8 +288,12 @@ func progress(done, size int64, status Status) int {
 	return int(min(done, size) * 100 / size)
 }
 
-// Registry holds every transfer made since Loka started. Its lock guards
-// only the lookup tables, never a transfer's own state.
+// MaxEnded is how many ended transfers a Registry keeps. Older ones are
+// dropped, so offers that keep arriving can't fill the memory.
+const MaxEnded = 100
+
+// Registry holds the transfers still under way and the latest that ended.
+// Its lock guards only the lookup tables, never a transfer's own state.
 type Registry struct {
 	mu      sync.Mutex
 	ordered []*Transfer
@@ -310,6 +314,31 @@ func (r *Registry) Add(t *Transfer) {
 	if t.Token != "" {
 		r.byToken[t.Token] = t
 	}
+	r.dropEnded()
+}
+
+// dropEnded drops the oldest ended transfers beyond MaxEnded.
+func (r *Registry) dropEnded() {
+	ended := 0
+	for _, t := range r.ordered {
+		if t.Status().Final() {
+			ended++
+		}
+	}
+	if ended <= MaxEnded {
+		return
+	}
+	r.ordered = slices.DeleteFunc(r.ordered, func(t *Transfer) bool {
+		if ended <= MaxEnded || !t.Status().Final() {
+			return false
+		}
+		ended--
+		delete(r.byID, t.ID)
+		if t.Token != "" {
+			delete(r.byToken, t.Token)
+		}
+		return true
+	})
 }
 
 // Get returns the transfer with this ID, or nil.

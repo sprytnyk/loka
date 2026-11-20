@@ -143,3 +143,25 @@ func TestRegistryFindsLinksByToken(t *testing.T) {
 		t.Fatal("transfers are not kept in creation order")
 	}
 }
+
+func TestRegistryDropsTheOldestEndedTransfers(t *testing.T) {
+	var r Registry
+	running := New(Incoming, "sender", nil, 0, Waiting)
+	r.Add(running)
+	var ended []*Transfer
+	for range MaxEnded + 5 {
+		e := New(Outgoing, "Link", nil, 0, Stopped)
+		e.Token = RandomToken(9)
+		ended = append(ended, e)
+		r.Add(e)
+	}
+	if got := len(r.All()); got != MaxEnded+1 {
+		t.Fatalf("kept %d transfers, want %d", got, MaxEnded+1)
+	}
+	if r.Get(running.ID) != running {
+		t.Fatal("dropped a transfer that hasn't ended")
+	}
+	if r.Get(ended[4].ID) != nil || r.Link(ended[4].Token) != nil || r.Get(ended[5].ID) != ended[5] {
+		t.Fatal("didn't drop exactly the oldest ended transfers")
+	}
+}
