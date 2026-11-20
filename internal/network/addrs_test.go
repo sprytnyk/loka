@@ -30,10 +30,16 @@ func TestOrderAddresses(t *testing.T) {
 			[]string{bridge, "192.168.1.10"},
 		},
 		{
-			"local network beats a vpn that owns the route",
+			"vpn and bridge left out beside the local network",
 			[]localAddress{{vpn, false}, {lan, true}, {bridge, false}},
 			vpn,
-			[]string{lan, vpn, bridge},
+			[]string{lan},
+		},
+		{
+			"every local network, route first",
+			[]localAddress{{"10.0.0.5", true}, {vpn, false}, {lan, true}},
+			lan,
+			[]string{lan, "10.0.0.5"},
 		},
 		{
 			"vpn and bridge only",

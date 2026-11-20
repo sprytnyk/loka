@@ -16,8 +16,9 @@ type localAddress struct {
 	lan bool
 }
 
-// LocalAddresses lists this device's IPv4 addresses, the best one for a
-// share link first.
+// LocalAddresses lists this device's local-network IPv4 addresses, the
+// best one for a link first. Other devices may be on any of them, so each
+// gets its own link.
 func LocalAddresses() []string {
 	found, err := interfaceAddresses()
 	if err != nil {
@@ -37,9 +38,9 @@ func routeAddress() string {
 	return conn.LocalAddr().(*net.UDPAddr).IP.String()
 }
 
-// orderAddresses drops loopback addresses and puts local-network addresses
-// first, then the route address, then the rest in text order. A VPN that
-// takes over the default route still comes after the local network.
+// orderAddresses drops loopback addresses, and VPN and virtual ones unless
+// there is nothing else. It puts the route address first, then the rest in
+// text order.
 func orderAddresses(found []localAddress, route string) []string {
 	lan := map[string]bool{}
 	for _, a := range found {
@@ -49,18 +50,21 @@ func orderAddresses(found []localAddress, route string) []string {
 		lan[a.ip] = lan[a.ip] || a.lan
 	}
 	ips := slices.Collect(maps.Keys(lan))
-	last := func(b bool) int {
-		if b {
-			return 1
-		}
-		return 0
+	if slices.ContainsFunc(ips, func(ip string) bool { return lan[ip] }) {
+		ips = slices.DeleteFunc(ips, func(ip string) bool { return !lan[ip] })
 	}
 	slices.SortFunc(ips, func(a, b string) int {
 		return cmp.Or(
-			cmp.Compare(last(!lan[a]), last(!lan[b])),
-			cmp.Compare(last(a != route), last(b != route)),
+			cmp.Compare(boolInt(a != route), boolInt(b != route)),
 			strings.Compare(a, b),
 		)
 	})
 	return ips
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
