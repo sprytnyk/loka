@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sprytnyk/loka/internal/desktop"
+	"github.com/sprytnyk/loka/internal/qr"
 	"github.com/sprytnyk/loka/internal/transfer"
 )
 
@@ -111,4 +112,21 @@ func store(target string, body io.Reader) error {
 		return err
 	}
 	return f.Close()
+}
+
+// qrCode draws text, a link, as a QR code for the page.
+func (s *Server) qrCode(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Text string `json:"text"`
+	}
+	if err := readJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	code, err := qr.Encode(req.Text)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("The link is too long for a QR code"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"svg": code.SVG()})
 }

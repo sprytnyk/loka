@@ -438,7 +438,8 @@ func (c *Code) SVG() string {
 			}
 		}
 	}
-	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" shape-rendering="crispEdges"><rect width="%d" height="%d" fill="#fff"/><path fill="#000" d="%s"/></svg>`,
+	// Inline styles, so a page's own styles for SVG can't repaint the code.
+	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" shape-rendering="crispEdges"><rect width="%d" height="%d" style="fill:#fff;stroke:none"/><path style="fill:#000;stroke:none" d="%s"/></svg>`,
 		n, n, n, n, path.String())
 }
 

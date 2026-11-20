@@ -21,6 +21,7 @@ import (
 
 	"github.com/sprytnyk/loka/internal/desktop"
 	"github.com/sprytnyk/loka/internal/network"
+	"github.com/sprytnyk/loka/internal/qr"
 	"github.com/sprytnyk/loka/internal/server"
 	"github.com/sprytnyk/loka/internal/transfer"
 )
@@ -361,8 +362,20 @@ func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
 	}
 	s := server.New(hostname(), version)
 	s.Transfers.Add(link)
-	for _, address := range addresses {
-		fmt.Fprintf(stdout, "http://%s/download/%s\n", net.JoinHostPort(address, strconv.Itoa(port)), link.Token)
-	}
+	printLinks(stdout, addresses, port, "/download/"+link.Token)
 	return serveUntil(ctx, ln, s.Handler())
+}
+
+// printLinks prints path at each address, each under its QR code when
+// stdout is a terminal, so a phone can open it by camera.
+func printLinks(stdout io.Writer, addresses []string, port int, path string) {
+	f, ok := stdout.(*os.File)
+	codes := ok && isTerminal(f)
+	for _, address := range addresses {
+		link := "http://" + net.JoinHostPort(address, strconv.Itoa(port)) + path
+		if code, err := qr.Encode(link); codes && err == nil {
+			fmt.Fprint(stdout, code.Text())
+		}
+		fmt.Fprintln(stdout, link)
+	}
 }

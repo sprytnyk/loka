@@ -127,3 +127,14 @@ func TestPickReturnsChosenPaths(t *testing.T) {
 		t.Fatalf("asked for %v", asked)
 	}
 }
+
+func TestQRCodeForALink(t *testing.T) {
+	s, base := startServer(t)
+	var reply struct{ SVG, Error string }
+	if code := api(t, s, base, "/api/qr", map[string]string{"text": "http://192.0.2.10:45873/"}, &reply); code != http.StatusOK || !strings.HasPrefix(reply.SVG, "<svg") {
+		t.Fatalf("got %d %+v", code, reply)
+	}
+	if code := api(t, s, base, "/api/qr", map[string]string{"text": strings.Repeat("x", 300)}, &reply); code != http.StatusBadRequest || reply.Error == "" {
+		t.Fatalf("too long: got %d %+v", code, reply)
+	}
+}
