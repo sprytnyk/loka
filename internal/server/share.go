@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sprytnyk/loka/internal/network"
 	"github.com/sprytnyk/loka/internal/transfer"
 )
 
@@ -41,6 +42,7 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, errors.New("This link has expired"))
 		return
 	}
+	network.Prove(r.Context())
 	// Stopping the link also stops downloads in progress.
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()

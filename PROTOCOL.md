@@ -36,6 +36,13 @@ flowchart TD
     H -- no --> O["The check page and<br>the certificate only"]
 ```
 
+A connection has 10 seconds to send its first byte. Loka keeps at most 128
+connections from other devices that aren't part of a transfer, whether
+new, idle or busy with another request. Past that, it closes the oldest, so
+connections that send nothing can't use up the file handles a transfer
+needs. Loka doesn't count an upload with its secret or a download with its
+link while it runs.
+
 ## Who is who
 
 Each Loka makes two certificates on its first run and keeps them in its

@@ -70,6 +70,8 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ErrorLog:          log.New(quietHandshakes{os.Stderr}, "", log.LstdFlags),
+		ConnState:         network.ConnState,
+		ConnContext:       network.ConnContext,
 	}
 	plain, secure := network.Split(ln, s.Trust.ServerConfig())
 	listeners := []net.Listener{plain, secure}
@@ -495,6 +497,7 @@ func (s *Server) peerUpload(w http.ResponseWriter, r *http.Request, t *transfer.
 		writeError(w, http.StatusConflict, errors.New("The transfer is not accepted"))
 		return
 	}
+	network.Prove(r.Context())
 	// A cancel must also end a read that is waiting for bytes, as when the
 	// sender has stalled.
 	rc := http.NewResponseController(w)

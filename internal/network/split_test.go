@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -160,5 +161,102 @@ func TestSplitStopsOnOtherErrors(t *testing.T) {
 	}
 	if _, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second); err == nil {
 		t.Fatal("the port is still open")
+	}
+}
+
+// TestSplitClosesTheOldestSilentConnections floods the port with
+// connections that send nothing, and checks only the newest few stay
+// open, while a transfer that proved itself keeps going and a new request
+// still gets an answer.
+func TestSplitClosesTheOldestSilentConnections(t *testing.T) {
+	defer func(m int, local func(net.Conn) bool) { maxUnproven, fromThisDevice = m, local }(maxUnproven, fromThisDevice)
+	maxUnproven = 4
+	fromThisDevice = func(net.Conn) bool { return false }
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, _ := Split(ln, nil)
+	inTransfer, release := make(chan struct{}), make(chan struct{})
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") })
+	mux.HandleFunc("/transfer", func(w http.ResponseWriter, r *http.Request) {
+		Prove(r.Context())
+		close(inTransfer)
+		<-release
+		io.WriteString(w, "done")
+	})
+	srv := &http.Server{
+		Handler:     mux,
+		ConnState:   ConnState,
+		ConnContext: ConnContext,
+	}
+	go srv.Serve(plain)
+	defer srv.Close()
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+	get := func(path string) (string, error) {
+		resp, err := client.Get("http://" + ln.Addr().String() + path)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		return string(body), err
+	}
+
+	transferred := make(chan string, 1)
+	go func() {
+		body, err := get("/transfer")
+		if err != nil {
+			body = err.Error()
+		}
+		transferred <- body
+	}()
+	<-inTransfer
+
+	var silent []net.Conn
+	for range 10 {
+		c, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		silent = append(silent, c)
+	}
+	closed := func(c net.Conn, wait time.Duration) bool {
+		c.SetReadDeadline(time.Now().Add(wait))
+		_, err := c.Read(make([]byte, 1))
+		var ne net.Error
+		return !(errors.As(err, &ne) && ne.Timeout())
+	}
+	for i, c := range silent[:6] {
+		if !closed(c, 2*time.Second) {
+			t.Errorf("silent connection %d is still open", i)
+		}
+	}
+	for i, c := range silent[6:] {
+		if closed(c, 200*time.Millisecond) {
+			t.Errorf("silent connection %d was closed, but it's among the newest", 6+i)
+		}
+	}
+
+	if body, err := get("/"); err != nil || body != "ok" {
+		t.Fatalf("a new request got %q, %v", body, err)
+	}
+	close(release)
+	if body := <-transferred; body != "done" {
+		t.Fatalf("the transfer got %q", body)
+	}
+}
+
+// TestUnwrapFindsTheCountedConnection checks Prove and ConnState find the
+// connection Split counts inside what http.Server sees, TLS or not.
+func TestUnwrapFindsTheCountedConnection(t *testing.T) {
+	c := &tracked{}
+	for _, seen := range []net.Conn{c, peekedConn{c, nil}, tls.Server(peekedConn{c, nil}, nil)} {
+		if unwrap(seen) != c {
+			t.Errorf("unwrap(%T) didn't find the connection", seen)
+		}
 	}
 }
