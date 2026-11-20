@@ -3,12 +3,15 @@
 package server
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -59,7 +62,11 @@ func (s *Server) Close() {
 // Serve answers on ln until ctx is done, over TLS and plain HTTP on the
 // same port.
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
-	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{
+		Handler:           s.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ErrorLog:          log.New(quietHandshakes{os.Stderr}, "", log.LstdFlags),
+	}
 	plain, secure := network.Split(ln, s.Trust.ServerConfig())
 	listeners := []net.Listener{plain, secure}
 	stop := context.AfterFunc(ctx, func() {
@@ -81,6 +88,18 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		}
 	}
 	return first
+}
+
+// quietHandshakes drops log lines about failed TLS handshakes. A browser
+// that doesn't trust this device yet makes one on each visit, as the page
+// checks whether it can move to HTTPS.
+type quietHandshakes struct{ w io.Writer }
+
+func (q quietHandshakes) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte("TLS handshake error")) {
+		return len(p), nil
+	}
+	return q.w.Write(p)
 }
 
 // CAPath is where browsers download this device's certificate authority.
