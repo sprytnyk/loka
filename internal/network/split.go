@@ -57,12 +57,9 @@ func (s *splitter) accept(plain, secure *half, config *tls.Config) {
 				conn.Close()
 				return
 			}
-			var to *half
-			var c net.Conn = peekedConn{conn, r}
+			to, c := plain, net.Conn(peekedConn{conn, r})
 			if first[0] == tlsHandshake {
 				to, c = secure, tls.Server(c, config)
-			} else {
-				to = plain
 			}
 			select {
 			case to.conns <- c:

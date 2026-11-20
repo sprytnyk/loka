@@ -6,6 +6,7 @@ package qr
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -260,7 +261,7 @@ func alignmentPositions(version int) []int {
 	step := (version*8 + n*3 + 5) / (n*4 - 4) * 2
 	positions := []int{6}
 	for pos := version*4 + 10; len(positions) < n; pos -= step {
-		positions = append(positions[:1], append([]int{pos}, positions[1:]...)...)
+		positions = slices.Insert(positions, 1, pos)
 	}
 	return positions
 }

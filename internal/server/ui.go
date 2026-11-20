@@ -31,10 +31,11 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		label = "v" + label
 	}
 	key, mode := "", "phone"
+	local := fromThisDevice(r)
 	switch {
-	case s.OnlyLinks || r.TLS == nil && !fromThisDevice(r):
+	case s.OnlyLinks || r.TLS == nil && !local:
 		mode = "check"
-	case fromThisDevice(r):
+	case local:
 		key, mode = s.key, "desktop"
 	}
 	name, _ := json.Marshal(s.name) // escapes <, > and &, so it is safe in a script
