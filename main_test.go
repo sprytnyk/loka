@@ -307,12 +307,26 @@ func TestForgetCommand(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Names can repeat, so an ID forgets just that one device.
 	var out bytes.Buffer
+	if code := run(context.Background(), []string{"forget", "a"}, nil, &out, &out); code != 0 || out.String() != "Forgot old laptop.\n" {
+		t.Fatalf("got %d %q", code, out.String())
+	}
+	devices, _ := store.Devices()
+	ids := map[string]bool{}
+	for _, d := range devices {
+		ids[d.ID] = true
+	}
+	if ids["a"] || !ids["b"] {
+		t.Fatalf("left %+v", devices)
+	}
+	store.Remember(trust.Device{ID: "a", Name: "old laptop", Fingerprint: "a"})
+	out.Reset()
 	if code := run(context.Background(), []string{"forget", "old laptop"}, nil, &out, &out); code != 0 || out.String() != "Forgot 2 devices named old laptop.\n" {
 		t.Fatalf("got %d %q", code, out.String())
 	}
 	out.Reset()
-	if code := run(context.Background(), []string{"forget", "old laptop"}, nil, &out, &out); code != 1 || !strings.Contains(out.String(), `no remembered device is named "old laptop"`) {
+	if code := run(context.Background(), []string{"forget", "old laptop"}, nil, &out, &out); code != 1 || !strings.Contains(out.String(), `no remembered device has the name or ID "old laptop"`) {
 		t.Fatalf("got %d %q", code, out.String())
 	}
 }

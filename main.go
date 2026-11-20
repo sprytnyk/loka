@@ -136,7 +136,7 @@ func parse(args []string, stdout, stderr io.Writer) (options, int) {
 	case o.command == "share" && len(o.paths) == 0:
 		return fail("share needs one or more paths")
 	case o.command == "forget" && len(o.paths) != 1:
-		return fail("forget needs the name of one device")
+		return fail("forget needs the name or ID of one device")
 	case !named && len(o.paths) > 0:
 		return fail("unknown command %q", o.paths[0])
 	case o.command != "send" && o.command != "share" && o.command != "forget" && len(o.paths) > 0:
@@ -233,6 +233,9 @@ func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
 	stop := context.AfterFunc(ctx, t.Stop)
 	defer stop()
 	v := follow(t, stdout)
+	if v.ForgetID != "" {
+		return fmt.Errorf("%s\nTo trust it, run: loka forget %s", v.Error, v.ForgetID)
+	}
 	if v.Status != transfer.Complete {
 		return errors.New(cmp.Or(v.Error, string(v.Status)))
 	}
@@ -294,7 +297,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 		for _, t := range s.Transfers.All() {
 			if v := t.View(); v.ForgetID != "" && !told[t.ID] {
 				told[t.ID] = true
-				fmt.Fprintf(stdout, "\nRefused a transfer: %s\nTo trust it, run: loka forget %q\n", v.Error, t.Peer)
+				fmt.Fprintf(stdout, "\nRefused a transfer: %s\nTo trust it, run: loka forget %s\n", v.Error, v.ForgetID)
 			}
 		}
 		t := firstWaiting(s)
@@ -394,24 +397,25 @@ func devicesCommand(ctx context.Context, stdout io.Writer) error {
 	return nil
 }
 
-// forgetCommand forgets every remembered device with this name, so a new
-// certificate of theirs is trusted on the next transfer.
-func forgetCommand(name string, stdout io.Writer) error {
+// forgetCommand forgets the remembered device with this ID, or every one
+// with this name, so a new certificate of theirs is trusted on the next
+// transfer.
+func forgetCommand(nameOrID string, stdout io.Writer) error {
 	store, err := openTrust()
 	if err != nil {
 		return err
 	}
-	forgotten, err := store.Forget(func(d trust.Device) bool { return d.Name == name })
+	forgotten, err := store.Forget(func(d trust.Device) bool { return d.ID == nameOrID || d.Name == nameOrID })
 	if err != nil {
 		return err
 	}
 	switch len(forgotten) {
 	case 0:
-		return fmt.Errorf("no remembered device is named %q", name)
+		return fmt.Errorf("no remembered device has the name or ID %q", nameOrID)
 	case 1:
-		fmt.Fprintf(stdout, "Forgot %s.\n", name)
+		fmt.Fprintf(stdout, "Forgot %s.\n", forgotten[0].Name)
 	default:
-		fmt.Fprintf(stdout, "Forgot %d devices named %s.\n", len(forgotten), name)
+		fmt.Fprintf(stdout, "Forgot %d devices named %s.\n", len(forgotten), nameOrID)
 	}
 	return nil
 }

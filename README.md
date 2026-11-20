@@ -138,8 +138,8 @@ macOS, `%AppData%\loka` on Windows). The first transfer with another device is
 trusted as it is, and the accept prompt marks that device as new. After that,
 Loka remembers its certificate. If a remembered device shows a different one,
 another device may be posing as it, and Loka refuses the transfer. To trust it
-anyway, select **Forget this device** or run `loka forget NAME`. A reinstalled
-Loka shows up as a new device instead.
+anyway, select **Forget this device**, or run the `loka forget` command Loka
+prints. A reinstalled Loka shows up as a new device instead.
 
 Browsers can't remember a certificate that way, so each Loka also makes its own
 certificate authority, kept in the same folder. Installed on a phone, it lets
