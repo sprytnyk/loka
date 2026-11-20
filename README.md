@@ -73,9 +73,9 @@ between devices. On Windows, allow Loka through the firewall when asked.
 
 A phone doesn't need Loka. On the computer, select **Receive from a phone** and
 scan the QR code with the phone's camera, or open the address in the phone's
-browser. Choose files or a folder and send. The computer asks you to accept,
-as with any transfer. iPhones and iPads can send files but not folders, because
-their browsers can't choose a folder.
+browser. Choose files or a directory and send. The computer asks you to accept,
+as with any transfer. iPhones and iPads can send files but not directories,
+because their browsers can't choose a directory.
 
 The first time, the phone offers to install Loka's certificate, with the steps
 for Android and iPhone. Do it once, and from then on the page opens over HTTPS
@@ -157,7 +157,7 @@ it, and Loka refuses the transfer. A reinstalled Loka shows up as a new device
 instead, so there is nothing to forget.
 
 Browsers can't remember a certificate that way, so each Loka also makes its own
-certificate authority, kept in the same folder. Installed on a phone, it lets
+certificate authority, kept in the same directory. Installed on a phone, it lets
 the browser check it's talking to your computer. It can only vouch for
 addresses on local networks, so even if someone copied it from your computer,
 they couldn't use it to pose as a web site. Loka never installs it on the

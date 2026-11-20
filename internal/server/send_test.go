@@ -47,7 +47,7 @@ func startSending(t *testing.T, from string, paths []string, host string, port i
 	return out
 }
 
-// TestSendBetweenTwoServers sends a nested folder and a file from one real
+// TestSendBetweenTwoServers sends a nested directory and a file from one real
 // server to another over loopback, through the same API the page uses, and
 // compares the checksums of every file on both sides.
 func TestSendBetweenTwoServers(t *testing.T) {

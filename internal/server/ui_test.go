@@ -181,7 +181,7 @@ func TestPickReturnsChosenPaths(t *testing.T) {
 		}
 	}
 	var failure struct{ Error string }
-	if code := api(t, s, base, "/api/pick", map[string]string{"kind": "folder"}, &failure); code != http.StatusBadRequest {
+	if code := api(t, s, base, "/api/pick", map[string]string{"kind": "photos"}, &failure); code != http.StatusBadRequest {
 		t.Fatalf("an unknown kind answered %d", code)
 	}
 	s.pick = func(desktop.Kind) ([]string, error) { return nil, desktop.ErrNoPicker }

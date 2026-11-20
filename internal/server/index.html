@@ -92,7 +92,7 @@ label.button{display:inline-block}
 <div class="intro"><h1 id="heading" data-i18n="heading">Share files on your network</h1><p id="security-note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span data-i18n="securityNote">Transfers between Lokas are encrypted. Phones and share links need Loka’s certificate once.</span></p></div>
 <div id="message" role="status"></div>
 <section class="card" id="phone"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></span><div><h2 data-i18n="phoneTitle">Choose what to send</h2><p data-i18n="phoneHint">The computer asks before it saves anything.</p></div></div>
-<div class="row"><label class="button secondary"><input type="file" id="phone-files" class="visually-hidden" multiple><span data-i18n="chooseFiles">Choose files</span></label><label class="button secondary" id="phone-folder-button"><input type="file" id="phone-folder" class="visually-hidden" webkitdirectory><span data-i18n="chooseDirectory">Choose directory</span></label></div>
+<div class="row"><label class="button secondary"><input type="file" id="phone-files" class="visually-hidden" multiple><span data-i18n="chooseFiles">Choose files</span></label><label class="button secondary" id="phone-directory-button"><input type="file" id="phone-directory" class="visually-hidden" webkitdirectory><span data-i18n="chooseDirectory">Choose directory</span></label></div>
 <p id="phone-selection" role="status">Nothing selected</p><ul id="phone-selected"></ul>
 <div class="row"><button id="phone-send" data-i18n="send">Send</button><button class="secondary" id="phone-cancel" data-i18n="cancel" hidden>Cancel</button></div>
 <p id="phone-status" role="status"></p><progress id="phone-progress" max="100" hidden></progress></section>
@@ -1010,7 +1010,7 @@ function addPhoneFiles(files) {
   }
   renderPhoneSelection();
 }
-for (const id of ['phone-files', 'phone-folder']) {
+for (const id of ['phone-files', 'phone-directory']) {
   $(id).onchange = e => {
     addPhoneFiles(e.target.files);
     e.target.value = '';
@@ -1075,7 +1075,7 @@ function phoneBusy(busy) {
   $('phone-cancel').hidden = !busy;
   $('phone-progress').hidden = !busy;
   $('phone-progress').value = 0;
-  for (const id of ['phone-files', 'phone-folder']) $(id).disabled = busy;
+  for (const id of ['phone-files', 'phone-directory']) $(id).disabled = busy;
 }
 function serverError(text) {
   try {
@@ -1146,9 +1146,9 @@ function phoneCancel() {
 $('phone-cancel').onclick = phoneCancel;
 addEventListener('pagehide', phoneCancel);
 
-// iPhones and iPads can't choose a folder from the browser.
+// iPhones and iPads can't choose a directory from the browser.
 const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-$('phone-folder-button').hidden = ios || !('webkitdirectory' in $('phone-folder'));
+$('phone-directory-button').hidden = ios || !('webkitdirectory' in $('phone-directory'));
 
 // Moving to HTTPS. A share link carries its token after #, which browsers
 // never send, so it doesn't cross the network before the connection is

@@ -458,10 +458,10 @@ func TestLinksShareOneBudget(t *testing.T) {
 	}
 }
 
-// TestSendingAFolderKeepsNoFilesOpen sends a folder of more files than the
+// TestSendingADirectoryKeepsNoFilesOpen sends a directory of more files than the
 // open file limit allows, which works because nothing is held open while
 // the transfer waits.
-func TestSendingAFolderKeepsNoFilesOpen(t *testing.T) {
+func TestSendingADirectoryKeepsNoFilesOpen(t *testing.T) {
 	root := t.TempDir()
 	tree := map[string]string{}
 	for i := range 64 {
