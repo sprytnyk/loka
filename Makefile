@@ -1,4 +1,4 @@
-.PHONY: all run build check lint test format release
+.PHONY: all run build check lint test test-large format release
 
 VERSION ?= $(patsubst v%,%,$(shell git describe --tags --always --dirty))
 
@@ -18,6 +18,10 @@ lint:
 
 test:
 	go test -race ./...
+
+# Sends a file over 8 GiB, which needs that much free disk space.
+test-large:
+	LOKA_LARGE_TESTS=1 go test -count=1 -run Over8GiB ./internal/transfer/
 
 format:
 	gofmt -w .

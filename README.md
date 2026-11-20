@@ -191,6 +191,7 @@ symbolic links inside the directories you choose.
 ## Development
 
 Run `make check` for gofmt, go vet and the tests, and `make format` to format
-the code. `make build` builds `dist/loka` for this computer. `make release`
-builds the archives for every system into `dist/`, after checking that the
-build for this computer runs.
+the code. `make test-large` also sends a file over 8 GiB, which needs that
+much free disk space. `make build` builds `dist/loka` for this computer.
+`make release` builds the archives for every system into `dist/`, after
+checking that the build for this computer runs.
