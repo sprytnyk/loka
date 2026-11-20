@@ -1,8 +1,12 @@
 # Loka
 
 Share files and directories with computers and phones on your local network.
-Loka is one program with nothing else to install. It runs in your browser,
-finds other devices by itself, and needs no account, server or internet.
+Files go straight from one device to the other, encrypted, and never pass
+through a server or the internet.
+
+Loka is one program with nothing else to install, used in the browser or the
+terminal. It finds other devices by itself, and phones need only a browser. It
+needs no account and sends nothing outside your network.
 
 ![Loka showing selected files, nearby devices, and transfer progress](docs/loka.png)
 
