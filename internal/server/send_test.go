@@ -122,7 +122,16 @@ func TestSeveralIncomingAtOnce(t *testing.T) {
 	for _, dir := range []string{"a", "b"} {
 		outs = append(outs, startSending(t, dir, []string{filepath.Join(root, dir, "report.txt")}, host, port))
 	}
-	waitFor(t, "both offers", func() bool { return len(receiver.Transfers.All()) == 2 })
+	// An offer from a Loka can be accepted only once pairing is done.
+	waitFor(t, "both offers", func() bool {
+		waiting := 0
+		for _, in := range receiver.Transfers.All() {
+			if in.Status() == transfer.Waiting {
+				waiting++
+			}
+		}
+		return waiting == 2
+	})
 	for _, in := range receiver.Transfers.All() {
 		api(t, receiver, receiverURL, "/api/accept", map[string]string{"id": in.ID, "destination": destination}, nil)
 	}
