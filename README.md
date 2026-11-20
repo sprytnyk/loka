@@ -71,15 +71,24 @@ browser. Choose files or a folder and send. The computer asks you to accept,
 as with any transfer. iPhones and iPads can send files but not folders, because
 their browsers can't choose a folder.
 
+The first time, the phone offers to install Loka's certificate, with the steps
+for Android and iPhone. Do it once, and from then on the page opens over HTTPS
+without a warning. You can also continue without it: the connection is still
+encrypted, but the browser warns that it can't check it's really your computer.
+
 A computer with several networks shows an address and QR code for each. Use
 the one on the same network as the phone.
 
 ## Download links
 
 For someone without Loka, add what to share and select **Create link**. The
-link works in any browser while you're sharing. Each link comes with a QR code,
-so a phone can open it by camera, and with one per address when the computer
-is on several networks.
+link works in any browser while you're sharing. Its **QR code** button shows a
+code a phone can open by camera, one per address when the computer is on
+several networks.
+
+A link looks like `http://192.0.2.10:45873/#d=…`. Browsers never send the part
+after `#`, so the page moves to HTTPS before the link's secret leaves the
+device, the same way as for phones above.
 
 A single file downloads as itself, and an interrupted download can resume.
 Directories and several files download as a ZIP that Loka builds during the
@@ -99,9 +108,14 @@ loka forget my-laptop
 `send` takes the receiver's address. `receive` asks where to put each
 transfer; leave the answer empty to decline. It also prints the address and QR
 code a phone can send from. `share` prints a link and its QR code for each
-local address, and the link works until you press Ctrl+C. `--address` limits
-it to one address. `devices` marks the devices Loka remembers, and `forget`
-forgets one (see below).
+local address, plus a `curl` command, and the link works until you press
+Ctrl+C. `--address` limits it to one address. `devices` marks the devices Loka
+remembers, and `forget` forgets one (see below).
+
+The `curl` command uses `-k`, since curl doesn't know Loka's certificate. To
+check it instead, download the certificate from the help on the page, convert
+it with `openssl x509 -inform DER -in loka-ca.crt -out loka-ca.pem`, and give
+curl `--cacert loka-ca.pem` in place of `-k`.
 
 Run `loka -h` for all options and `loka --version` for the version. If the port
 is busy, add `--port 0` to use a free one. Help and errors are in colour in a
@@ -112,12 +126,11 @@ terminal. Set `NO_COLOR=1` to turn that off.
 | Between | Encrypted |
 | --- | --- |
 | Two computers running Loka | Yes |
-| A phone's browser and Loka | No |
-| Download links | No |
+| A phone's browser and Loka | Yes |
+| Download links | Yes |
 
-Browsers don't trust the certificate Loka makes for itself, so anything a
-browser sends or downloads goes as plain HTTP. Use those only on networks you
-trust. Anyone with a link can download while you're sharing.
+The page on your own computer opens at `http://127.0.0.1`, which never leaves
+it. The **?** button on the page explains the rest.
 
 Each Loka makes a certificate on its first run and keeps it in your settings
 folder (`~/.config/loka` on Linux, `~/Library/Application Support/loka` on
@@ -128,8 +141,22 @@ another device may be posing as it, and Loka refuses the transfer. To trust it
 anyway, select **Forget this device** or run `loka forget NAME`. A reinstalled
 Loka shows up as a new device instead.
 
-Loka 0.1 can't receive from this version, and what it sends arrives as if from
-a browser. Update Loka on every device.
+Browsers can't remember a certificate that way, so each Loka also makes its own
+certificate authority, kept in the same folder. Installed on a phone, it lets
+the browser check it's talking to your computer. It can only vouch for
+addresses on local networks, so even if someone copied it from your computer,
+they couldn't use it to pose as a web site. Loka never installs it on the
+computer itself.
+
+Two steps still go over plain HTTP: the small page a phone opens first, which
+moves it to HTTPS, and the download of the certificate. Someone on the network
+could change either. To be sure, compare the certificate's fingerprint in the
+phone's certificate details with the one in the page's help. Once it's
+installed, you can open `https://` and the address directly. Anyone with a link
+can download while you're sharing.
+
+Loka 0.1 can't receive from this version, and this version refuses what Loka
+0.1 sends, asking it to update. Update Loka on every device.
 
 An interrupted transfer starts over. Loka skips symbolic links inside the
 directories you choose.
