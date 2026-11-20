@@ -1,7 +1,8 @@
 # Loka
 
-Share files and directories with computers on your local network. Loka is one
-program with nothing else to install.
+Share files and directories with computers and phones on your local network.
+Loka is one program with nothing else to install. It runs in your browser,
+finds other devices by itself, and needs no account, server or internet.
 
 ![Loka showing selected files, nearby devices, and transfer progress](docs/loka.png)
 
@@ -62,11 +63,23 @@ leaves nothing behind.
 If the computers can't see each other, the Wi-Fi network may block connections
 between devices. On Windows, allow Loka through the firewall when asked.
 
+## From a phone
+
+A phone doesn't need Loka. On the computer, select **Receive from a phone** and
+scan the QR code with the phone's camera, or open the address in the phone's
+browser. Choose files or a folder and send. The computer asks you to accept,
+as with any transfer. iPhones and iPads can send files but not folders, because
+their browsers can't choose a folder.
+
+A computer with several networks shows an address and QR code for each. Use
+the one on the same network as the phone.
+
 ## Download links
 
-For someone without Loka, add what to share and select **Create link**. Enter
-your local address if Loka can't find it. The link works in any browser while
-you're sharing.
+For someone without Loka, add what to share and select **Create link**. The
+link works in any browser while you're sharing. Each link comes with a QR code,
+so a phone can open it by camera, and with one per address when the computer
+is on several networks.
 
 A single file downloads as itself, and an interrupted download can resume.
 Directories and several files download as a ZIP that Loka builds during the
@@ -79,12 +92,16 @@ directory is deleted or replaced, the link stops working.
 loka receive
 loka devices
 loka send --to 192.0.2.10 /path/to/file /path/to/directory
-loka share --address 192.0.2.10 /path/to/file
+loka share /path/to/file
+loka forget my-laptop
 ```
 
 `send` takes the receiver's address. `receive` asks where to put each
-transfer; leave the answer empty to decline. `share` prints a link that works
-until you press Ctrl+C. Without `--address`, it uses this computer's address.
+transfer; leave the answer empty to decline. It also prints the address and QR
+code a phone can send from. `share` prints a link and its QR code for each
+local address, and the link works until you press Ctrl+C. `--address` limits
+it to one address. `devices` marks the devices Loka remembers, and `forget`
+forgets one (see below).
 
 Run `loka -h` for all options and `loka --version` for the version. If the port
 is busy, add `--port 0` to use a free one. Help and errors are in colour in a
@@ -92,10 +109,46 @@ terminal. Set `NO_COLOR=1` to turn that off.
 
 ## Safety
 
-Transfers aren't encrypted, so use Loka only on networks you trust. Anyone with
-a link can download while you're sharing. An interrupted transfer between
-devices starts over. Loka skips symbolic links inside the directories you
-choose.
+| Between | Encrypted |
+| --- | --- |
+| Two computers running Loka | Yes |
+| A phone's browser and Loka | No |
+| Download links | No |
+
+Browsers don't trust the certificate Loka makes for itself, so anything a
+browser sends or downloads goes as plain HTTP. Use those only on networks you
+trust. Anyone with a link can download while you're sharing.
+
+Each Loka makes a certificate on its first run and keeps it in your settings
+folder (`~/.config/loka` on Linux, `~/Library/Application Support/loka` on
+macOS, `%AppData%\loka` on Windows). The first transfer with another device is
+trusted as it is, and the accept prompt marks that device as new. After that,
+Loka remembers its certificate. If a remembered device shows a different one,
+another device may be posing as it, and Loka refuses the transfer. To trust it
+anyway, select **Forget this device** or run `loka forget NAME`. A reinstalled
+Loka shows up as a new device instead.
+
+Loka 0.1 can't receive from this version, and what it sends arrives as if from
+a browser. Update Loka on every device.
+
+An interrupted transfer starts over. Loka skips symbolic links inside the
+directories you choose.
+
+## Compared with LocalSend and st
+
+| | Loka | [LocalSend](https://localsend.org) | [st](https://github.com/chyok/st) |
+| --- | --- | --- | --- |
+| On computers | One program, used in the browser or the terminal | An app, or a separate command-line tool | One program, used in the terminal |
+| On phones | Nothing, the browser | The app | Nothing, the browser |
+| Between two installs | Encrypted | Encrypted by default | Not encrypted |
+| From a phone's browser | You accept each upload | Not offered | Saved without asking |
+| Download link for a browser | Yes | Yes | Yes |
+| Finding devices | Multicast | Multicast, then scanning the network | Multicast |
+| Account, server or internet | None | None | None |
+
+## Planned
+
+- Resume an interrupted transfer between devices instead of starting over.
 
 ## Development
 

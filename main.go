@@ -1,5 +1,5 @@
-// Command loka shares files and directories with computers on the same local
-// network.
+// Command loka shares files and directories with computers and phones on the
+// same local network.
 package main
 
 import (

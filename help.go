@@ -58,7 +58,7 @@ func printHelp(w io.Writer, fs *flag.FlagSet) {
 	}
 
 	var b strings.Builder
-	b.WriteString(usageLine(p) + "\n\nShare files and directories with computers on the same local network.\n")
+	b.WriteString(usageLine(p) + "\n\nShare files and directories with computers and phones on the same local network.\n")
 	for _, section := range []struct {
 		name string
 		rows []row
