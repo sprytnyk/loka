@@ -39,7 +39,7 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .drop{flex:none;border:1.5px dashed var(--drop-line);border-radius:12px;background:var(--drop);padding:18px 16px 14px;text-align:center;margin-bottom:14px}.drop.over{border-color:var(--drop-over-line);background:var(--drop-over)}.drop-icon{display:grid;place-items:center;width:38px;height:38px;margin:0 auto 8px;border-radius:12px;background:var(--soft);color:var(--icon)}.drop-title{margin:0;font-weight:650;font-size:14px}.drop .row{justify-content:center;margin-top:10px}
 #selection{margin:10px 0 0;color:var(--muted);font-size:12px}
 .field-label{display:block;margin:0 var(--action-inset) 7px;font-size:12px;font-weight:650;color:var(--label)}.manual{flex:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.manual .row{align-items:stretch}#port{flex:0 1 84px;min-width:68px}#selected{margin:12px 0 0;padding:0 var(--action-inset);list-style:none;overflow-wrap:anywhere}#selected:empty{display:none}#selected li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}#selected button{flex:none;padding:5px 9px;font-size:12px}
-#peers>p,#transfers>p{margin:0;color:var(--muted);font-size:13px}.item{background:var(--item);border:1px solid var(--item-line);border-radius:10px;padding:var(--row-padding);margin-top:10px;overflow-wrap:anywhere}.item:first-child{margin-top:0}.item strong{color:var(--strong)}.item .row{justify-content:space-between}.item small,.muted,small{color:var(--muted)}.item button{margin-top:5px}.item .row button{margin-top:0}.notice{color:var(--notice)}progress{width:100%;height:.45rem;accent-color:var(--accent)}a{color:var(--link);overflow-wrap:anywhere}#message:empty,#incoming-error:empty,#incoming-warning:empty{display:none}#message{flex:none;margin-bottom:16px;padding:12px 15px;background:var(--message);border:1px solid var(--message-line);border-radius:10px;color:var(--message-ink);overflow-wrap:anywhere}
+#peers>p,#transfers>p{margin:0;color:var(--muted);font-size:13px}.item{background:var(--item);border:1px solid var(--item-line);border-radius:10px;padding:var(--row-padding);margin-top:10px;overflow-wrap:anywhere}.item:first-child{margin-top:0}.item strong{color:var(--strong)}.item .row{justify-content:space-between}.item small,.muted,small{color:var(--muted)}.item button{margin-top:5px}.item .row button{margin-top:0}.notice{color:var(--notice)}progress{width:100%;height:.45rem;accent-color:var(--accent)}a{color:var(--link);overflow-wrap:anywhere}#message:empty,#incoming-error:empty,#incoming-warning:empty,#incoming-code:empty{display:none}#incoming-code,.transfer-code{font-weight:600;font-variant-numeric:tabular-nums}#message{flex:none;margin-bottom:16px;padding:12px 15px;background:var(--message);border:1px solid var(--message-line);border-radius:10px;color:var(--message-ink);overflow-wrap:anywhere}
 #links:not(:empty){margin-top:12px}
 .qr-list{display:flex;flex-wrap:wrap;gap:14px}.qr-entry{display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:100%;font-size:13px}
 .qr-code{display:block;width:150px;height:150px;border-radius:10px;overflow:hidden;background:#fff}.qr-code svg{display:block;width:100%;height:100%}
@@ -114,7 +114,7 @@ label.button{display:inline-block}
 </div><footer class="footer-note"><a href="https://github.com/sprytnyk/loka" data-i18n="source">Source on GitHub</a></footer>
 </main>
 <dialog id="incoming" aria-labelledby="incoming-title">
-<h2 id="incoming-title" data-i18n="incomingTitle">Incoming transfer</h2><p id="incoming-details"></p><p id="incoming-warning" class="notice"></p><div id="incoming-files"></div>
+<h2 id="incoming-title" data-i18n="incomingTitle">Incoming transfer</h2><p id="incoming-details"></p><p id="incoming-code"></p><p id="incoming-warning" class="notice"></p><div id="incoming-files"></div>
 <div class="row"><input id="destination" data-i18n-placeholder="destination" placeholder="Destination directory" data-i18n-label="destination" aria-label="Destination directory"><button type="button" class="secondary" id="choose-destination" data-i18n="browse">Browse</button></div>
 <p id="incoming-error" class="notice" role="alert"></p>
 <div class="row"><button type="button" id="accept-incoming" data-i18n="accept">Accept</button><button type="button" class="secondary" id="decline-incoming" data-i18n="decline">Decline</button></div>
@@ -137,7 +137,7 @@ const key = '__LOKA_KEY__';
 const mode = '__LOKA_MODE__';
 const hostName = __LOKA_NAME__; // the computer this page belongs to
 const caFingerprint = '__LOKA_CA_FINGERPRINT__'; // SHA-256 of this computer's authority, in hex
-const activeTransferStatuses = ['waiting', 'accepted', 'receiving', 'sending'];
+const activeTransferStatuses = ['pairing', 'waiting', 'accepted', 'receiving', 'sending'];
 let selected = [];
 let incoming = null; // the offer the dialog shows
 let pendingSelections = new Map(); // transfer id -> the items it sends
@@ -208,6 +208,7 @@ const messages = {
     to: 'To {name}',
     newDevice: 'New device: Loka hasn’t seen it before. Make sure you expect this transfer.',
     newReceiver: 'New device: Loka hasn’t sent to it before. Make sure it’s the one you meant.',
+    code: 'Pairing code {code}. Check that the other device shows the same.',
     forget: 'Forget this device',
     forgotten: 'Forgotten. Its certificate will be trusted on the next transfer.',
     names: {one: '{n} name', other: '{n} names'},
@@ -218,7 +219,7 @@ const messages = {
     help: 'How Loka keeps transfers private',
     helpTitle: 'How Loka keeps transfers private',
     helpLokasTitle: 'Between Lokas',
-    helpLokas: 'Always encrypted. The first time two Lokas talk, each remembers the other’s certificate. If a remembered device ever shows a different one, Loka refuses the transfer, since another device may be posing as it.',
+    helpLokas: 'Always encrypted. The first time two Lokas talk, each remembers the other’s certificate. If a remembered device ever shows a different one, Loka refuses the transfer, since another device may be posing as it. Both also show a pairing code for each transfer. The first time, check it’s the same on both, so you know no other device sits between them.',
     helpBrowsersTitle: 'Phones and share links',
     helpBrowsers: 'Also encrypted, with a certificate from this computer’s own authority. A browser trusts it only once you install the authority. Until then the phone offers to install it, or warns that the connection isn’t private when you continue without it.',
     helpInstallTitle: 'Installing the certificate',
@@ -243,7 +244,7 @@ const messages = {
     copyFailed: 'Could not upload {name}: {error}',
     destinationPickFailed: '{error}. Enter a destination path instead.',
     chooseDestination: 'Choose or enter a destination directory.',
-    statuses: {waiting: 'waiting', accepted: 'accepted', sending: 'sending', receiving: 'receiving', complete: 'complete', failed: 'failed', cancelled: 'cancelled'},
+    statuses: {pairing: 'pairing', waiting: 'waiting', accepted: 'accepted', sending: 'sending', receiving: 'receiving', complete: 'complete', failed: 'failed', cancelled: 'cancelled'},
     receivePhone: 'Receive from a phone',
     receivePhoneHint: 'Scan a code with the phone’s camera, or open the address in its browser. If there are several, use the one on the phone’s network. Loka asks here before saving anything.',
     close: 'Close',
@@ -314,6 +315,7 @@ const messages = {
     to: 'До {name}',
     newDevice: 'Новий пристрій: Loka бачить його вперше. Переконайтеся, що чекаєте на це передавання.',
     newReceiver: 'Новий пристрій: Loka надсилає на нього вперше. Переконайтеся, що це саме той пристрій.',
+    code: 'Код з’єднання {code}. Перевірте, що інший пристрій показує такий самий.',
     forget: 'Забути цей пристрій',
     forgotten: 'Забуто. Його сертифікату буде довіра під час наступного передавання.',
     names: {one: '{n} назва', few: '{n} назви', many: '{n} назв', other: '{n} назви'},
@@ -324,7 +326,7 @@ const messages = {
     help: 'Як Loka захищає передавання',
     helpTitle: 'Як Loka захищає передавання',
     helpLokasTitle: 'Між пристроями з Loka',
-    helpLokas: 'Завжди зашифровані. Коли два пристрої з Loka зв’язуються вперше, кожен запам’ятовує сертифікат іншого. Якщо знайомий пристрій колись покаже інший, Loka відхилить передавання, бо за нього може видавати себе інший пристрій.',
+    helpLokas: 'Завжди зашифровані. Коли два пристрої з Loka зв’язуються вперше, кожен запам’ятовує сертифікат іншого. Якщо знайомий пристрій колись покаже інший, Loka відхилить передавання, бо за нього може видавати себе інший пристрій. Обидва також показують код з’єднання для кожного передавання. Уперше перевірте, що він однаковий на обох. Тоді ви знаєте, що між ними немає іншого пристрою.',
     helpBrowsersTitle: 'Телефони й посилання',
     helpBrowsers: 'Теж зашифровані, сертифікатом від власного центру сертифікації цього комп’ютера. Браузер довіряє йому, лише коли ви встановите цей центр. Доти телефон пропонує його встановити або попереджає, що з’єднання не приватне, якщо продовжити без нього.',
     helpInstallTitle: 'Як установити сертифікат',
@@ -349,7 +351,7 @@ const messages = {
     copyFailed: 'Не вдалося скопіювати {name}: {error}',
     destinationPickFailed: '{error}. Введіть шлях до теки вручну.',
     chooseDestination: 'Виберіть або введіть теку призначення.',
-    statuses: {waiting: 'очікує', accepted: 'прийнято', sending: 'надсилання', receiving: 'отримання', complete: 'завершено', failed: 'помилка', cancelled: 'скасовано'},
+    statuses: {pairing: 'з’єднання', waiting: 'очікує', accepted: 'прийнято', sending: 'надсилання', receiving: 'отримання', complete: 'завершено', failed: 'помилка', cancelled: 'скасовано'},
     receivePhone: 'Отримати з телефона',
     receivePhoneHint: 'Відскануйте код камерою телефона або відкрийте адресу в його браузері. Якщо адрес кілька, виберіть ту, що в мережі телефона. Loka спитає тут, перш ніж щось зберегти.',
     close: 'Закрити',
@@ -406,6 +408,8 @@ const serverMessages = {
     [/^The other device's certificate changed during the transfer$/, 'Сертифікат іншого пристрою змінився під час передавання'],
     [/^(.*) showed a different certificate than before, so another device may be posing as it\. To trust it anyway, forget it and try again$/s, '$1 показав інший сертифікат, ніж раніше, тож інший пристрій може видавати себе за нього. Щоб однаково довіряти йому, забудьте його й спробуйте знову'],
     [/^Another device answered at this address, not the one you picked\. It may be posing as it$/, 'За цією адресою відповів інший пристрій, а не той, який ви вибрали. Можливо, він видає себе за нього'],
+    [/^The pairing code didn't check out, so the transfer stopped$/, 'Код з’єднання не збігся, тож передавання зупинено'],
+    [/^The receiver runs an older Loka\. Update Loka on it$/, 'На отримувачі старіша версія Loka. Оновіть Loka на ньому'],
     [/^The receiver remembers this device with a different certificate and refused the transfer$/, 'Отримувач пам’ятає цей пристрій з іншим сертифікатом і відхилив передавання'],
     [/^Choose one or more files or directories$/, 'Виберіть один чи кілька файлів або тек'],
     [/^Cannot send (.*): only files and directories can be sent$/s, 'Не можна надіслати $1: надсилати можна лише файли й теки'],
@@ -819,7 +823,7 @@ function renderTransfers(transfers) {
       card.dataset.transfer = transfer.id;
       card.innerHTML = `<div class="row"><strong>${escapeHtml(peerName(transfer))}</strong><span class="transfer-status"></span></div>
         ${fileNames(transfer.items || [])}
-        <p class="notice" hidden></p><progress max="100" hidden></progress>
+        <p class="transfer-code" hidden></p><p class="notice" hidden></p><progress max="100" hidden></progress>
         <button class="secondary" data-cancel="${escapeHtml(transfer.id)}" hidden>${escapeHtml(t('cancel'))}</button>
         <button class="secondary" data-forget="${escapeHtml(transfer.forget_id || '')}" hidden>${escapeHtml(t('forget'))}</button>`;
       if (previousCard) previousCard.after(card);
@@ -837,6 +841,9 @@ function renderTransfers(transfers) {
     const newReceiver = transfer.direction !== 'incoming' && transfer.new_device && !transfer.error;
     error.textContent = transfer.error ? fromServer(transfer.error) : newReceiver ? t('newReceiver') : '';
     error.hidden = !error.textContent;
+    const code = card.querySelector('.transfer-code');
+    code.textContent = transfer.direction === 'outgoing' && transfer.status === 'waiting' && transfer.code ? t('code', {code: transfer.code}) : '';
+    code.hidden = !code.textContent;
     const progress = card.querySelector('progress');
     progress.value = transfer.progress;
     progress.hidden = !active;
@@ -869,6 +876,7 @@ function peerName(transfer) {
 function renderIncomingDetails() {
   const warning = incoming.new_device ? t('newDevice') : '';
   $('incoming-details').textContent = peerName(incoming);
+  $('incoming-code').textContent = incoming.code ? t('code', {code: incoming.code}) : '';
   $('incoming-warning').textContent = warning;
   $('incoming-files').innerHTML = fileNames(incoming.items || []);
 }

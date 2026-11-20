@@ -87,7 +87,7 @@ func sendPicked(t *testing.T, store *trust.Store, paths []string, host string, p
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := transfer.New(transfer.Outgoing, host, items, size, transfer.Waiting)
+	out := transfer.New(transfer.Outgoing, host, items, size, transfer.Pairing)
 	go func() { out.Finish(SendTo(out, entries, store, "laptop", host, port, id)) }()
 	return out
 }

@@ -239,12 +239,15 @@ func TestSendAndReceiveCommands(t *testing.T) {
 	treetest.Write(t, source, map[string]string{"dir/a.txt": "a", "dir/sub/b.txt": "b"})
 	sent, _, sendCode := runLoka(t, nil, "send", filepath.Join(source, "dir"), "--to", "127.0.0.1", "--peer-port", port)
 
-	received.wait(t, `wants to send: dir\nDestination directory`)
+	code := received.wait(t, `wants to send: dir\nPairing code (\d{3} \d{3})\. Check that the sender shows the same\.\nDestination directory`)[1]
 	io.WriteString(answer, filepath.Join(destination, "missing")+"\n")
 	received.wait(t, `must be an existing directory\nDestination directory`)
 	io.WriteString(answer, destination+"\n")
 	if c := <-sendCode; c != 0 || !strings.Contains(sent.String(), "complete: 100%") {
 		t.Fatalf("send exited %d, output %q", c, sent.String())
+	}
+	if !strings.Contains(sent.String(), "Pairing code "+code+".") {
+		t.Fatalf("the sender didn't show the receiver's code %s, output %q", code, sent.String())
 	}
 	treetest.Same(t, treetest.Read(t, destination), treetest.Read(t, source))
 

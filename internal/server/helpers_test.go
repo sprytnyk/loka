@@ -113,13 +113,14 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 	}
 }
 
-// waitForIncoming returns the first incoming transfer on s.
+// waitForIncoming returns the first incoming transfer on s once it is
+// past pairing, as the person sees it.
 func waitForIncoming(t *testing.T, s *Server) *transfer.Transfer {
 	t.Helper()
 	var found *transfer.Transfer
 	waitFor(t, "an incoming offer", func() bool {
 		for _, tr := range s.Transfers.All() {
-			if tr.Direction == transfer.Incoming {
+			if tr.Direction == transfer.Incoming && tr.Status() != transfer.Pairing {
 				found = tr
 				return true
 			}

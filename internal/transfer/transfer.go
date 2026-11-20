@@ -19,6 +19,7 @@ import (
 type Status string
 
 const (
+	Pairing   Status = "pairing"   // between Lokas, until both know the pairing code
 	Waiting   Status = "waiting"   // offered; the receiver has not answered
 	Accepted  Status = "accepted"  // the receiver chose a destination
 	Sending   Status = "sending"   // bytes are leaving this device
@@ -58,8 +59,12 @@ type Transfer struct {
 	Browser     bool
 	DeviceID    string
 	Fingerprint string
-	Token       string       // the download link token, only for links
-	shared      []sharedItem // what a link serves, only for links
+	// For the pairing code of an incoming transfer from a Loka: what the
+	// sender committed to, and this side's nonce.
+	Commitment string
+	Nonce      string
+	Token      string       // the download link token, only for links
+	shared     []sharedItem // what a link serves, only for links
 
 	Done atomic.Int64 // bytes of file content moved so far
 
@@ -71,6 +76,7 @@ type Transfer struct {
 	err         string
 	forgetID    string // the device to forget to trust its new certificate
 	newDevice   bool   // the other Loka has not been remembered yet
+	code        string // the pairing code, once both nonces are known
 	destination string
 	speed       speedometer
 }
@@ -143,7 +149,7 @@ func (t *Transfer) Stop() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	switch t.status {
-	case Waiting, Accepted:
+	case Pairing, Waiting, Accepted:
 		t.status = Cancelled
 	case Shared:
 		t.status = Stopped
@@ -196,6 +202,19 @@ func (t *Transfer) NewDevice() bool {
 	return t.newDevice
 }
 
+// Pair records the pairing code of a transfer between Lokas and moves it
+// on to waiting for the receiver. It reports false when the transfer was
+// no longer pairing.
+func (t *Transfer) Pair(code string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.status != Pairing {
+		return false
+	}
+	t.code, t.status = code, Waiting
+	return true
+}
+
 // View is what the page sees of a transfer.
 type View struct {
 	ID        string    `json:"id"`
@@ -211,13 +230,14 @@ type View struct {
 	Browser   bool      `json:"browser,omitempty"`
 	NewDevice bool      `json:"new_device,omitempty"`
 	ForgetID  string    `json:"forget_id,omitempty"`
+	Code      string    `json:"code,omitempty"` // the pairing code, between Lokas
 }
 
 // View returns what the page shows now. While bytes move it includes the
 // speed, which reading the view measures.
 func (t *Transfer) View() View {
 	t.mu.Lock()
-	status, err, forgetID, newDevice := t.status, t.err, t.forgetID, t.newDevice
+	status, err, forgetID, newDevice, code := t.status, t.err, t.forgetID, t.newDevice, t.code
 	var speed *float64
 	if status == Sending || status == Receiving {
 		mbps := t.speed.read(t.Done.Load(), time.Now())
@@ -238,6 +258,7 @@ func (t *Transfer) View() View {
 		Browser:   t.Browser,
 		NewDevice: newDevice,
 		ForgetID:  forgetID,
+		Code:      code,
 	}
 }
 

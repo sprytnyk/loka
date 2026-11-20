@@ -228,7 +228,7 @@ func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	t := transfer.New(transfer.Outgoing, o.to, items, size, transfer.Waiting)
+	t := transfer.New(transfer.Outgoing, o.to, items, size, transfer.Pairing)
 	go func() { t.Finish(server.SendTo(t, entries, store, hostname(), o.to, o.peerPort, "")) }()
 	stop := context.AfterFunc(ctx, t.Stop)
 	defer stop()
@@ -246,13 +246,17 @@ func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
 func follow(t *transfer.Transfer, stdout io.Writer) transfer.View {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
-	warned := false
+	warned, coded := false, false
 	for {
 		v := t.View()
-		// An incoming offer already said so when it was shown.
+		// An incoming offer already said both when it was shown.
 		if t.Direction == transfer.Outgoing && v.NewDevice && !warned {
 			warned = true
 			fmt.Fprintf(stdout, "\r%s is a new device, not seen before. Make sure it's the one you meant.\n", v.Name)
+		}
+		if t.Direction == transfer.Outgoing && v.Code != "" && !coded {
+			coded = true
+			fmt.Fprintf(stdout, "\rPairing code %s. Check that the receiver shows the same.\n", v.Code)
 		}
 		label := fmt.Sprintf("%s: %d%%", v.Status, v.Progress)
 		if v.SpeedMbps != nil {
@@ -311,6 +315,9 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 			continue
 		}
 		fmt.Fprintf(stdout, "\n%s wants to send: %s\n", sender(t), strings.Join(t.Items, ", "))
+		if v := t.View(); v.Code != "" {
+			fmt.Fprintf(stdout, "Pairing code %s. Check that the sender shows the same.\n", v.Code)
+		}
 		if !answerOffer(ctx, s, t, answers, stdout) {
 			return <-served
 		}

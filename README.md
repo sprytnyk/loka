@@ -40,7 +40,8 @@ Run `loka` on both computers. It opens in your browser.
    enter a path.
 2. Select the receiving device. If it doesn't show up, enter its address and
    port.
-3. On the receiver, choose an existing directory and accept.
+3. On the receiver, choose an existing directory and accept. Both computers
+   show a pairing code. The first time, check it's the same on both.
 
 Several transfers can arrive at once, and each shows its speed. Loka remembers
 the last destination until it stops.
@@ -134,12 +135,18 @@ it. The **?** button on the page explains the rest.
 
 Each Loka makes a certificate on its first run and keeps it in your settings
 folder (`~/.config/loka` on Linux, `~/Library/Application Support/loka` on
-macOS, `%AppData%\loka` on Windows). The first transfer with another device is
-trusted as it is, and Loka marks that device as new on both sides. After that,
-Loka remembers its certificate. If a remembered device shows a different one,
-another device may be posing as it, and Loka refuses the transfer. To trust it
-anyway, select **Forget this device**, or run the `loka forget` command Loka
-prints. A reinstalled Loka shows up as a new device instead.
+macOS, `%AppData%\loka` on Windows). Loka trusts the first transfer with
+another device as it is, and marks that device as new on both sides.
+
+Both devices show a six-digit pairing code, made from both certificates and a
+random number from each side. If another device sits between them and passes
+the transfer on, the codes differ. Check them that first time.
+
+After the first transfer, Loka remembers the other device's certificate. If a
+remembered device shows a different one, another device may be posing as it,
+and Loka refuses the transfer. To trust it anyway, select **Forget this
+device**, or run the `loka forget` command Loka prints. A reinstalled Loka
+shows up as a new device instead.
 
 Browsers can't remember a certificate that way, so each Loka also makes its own
 certificate authority, kept in the same folder. Installed on a phone, it lets
@@ -155,8 +162,8 @@ phone's certificate details with the one in the page's help. Once it's
 installed, you can open `https://` and the address directly. Anyone with a link
 can download while you're sharing.
 
-Loka 0.1 can't receive from this version, and this version refuses what Loka
-0.1 sends, asking it to update. Update Loka on every device.
+Loka 0.2.0 can't receive from this version, and this version refuses what it
+sends and tells it to update. Update Loka on every device.
 
 An interrupted transfer starts over. Loka skips symbolic links inside the
 directories you choose.

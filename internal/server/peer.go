@@ -28,6 +28,7 @@ var pollEvery = time.Second
 // SendTo offers entries to the device at host and port, waits for it to
 // accept, then streams them, all over TLS. It returns why the transfer
 // ended, if not complete. The receiver is remembered once it accepts.
+// While it waits, t shows the pairing code, which the receiver shows too.
 //
 // id is the device picked from the list of devices, or empty for an
 // address typed in. Another device answering there is refused. A receiver
@@ -41,13 +42,15 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 	client := &http.Client{Transport: transport}
 
 	var reply offerReply
-	o := offer{Name: from, Items: t.Items[:min(len(t.Items), transfer.MaxOfferItems)], Size: t.Size}
+	nonce := trust.Nonce()
+	o := offer{Name: from, Items: t.Items[:min(len(t.Items), transfer.MaxOfferItems)], Size: t.Size, Commitment: trust.Commit(nonce)}
 	if err := call(t.Context(), client, http.MethodPost, base+"/peer/offer", "", o, &reply); err != nil {
 		return err
 	}
 	if receiver.isNew() {
 		t.MarkNewDevice()
 	}
+	device := receiver.device(cmp.Or(truncate(reply.Name, 255), host))
 	tellReceiver := sync.OnceFunc(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -63,6 +66,19 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 	})
 	defer stop()
 
+	if reply.Nonce == "" {
+		// Loka 0.2.0 answers without one.
+		tellReceiver()
+		return errors.New("The receiver runs an older Loka. Update Loka on it")
+	}
+	if !t.Pair(trust.Code(store.Fingerprint(), device.Fingerprint, nonce, reply.Nonce)) {
+		return context.Canceled
+	}
+	reveal := map[string]string{"nonce": nonce}
+	if err := call(t.Context(), client, http.MethodPost, base+"/peer/reveal/"+reply.ID, reply.Secret, reveal, nil); err != nil {
+		tellReceiver()
+		return err
+	}
 	if err := waitForAnswer(t.Context(), client, base+"/peer/status/"+reply.ID, reply.Secret); err != nil {
 		// Otherwise the receiver would show the offer as waiting forever.
 		tellReceiver()
@@ -70,7 +86,7 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 	}
 	// Remembering is a convenience: a failure only means the receiver
 	// counts as new next time.
-	store.Remember(receiver.device(cmp.Or(truncate(reply.Name, 255), host)))
+	store.Remember(device)
 	if !t.Move(transfer.Sending, transfer.Waiting) {
 		return context.Canceled
 	}
@@ -145,7 +161,7 @@ func waitForAnswer(ctx context.Context, client *http.Client, url, secret string)
 			return nil
 		case transfer.Waiting:
 		default:
-			return errors.New("The receiver declined or cancelled")
+			return errDeclined
 		}
 		select {
 		case <-ctx.Done():

@@ -131,6 +131,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	plain.HandleFunc("POST /peer/offer", s.offer) // to tell an old Loka why it can't send
 	mux.HandleFunc("POST /peer/offer", s.offer)
+	mux.HandleFunc("POST /peer/reveal/{id}", s.peer(s.peerReveal))
 	mux.HandleFunc("GET /peer/status/{id}", s.peer(s.peerStatus))
 	mux.HandleFunc("POST /peer/cancel/{id}", s.peer(s.peerCancel))
 	mux.HandleFunc("POST /peer/upload/{id}", s.peer(s.peerUpload))
@@ -188,21 +189,34 @@ func (s *Server) peer(h func(http.ResponseWriter, *http.Request, *transfer.Trans
 
 // offer is what a sender tells the receiver before anything is sent.
 type offer struct {
-	Name  string   `json:"name"`
-	Items []string `json:"items"`
-	Size  int64    `json:"size"`
+	Name       string   `json:"name"`
+	Items      []string `json:"items"`
+	Size       int64    `json:"size"`
+	Commitment string   `json:"commitment,omitempty"` // to the sender's nonce, from a Loka
 }
 
 type offerReply struct {
 	ID     string `json:"id"`
 	Secret string `json:"secret"`
-	Name   string `json:"name"` // the receiver's, so the sender can remember it
+	Name   string `json:"name"`            // the receiver's, so the sender can remember it
+	Nonce  string `json:"nonce,omitempty"` // the receiver's, to a Loka
 }
+
+// errOldLoka is the reply to a Loka too old to send here. Loka 0.1 sends
+// without TLS, and 0.2.0 without a pairing code. Both show the message.
+var errOldLoka = errors.New("This device runs a newer Loka. Update Loka to send to it.")
+
+// errDeclined is how a sender learns that the person at the receiver
+// declined or cancelled, whichever request it was making.
+var errDeclined = errors.New("The receiver declined or cancelled")
+
+// errCodeMismatch ends a transfer whose sender revealed a nonce other
+// than the one it committed to.
+var errCodeMismatch = errors.New("The pairing code didn't check out, so the transfer stopped")
 
 func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 	if r.TLS == nil {
-		// Only Loka 0.1 sends offers without TLS. It shows this message.
-		writeError(w, http.StatusUpgradeRequired, errors.New("This device runs a newer Loka. Update Loka to send to it."))
+		writeError(w, http.StatusUpgradeRequired, errOldLoka)
 		return
 	}
 	var o offer
@@ -226,8 +240,13 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		s.addOffer(w, t)
 		return
 	}
-	t := transfer.New(transfer.Incoming, cmp.Or(truncate(o.Name, 255), host), items, o.Size, transfer.Waiting)
+	if o.Commitment == "" {
+		writeError(w, http.StatusUpgradeRequired, errOldLoka)
+		return
+	}
+	t := transfer.New(transfer.Incoming, cmp.Or(truncate(o.Name, 255), host), items, o.Size, transfer.Pairing)
 	t.DeviceID, t.Fingerprint = trust.Identify(r.TLS.PeerCertificates[0])
+	t.Commitment, t.Nonce = o.Commitment, trust.Nonce()
 	standing, known, err := s.Trust.Check(t.DeviceID, t.Fingerprint)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -251,7 +270,30 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
 	t.Secret = transfer.RandomToken(24)
 	s.Transfers.Add(t)
-	writeJSON(w, http.StatusOK, offerReply{t.ID, t.Secret, s.name})
+	writeJSON(w, http.StatusOK, offerReply{t.ID, t.Secret, s.name, t.Nonce})
+}
+
+// peerReveal takes the nonce a Loka committed to in its offer, which
+// makes the pairing code. Only then does the offer wait for an answer.
+func (s *Server) peerReveal(w http.ResponseWriter, r *http.Request, t *transfer.Transfer) {
+	var req struct {
+		Nonce string `json:"nonce"`
+	}
+	if err := readJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if trust.Commit(req.Nonce) != t.Commitment {
+		t.Finish(errCodeMismatch)
+		writeError(w, http.StatusBadRequest, errCodeMismatch)
+		return
+	}
+	if !t.Pair(trust.Code(t.Fingerprint, s.Trust.Fingerprint(), req.Nonce, t.Nonce)) {
+		// The person declined while the sender was about to reveal.
+		writeError(w, http.StatusConflict, errDeclined)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) peerStatus(w http.ResponseWriter, _ *http.Request, t *transfer.Transfer) {
@@ -339,7 +381,7 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	t := transfer.New(transfer.Outgoing, req.Host, items, size, transfer.Waiting)
+	t := transfer.New(transfer.Outgoing, req.Host, items, size, transfer.Pairing)
 	s.Transfers.Add(t)
 	go func() {
 		t.Finish(SendTo(t, entries, s.Trust, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort), req.ID))
