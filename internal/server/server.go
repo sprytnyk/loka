@@ -526,7 +526,17 @@ func (s *Server) peerUpload(w http.ResponseWriter, r *http.Request, t *transfer.
 	rc := http.NewResponseController(w)
 	stop := context.AfterFunc(t.Context(), func() { rc.SetReadDeadline(time.Now()) })
 	defer stop()
+	// A sender that went away without a word must end it too.
+	var stalled atomic.Bool
+	stopWatch := transfer.WatchStall(&t.Done, func() {
+		stalled.Store(true)
+		rc.SetReadDeadline(time.Now())
+	})
+	defer stopWatch()
 	err := transfer.Receive(t.Context(), r.Body, t.Destination(), t.Size, &t.Done, s.localName)
+	if err != nil && stalled.Load() {
+		err = transfer.ErrInterrupted
+	}
 	t.Finish(err)
 	switch {
 	case t.Context().Err() != nil:

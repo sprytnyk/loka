@@ -13,7 +13,9 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // A transfer between devices is a tar stream: one header per directory or
@@ -173,6 +175,35 @@ func publish(staged map[string]string, roots []string, destination string) error
 		moved = append(moved, [2]string{from, to})
 	}
 	return nil
+}
+
+// StallTimeout is how long a transfer may move no bytes before it counts
+// as interrupted.
+var StallTimeout = time.Minute
+
+// WatchStall calls stalled once if done stays the same for StallTimeout.
+// The returned stop ends the watch.
+func WatchStall(done *atomic.Int64, stalled func()) (stop func()) {
+	timeout, quit := StallTimeout, make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(timeout / 10)
+		defer ticker.Stop()
+		last, since := done.Load(), time.Now()
+		for {
+			select {
+			case <-quit:
+				return
+			case now := <-ticker.C:
+				if n := done.Load(); n != last {
+					last, since = n, now
+				} else if now.Sub(since) >= timeout {
+					stalled()
+					return
+				}
+			}
+		}
+	}()
+	return sync.OnceFunc(func() { close(quit) })
 }
 
 // ErrInterrupted means the connection ended in the middle of a transfer.

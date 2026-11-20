@@ -118,6 +118,9 @@ sequenceDiagram
 - Either side can cancel. The sender cancels with
   `POST /peer/cancel/{id}`. When the receiver cancels, the sender's next
   request fails.
+- If no bytes move for a minute, each side ends the transfer as
+  interrupted. A device that goes to sleep or loses its network can't
+  say so, and without this limit the sender would wait up to 15 minutes.
 - A Loka that sends checks the receiver's certificate on every
   connection of the transfer, and stops if it changes. When the device
   was picked from the list, the receiver's certificate must also have

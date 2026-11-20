@@ -90,7 +90,20 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 	if !t.Move(transfer.Sending, transfer.Waiting) {
 		return context.Canceled
 	}
-	return upload(uploadCtx, client, base+"/peer/upload/"+reply.ID, reply.Secret, entries, &t.Done)
+	// Nothing tells the sender when the receiver went away without a
+	// word, such as when its lid closed, so a transfer that stops moving
+	// counts as interrupted.
+	var stalled atomic.Bool
+	stopWatch := transfer.WatchStall(&t.Done, func() {
+		stalled.Store(true)
+		stopUpload()
+	})
+	defer stopWatch()
+	err := upload(uploadCtx, client, base+"/peer/upload/"+reply.ID, reply.Secret, entries, &t.Done)
+	if err != nil && stalled.Load() {
+		return transfer.ErrInterrupted
+	}
+	return err
 }
 
 // pinned is the receiver as its first connection showed it. Every later
