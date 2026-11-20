@@ -207,9 +207,9 @@ type offerReply struct {
 	Nonce  string `json:"nonce,omitempty"` // the receiver's, to a Loka
 }
 
-// errOldLoka is the reply to a Loka too old to send here. Loka 0.1 sends
-// without TLS, and 0.2.0 without a pairing code. Both show the message.
-var errOldLoka = errors.New("This device runs a newer Loka. Update Loka to send to it.")
+// errNeedsHTTPS refuses an offer over plain HTTP, which nothing would
+// encrypt.
+var errNeedsHTTPS = errors.New("Loka takes offers only over HTTPS")
 
 // errDeclined is how a sender learns that the person at the receiver
 // declined or cancelled, whichever request it was making.
@@ -237,7 +237,7 @@ var errCodeMismatch = errors.New("The pairing code didn't check out, so the tran
 
 func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 	if r.TLS == nil {
-		writeError(w, http.StatusUpgradeRequired, errOldLoka)
+		writeError(w, http.StatusUpgradeRequired, errNeedsHTTPS)
 		return
 	}
 	var o offer
@@ -259,10 +259,6 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		t := transfer.New(transfer.Incoming, host, items, o.Size, transfer.Waiting)
 		t.Browser = true
 		s.addOffer(w, t)
-		return
-	}
-	if o.Commitment == "" {
-		writeError(w, http.StatusUpgradeRequired, errOldLoka)
 		return
 	}
 	if len(o.Commitment) != trust.CommitmentSize {

@@ -66,11 +66,6 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 	})
 	defer stop()
 
-	if reply.Nonce == "" {
-		// Loka 0.2.0 answers without one.
-		tellReceiver()
-		return errors.New("The receiver runs an older Loka. Update Loka on it")
-	}
 	if !t.Pair(trust.Code(store.Fingerprint(), device.Fingerprint, nonce, reply.Nonce)) {
 		return context.Canceled
 	}
@@ -279,11 +274,11 @@ func connectionError(ctx context.Context, err error) error {
 	if errors.Is(err, errNotPicked) {
 		return errNotPicked
 	}
-	// An answer that isn't TLS: Loka 0.1, or not Loka at all. Go's client
+	// An answer that isn't TLS, so not Loka. Go's client
 	// reports a plain HTTP answer only in words.
 	_, notTLS := errors.AsType[tls.RecordHeaderError](err)
 	if notTLS || strings.Contains(err.Error(), "server gave HTTP response to HTTPS client") {
-		return errors.New("Could not connect securely to the other device. Check that it runs the latest Loka")
+		return errors.New("Could not connect securely to the other device. Check that it runs Loka")
 	}
 	if urlErr, ok := errors.AsType[*url.Error](err); ok {
 		err = urlErr.Err

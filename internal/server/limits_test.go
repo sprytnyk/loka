@@ -109,13 +109,13 @@ func TestTooManyOffersWait(t *testing.T) {
 	}
 }
 
-// TestOfferNeedsARealCommitment offers with commitments no Loka makes,
-// and checks each is refused before the receiver keeps anything or spends
-// a pairing try.
+// TestOfferNeedsARealCommitment offers without a commitment and with ones
+// no Loka makes, and checks each is refused before the receiver keeps
+// anything or spends a pairing try.
 func TestOfferNeedsARealCommitment(t *testing.T) {
 	receiver, base := startServer(t)
 	client := lokaClient(openTrust(t))
-	for _, commitment := range []string{"abc", strings.Repeat("a", 1<<19)} {
+	for _, commitment := range []string{"", "abc", strings.Repeat("a", 1<<19)} {
 		o := offer{Name: "laptop", Items: []string{"f"}, Size: 1, Commitment: commitment}
 		err := call(t.Context(), client, http.MethodPost, secure(base)+"/peer/offer", "", o, nil)
 		if err == nil || err.Error() != "Invalid offer" {

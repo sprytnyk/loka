@@ -252,12 +252,12 @@ func TestBrowserOffersAreLabelled(t *testing.T) {
 	}
 }
 
-// TestPlainHTTPOffersAreRefused has Loka 0.1, which sends without TLS,
-// offer a file, and checks it is told to update and nothing is shown.
+// TestPlainHTTPOffersAreRefused offers a file over plain HTTP, which
+// nothing would encrypt, and checks it is refused and nothing is shown.
 func TestPlainHTTPOffersAreRefused(t *testing.T) {
 	receiver, base := startServer(t)
 	for _, host := range []string{"", "192.0.2.10:45873"} { // this device, and another
-		req, _ := http.NewRequest(http.MethodPost, base+"/peer/offer", strings.NewReader(`{"name":"old","items":["f"],"size":1}`))
+		req, _ := http.NewRequest(http.MethodPost, base+"/peer/offer", strings.NewReader(`{"name":"laptop","items":["f"],"size":1}`))
 		if host != "" {
 			req.Host = host
 		}
@@ -265,9 +265,9 @@ func TestPlainHTTPOffersAreRefused(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = replyError(resp) // as Loka 0.1 reads it
+		err = replyError(resp)
 		resp.Body.Close()
-		if err == nil || err.Error() != "This device runs a newer Loka. Update Loka to send to it." {
+		if err == nil || err.Error() != errNeedsHTTPS.Error() {
 			t.Fatalf("host %q: got %v", host, err)
 		}
 	}
@@ -276,21 +276,20 @@ func TestPlainHTTPOffersAreRefused(t *testing.T) {
 	}
 }
 
-// TestOldLokaGetsAClearError has a plain HTTP server, as Loka 0.1 runs,
-// receive a TLS offer.
-func TestOldLokaGetsAClearError(t *testing.T) {
-	old := New("old", "0.1.0")
+// TestPlainHTTPAnswerGetsAClearError sends to a plain HTTP server, such as
+// another program on the port, and checks the sender says it isn't Loka.
+func TestPlainHTTPAnswerGetsAClearError(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{Handler: old.Handler()}
+	srv := &http.Server{Handler: http.NotFoundHandler()}
 	go srv.Serve(ln)
 	t.Cleanup(func() { srv.Close() })
 	file := filepath.Join(t.TempDir(), "file")
 	treetest.Write(t, filepath.Dir(file), map[string]string{"file": "abc"})
 	v := waitForEnd(t, sendFrom(t, openTrust(t), []string{file}, "127.0.0.1", ln.Addr().(*net.TCPAddr).Port))
-	if v.Status != transfer.Failed || !strings.Contains(v.Error, "Could not connect securely") {
+	if v.Status != transfer.Failed || !strings.HasSuffix(v.Error, "Check that it runs Loka") {
 		t.Fatalf("got %+v", v)
 	}
 }

@@ -1,11 +1,8 @@
 package server
 
 import (
-	"bytes"
-	"encoding/json"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
 	"path/filepath"
@@ -120,51 +117,5 @@ func TestDeclineWhilePairing(t *testing.T) {
 	receiver.Transfers.Get(reply.ID).Stop()
 	if err := reveal(t, client, base, reply, nonce); err == nil || err.Error() != errDeclined.Error() {
 		t.Fatalf("reveal answered %v", err)
-	}
-}
-
-// TestOldSenderIsToldToUpdate has a Loka offer without a commitment, as
-// 0.2.0 does, and checks it is told to update and nothing is shown.
-func TestOldSenderIsToldToUpdate(t *testing.T) {
-	receiver, base := startServer(t)
-	o := offer{Name: "laptop", Items: []string{"f"}, Size: 1}
-	err := call(t.Context(), lokaClient(openTrust(t)), http.MethodPost, secure(base)+"/peer/offer", "", o, nil)
-	if err == nil || err.Error() != errOldLoka.Error() {
-		t.Fatalf("offer answered %v", err)
-	}
-	if n := len(receiver.Transfers.All()); n != 0 {
-		t.Fatalf("%d offers shown", n)
-	}
-}
-
-// TestOldReceiverIsCancelled has the receiver answer without a nonce, as
-// 0.2.0 does, and checks the sender stops and cancels the offer there.
-func TestOldReceiverIsCancelled(t *testing.T) {
-	receiver := New("receiver", "test")
-	receiver.Trust = openTrust(t)
-	withoutNonce := func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/peer/offer" {
-				h.ServeHTTP(w, r)
-				return
-			}
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, r)
-			var reply offerReply
-			json.Unmarshal(rec.Body.Bytes(), &reply)
-			reply.Nonce = ""
-			var body bytes.Buffer
-			json.NewEncoder(&body).Encode(reply)
-			w.WriteHeader(rec.Code)
-			w.Write(body.Bytes())
-		})
-	}
-	host, port := hostPort(t, serve(t, receiver, withoutNonce))
-	v := waitForEnd(t, sendFrom(t, openTrust(t), []string{oneFile(t)}, host, port))
-	if v.Status != transfer.Failed || v.Error != "The receiver runs an older Loka. Update Loka on it" {
-		t.Fatalf("sender ended %+v", v)
-	}
-	if in := waitForEnd(t, waitForIncoming(t, receiver)); in.Status != transfer.Cancelled {
-		t.Fatalf("receiver shows %+v", in)
 	}
 }
