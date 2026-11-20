@@ -42,12 +42,25 @@ func (s *splitter) close(err error) {
 }
 
 func (s *splitter) accept(plain, secure *half, config *tls.Config) {
+	var wait time.Duration
 	for {
 		conn, err := s.ln.Accept()
+		if ne, ok := err.(net.Error); ok && ne.Temporary() {
+			// Such as running out of file handles: wait for some to close,
+			// as http.Server does.
+			wait = min(max(2*wait, 5*time.Millisecond), time.Second)
+			select {
+			case <-time.After(wait):
+				continue
+			case <-s.closed:
+				return
+			}
+		}
 		if err != nil {
 			s.close(err)
 			return
 		}
+		wait = 0
 		go func() {
 			conn.SetReadDeadline(time.Now().Add(firstByteTimeout))
 			r := bufio.NewReader(conn)

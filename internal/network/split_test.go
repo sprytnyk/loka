@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -75,5 +76,89 @@ func TestSplitServesHTTPAndTLSOnOnePort(t *testing.T) {
 	}
 	if _, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second); err == nil {
 		t.Fatal("the port is still open after shutdown")
+	}
+}
+
+// failing fails Accept with each of errs in turn, then accepts as ln does.
+type failing struct {
+	net.Listener
+	errs chan error
+}
+
+func (f failing) Accept() (net.Conn, error) {
+	select {
+	case err := <-f.errs:
+		return nil, err
+	default:
+		return f.Listener.Accept()
+	}
+}
+
+// outOfFiles is the error accept returns when the process has run out of
+// file handles, such as while many connections are open at once.
+type outOfFiles struct{}
+
+func (outOfFiles) Error() string   { return "accept: too many open files" }
+func (outOfFiles) Timeout() bool   { return false }
+func (outOfFiles) Temporary() bool { return true }
+
+// TestSplitOutlastsTemporaryErrors runs out of file handles twice before
+// the first connection, and checks the port still answers once they are
+// back.
+func TestSplitOutlastsTemporaryErrors(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := failing{ln, make(chan error, 2)}
+	f.errs <- outOfFiles{}
+	f.errs <- outOfFiles{}
+	plain, _ := Split(f, nil)
+	defer plain.Close()
+	go func() {
+		c, err := net.Dial("tcp", ln.Addr().String())
+		if err == nil {
+			c.Write([]byte("G"))
+			defer c.Close()
+			time.Sleep(time.Second)
+		}
+	}()
+	accepted := make(chan error, 1)
+	go func() {
+		c, err := plain.Accept()
+		if err == nil {
+			c.Close()
+		}
+		accepted <- err
+	}()
+	select {
+	case err := <-accepted:
+		if err != nil {
+			t.Fatalf("Accept returned %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the port stopped accepting after running out of file handles")
+	}
+}
+
+// TestSplitStopsOnOtherErrors checks an error that won't pass ends both
+// halves with that error, so the server stops and says why rather than
+// retrying for ever.
+func TestSplitStopsOnOtherErrors(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	broken := errors.New("the network went away")
+	f := failing{ln, make(chan error, 1)}
+	f.errs <- broken
+	plain, secure := Split(f, nil)
+	for _, half := range []net.Listener{plain, secure} {
+		if _, err := half.Accept(); err != broken {
+			t.Fatalf("Accept returned %v, want %v", err, broken)
+		}
+	}
+	if _, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second); err == nil {
+		t.Fatal("the port is still open")
 	}
 }
