@@ -50,12 +50,12 @@ The page follows your system's light or dark setting and your browser's
 language, English or Ukrainian. Buttons in the header switch both, and the
 browser remembers your choice.
 
-The pickers use zenity or kdialog on Linux, Finder on macOS, and the usual
-dialog on Windows. Without one, drop files or enter paths instead.
+The pickers use zenity or kdialog on Linux, Finder on macOS, and the
+Windows file dialog. Without one, drop files or enter paths instead.
 
-Dropped files are copied first, because the browser doesn't tell Loka where
-they are. Loka deletes the copies when it stops. Chosen files and paths are
-read where they are.
+Loka copies dropped files first, because the browser doesn't tell it where they
+are, and deletes the copies when it stops. It reads chosen files and paths
+where they are.
 
 Incoming files go to a hidden directory inside the destination and move into
 place when the transfer finishes. Nothing is overwritten, and a failed transfer
