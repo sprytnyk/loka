@@ -13,6 +13,7 @@
   } catch {}
   if (theme !== 'light' && theme !== 'dark') theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   document.documentElement.dataset.theme = theme;
+  document.documentElement.dataset.mode = '__LOKA_MODE__';
 })();
 </script>
 <style>
@@ -62,6 +63,17 @@ svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 #transfers{max-height:32rem}
 .footer-note{flex:none;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px 20px;margin:auto 0 0;padding-top:14px;color:var(--muted);font-size:12px}.footer-note p{margin:0}
 dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);border-radius:1.5rem;background:var(--card);color:var(--ink);padding:26px;box-shadow:var(--dialog-shadow)}dialog::backdrop{background:var(--backdrop)}dialog h2{margin:0;color:var(--strong);font-size:20px;letter-spacing:-.03em}dialog p{color:var(--muted);font-size:14px}dialog .row{margin-top:16px}
+[hidden]{display:none!important}
+#phone{display:none}
+[data-mode=phone] .layout,[data-mode=phone] .device-badge{display:none}
+[data-mode=phone] #phone{display:flex;max-width:640px}
+.visually-hidden{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+label.button{display:inline-block}
+#phone-selection{margin:12px 0 0;color:var(--muted);font-size:12px}
+#phone-selected{margin:8px 0 12px;padding:0;list-style:none;max-height:20rem;overflow-y:auto;overflow-wrap:anywhere}#phone-selected:empty{display:none}#phone-selected li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}#phone-selected button{flex:none;padding:5px 9px;font-size:12px}
+#phone-status{margin:12px 0 6px;font-size:14px}#phone-status:empty{display:none}
+.transfers-card .card-heading{align-items:center}#receive-phone{margin-inline-start:auto;padding:6px 10px;font-size:12px}
+#phone-codes{margin-top:8px}
 @media(min-width:1240px){.layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;grid-template-areas:"choose device transfers" "choose link transfers"}#peers{max-height:max(14rem,100vh - 26rem);max-height:max(14rem,100dvh - 26rem)}}
 @media(max-width:720px){main{padding:0 16px 24px}header{flex-wrap:wrap;padding:14px 0}.intro{padding:24px 0 18px}.layout{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-template-areas:"choose" "device" "transfers" "link";gap:14px}#message{margin-bottom:14px}#transfers{max-height:24rem}}
 @media(max-width:400px){.device-badge{font-size:11px}}
@@ -72,8 +84,13 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 <div class="controls"><span class="device-badge" id="hostname">Connecting...</span>
 <div class="languages" role="group" data-i18n-label="language" aria-label="Language"><button type="button" data-language="en" lang="en" aria-pressed="true">EN</button><button type="button" data-language="uk" lang="uk" aria-pressed="false">УКР</button></div>
 <button type="button" id="theme"><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button></div></header>
-<div class="intro"><h1 data-i18n="heading">Share files on your network</h1></div>
+<div class="intro"><h1 id="heading" data-i18n="heading">Share files on your network</h1></div>
 <div id="message" role="status"></div>
+<section class="card" id="phone"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></span><div><h2 data-i18n="phoneTitle">Choose what to send</h2><p data-i18n="phoneHint">The computer asks before it saves anything.</p></div></div>
+<div class="row"><label class="button secondary"><input type="file" id="phone-files" class="visually-hidden" multiple><span data-i18n="chooseFiles">Choose files</span></label><label class="button secondary" id="phone-folder-button"><input type="file" id="phone-folder" class="visually-hidden" webkitdirectory><span data-i18n="chooseDirectory">Choose directory</span></label></div>
+<p id="phone-selection" role="status">Nothing selected</p><ul id="phone-selected"></ul>
+<div class="row"><button id="phone-send" data-i18n="send">Send</button><button class="secondary" id="phone-cancel" data-i18n="cancel" hidden>Cancel</button></div>
+<p id="phone-status" role="status"></p><progress id="phone-progress" max="100" hidden></progress></section>
 <div class="layout">
 <section class="card choose-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><h2 data-i18n="itemsToShare">Items to share</h2></div>
 <div class="drop" id="drop"><span class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></span><p class="drop-title" data-i18n="dropHere">Drop files or a directory here</p>
@@ -82,7 +99,7 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 <label class="field-label" for="paths" data-i18n="addByPath">Add by path</label><div class="row action-row"><input id="paths" data-i18n-placeholder="pathPlaceholder" placeholder="File or directory path"><button class="secondary" id="add-path" data-i18n="addPath">Add path</button></div><ul id="selected"></ul></section>
 <section class="card device-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><h2 data-i18n="sendToDevice">Send to a device</h2></div><div id="peers"><p data-i18n="lookingForDevices">Looking for devices...</p></div><div class="manual"><label class="field-label" for="address" data-i18n="orEnterAddress">Or enter a device address</label><div class="row action-row"><input id="address" data-i18n-placeholder="deviceAddress" placeholder="Device address"><input id="port" value="45873" data-i18n-label="devicePort" aria-label="Device port"><button id="send" data-i18n="send">Send</button></div></div></section>
 <section class="card link-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></svg></span><div><h2 data-i18n="shareLink">Share a download link</h2><p data-i18n="shareLinkHint">The recipient can open the link in a browser.</p></div></div><div class="row action-row"><button id="share" data-i18n="createLink">Create link</button></div><div id="links"></div></section>
-<section class="card transfers-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3"/></svg></span><h2 data-i18n="transfers">Transfers</h2></div><div id="transfers"><p data-i18n="noTransfers">No transfers yet.</p></div></section>
+<section class="card transfers-card"><div class="card-heading"><span class="section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3"/></svg></span><h2 data-i18n="transfers">Transfers</h2><button class="secondary" id="receive-phone" data-i18n="receivePhone">Receive from a phone</button></div><div id="transfers"><p data-i18n="noTransfers">No transfers yet.</p></div></section>
 </div><footer class="footer-note"><p data-i18n="notEncrypted">Transfers between Loka devices are encrypted. Uploads from a browser and download links are not.</p><a href="https://github.com/sprytnyk/loka" data-i18n="source">Source on GitHub</a></footer>
 </main>
 <dialog id="incoming" aria-labelledby="incoming-title">
@@ -91,8 +108,14 @@ dialog{width:calc(100% - 32px);max-width:480px;border:1px solid var(--line);bord
 <p id="incoming-error" class="notice" role="alert"></p>
 <div class="row"><button type="button" id="accept-incoming" data-i18n="accept">Accept</button><button type="button" class="secondary" id="decline-incoming" data-i18n="decline">Decline</button></div>
 </dialog>
+<dialog id="phone-dialog" aria-labelledby="phone-dialog-title">
+<h2 id="phone-dialog-title" data-i18n="receivePhone">Receive from a phone</h2><p data-i18n="receivePhoneHint">Scan a code with the phone's camera, or open the address in its browser. If there are several, use the one on the phone's network. Loka asks here before saving anything. Uploads from a browser aren't encrypted.</p><div id="phone-codes"></div>
+<div class="row"><button type="button" class="secondary" id="close-phone-dialog" data-i18n="close">Close</button></div>
+</dialog>
 <script>
 const key = '__LOKA_KEY__';
+const mode = '__LOKA_MODE__';
+const hostName = __LOKA_NAME__; // the computer this page belongs to
 const activeTransferStatuses = ['waiting', 'accepted', 'receiving', 'sending'];
 let selected = [];
 let incoming = null; // the offer the dialog shows
@@ -184,6 +207,17 @@ const messages = {
     destinationPickFailed: '{error}. Enter a destination path instead.',
     chooseDestination: 'Choose or enter a destination directory.',
     statuses: {waiting: 'waiting', accepted: 'accepted', sending: 'sending', receiving: 'receiving', complete: 'complete', failed: 'failed', cancelled: 'cancelled'},
+    receivePhone: 'Receive from a phone',
+    receivePhoneHint: 'Scan a code with the phone’s camera, or open the address in its browser. If there are several, use the one on the phone’s network. Loka asks here before saving anything. Uploads from a browser aren’t encrypted.',
+    close: 'Close',
+    phoneHeading: 'Send files to {name}',
+    phoneTitle: 'Choose what to send',
+    phoneHint: 'The computer asks before it saves anything.',
+    waitingForAccept: 'Waiting for {name} to accept…',
+    sendingTo: 'Sending to {name}…',
+    sentTo: 'Sent to {name}.',
+    declined: '{name} declined or cancelled.',
+    cancelled: 'Cancelled.',
   },
   uk: {
     title: 'Loka: обмін файлами в локальній мережі',
@@ -245,6 +279,17 @@ const messages = {
     destinationPickFailed: '{error}. Введіть шлях до теки вручну.',
     chooseDestination: 'Виберіть або введіть теку призначення.',
     statuses: {waiting: 'очікує', accepted: 'прийнято', sending: 'надсилання', receiving: 'отримання', complete: 'завершено', failed: 'помилка', cancelled: 'скасовано'},
+    receivePhone: 'Отримати з телефона',
+    receivePhoneHint: 'Відскануйте код камерою телефона або відкрийте адресу в його браузері. Якщо адрес кілька, виберіть ту, що в мережі телефона. Loka спитає тут, перш ніж щось зберегти. Надсилання з браузера не шифрується.',
+    close: 'Закрити',
+    phoneHeading: 'Надіслати файли на {name}',
+    phoneTitle: 'Виберіть, що надіслати',
+    phoneHint: 'Комп’ютер спитає, перш ніж щось зберегти.',
+    waitingForAccept: 'Чекаю, поки {name} прийме…',
+    sendingTo: 'Надсилаю на {name}…',
+    sentTo: 'Надіслано на {name}.',
+    declined: '{name} відхилив або скасував.',
+    cancelled: 'Скасовано.',
   },
 };
 // Messages from the server come in English. These are the ones it sends,
@@ -315,6 +360,7 @@ function fromServer(text) {
 }
 function renderDeviceName() {
   $('hostname').textContent = deviceName ? t('thisDevice', {name: deviceName}) : t('connecting');
+  if (mode === 'phone') $('heading').textContent = t('phoneHeading', {name: hostName});
 }
 function applyLanguage() {
   document.documentElement.lang = language;
@@ -328,6 +374,7 @@ function applyLanguage() {
   renderDeviceName();
   renderTheme();
   updateSelection();
+  renderPhoneSelection();
   if (incoming) renderIncomingDetails();
 }
 document.querySelector('.languages').onclick = e => {
@@ -341,7 +388,7 @@ document.querySelector('.languages').onclick = e => {
   for (const card of $('transfers').querySelectorAll('.item')) card.remove();
   message('');
   applyLanguage();
-  poll();
+  if (mode !== 'phone') poll();
 };
 
 // Themes
@@ -778,6 +825,7 @@ async function refresh() {
   const data = await api('/api/state');
   forgetSentItems(data.transfers);
   deviceName = data.name;
+  addresses = data.addresses;
   renderDeviceName();
   renderPeers(data);
   renderIncoming(data);
@@ -803,6 +851,182 @@ async function pollPeriodically() {
   const active = await poll();
   setTimeout(pollPeriodically, active ? 1000 : 3000);
 }
+// Receiving from a phone: its browser opens this device's address and gets
+// the phone view below.
+
+let addresses = []; // this device's local addresses, from the server
+$('receive-phone').onclick = () => {
+  $('phone-codes').innerHTML = qrList(addressUrls(addresses, '/'));
+  drawQrCodes($('phone-codes'));
+  $('phone-dialog').showModal();
+};
+$('close-phone-dialog').onclick = () => $('phone-dialog').close();
+
+// The phone view sends the chosen files the way another Loka does: an
+// offer, a wait for the computer to accept, then a tar stream the browser
+// builds from the files as it uploads them.
+
+let phoneFiles = [];
+let phoneTransfer = null; // the transfer under way: {id, secret, xhr, cancelled}
+const phonePath = file => file.webkitRelativePath || file.name;
+function renderPhoneSelection() {
+  const count = phoneFiles.length;
+  $('phone-selection').textContent = count ? t('selected', {n: count}) : t('nothingSelected');
+  $('phone-selected').innerHTML = phoneFiles
+    .map((file, i) => `<li><bdi>${escapeHtml(phonePath(file))}</bdi> <button class="secondary" data-phone-remove="${i}">${escapeHtml(t('remove'))}</button></li>`)
+    .join('');
+}
+// addPhoneFiles adds files, skipping any whose path is already chosen, since
+// the computer can't save two files under one name in one transfer.
+function addPhoneFiles(files) {
+  const chosen = new Set(phoneFiles.map(phonePath));
+  for (const file of files) {
+    if (chosen.has(phonePath(file))) continue;
+    chosen.add(phonePath(file));
+    phoneFiles.push(file);
+  }
+  renderPhoneSelection();
+}
+for (const id of ['phone-files', 'phone-folder']) {
+  $(id).onchange = e => {
+    addPhoneFiles(e.target.files);
+    e.target.value = '';
+  };
+}
+$('phone-selected').onclick = e => {
+  if (e.target.dataset.phoneRemove === undefined || phoneTransfer) return;
+  phoneFiles.splice(Number(e.target.dataset.phoneRemove), 1);
+  renderPhoneSelection();
+};
+
+// A tar stream as Go reads it: each file gets a PAX header with its full
+// UTF-8 path, then a ustar header and its bytes, padded to 512-byte
+// blocks.
+const utf8 = new TextEncoder();
+const maxOctalSize = 0o77777777777; // the largest size a ustar header holds
+function tarHeader(name, size, type) {
+  const header = new Uint8Array(512);
+  const put = (text, offset, length) => header.set(utf8.encode(text).subarray(0, length), offset);
+  const octal = (n, length) => n.toString(8).padStart(length - 1, '0');
+  put(name, 0, 100);
+  put('0000644', 100, 8); // mode
+  put('0000000', 108, 8); // owner
+  put('0000000', 116, 8); // group
+  put(octal(size, 12), 124, 12);
+  put(octal(Math.floor(Date.now() / 1000), 12), 136, 12);
+  put(type, 156, 1);
+  put('ustar', 257, 6);
+  put('00', 263, 2);
+  header.fill(32, 148, 156); // the checksum counts its own field as spaces
+  put(octal(header.reduce((sum, b) => sum + b, 0), 7), 148, 7);
+  return header;
+}
+// paxRecord is "<length> key=value\n", where length counts itself.
+function paxRecord(key, value) {
+  const body = utf8.encode(` ${key}=${value}\n`);
+  let length = body.length + 1;
+  while (String(length).length + body.length !== length) length = String(length).length + body.length;
+  return utf8.encode(`${length} ${key}=${value}\n`);
+}
+const padding = size => new Uint8Array((512 - size % 512) % 512);
+function tarStream(files) {
+  const parts = [];
+  for (const file of files) {
+    const path = phonePath(file);
+    const records = [paxRecord('path', path)];
+    if (file.size > maxOctalSize) records.push(paxRecord('size', String(file.size)));
+    const pax = new Uint8Array(records.reduce((sum, r) => sum + r.length, 0));
+    records.reduce((offset, r) => (pax.set(r, offset), offset + r.length), 0);
+    const plainName = /^[ -~]{1,100}$/.test(path) ? path : 'file';
+    parts.push(tarHeader('PaxHeader', pax.length, 'x'), pax, padding(pax.length));
+    parts.push(tarHeader(plainName, file.size > maxOctalSize ? 0 : file.size, '0'), file, padding(file.size));
+  }
+  parts.push(new Uint8Array(1024)); // the end of the archive
+  return new Blob(parts);
+}
+
+function phoneStatus(text) {
+  $('phone-status').textContent = text;
+}
+function phoneBusy(busy) {
+  $('phone-cancel').hidden = !busy;
+  $('phone-progress').hidden = !busy;
+  $('phone-progress').value = 0;
+  for (const id of ['phone-files', 'phone-folder']) $(id).disabled = busy;
+}
+function serverError(text) {
+  try {
+    return fromServer(JSON.parse(text).error);
+  } catch {
+    return t('requestFailed');
+  }
+}
+function phoneUpload(current, body) {
+  return new Promise((resolve, reject) => {
+    const xhr = current.xhr = new XMLHttpRequest();
+    xhr.open('POST', `/peer/upload/${encodeURIComponent(current.id)}`);
+    xhr.setRequestHeader('X-Transfer-Secret', current.secret);
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) $('phone-progress').value = Math.floor(e.loaded * 100 / e.total);
+    };
+    xhr.onload = () => xhr.status < 300 ? resolve() : reject(Error(serverError(xhr.responseText)));
+    xhr.onerror = () => reject(Error(t('unreachable')));
+    xhr.onabort = () => reject(Error(t('cancelled')));
+    xhr.send(body);
+  });
+}
+$('phone-send').onclick = e => run(e.target, async () => {
+  if (!phoneFiles.length) throw Error(t('chooseFirst'));
+  const files = [...phoneFiles];
+  const items = [...new Set(files.map(file => phonePath(file).split('/')[0]))];
+  const size = files.reduce((sum, file) => sum + file.size, 0);
+  phoneStatus('');
+  const reply = await request('/peer/offer', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: '', items, size}),
+  });
+  const current = phoneTransfer = {id: reply.id, secret: reply.secret};
+  phoneBusy(true);
+  try {
+    phoneStatus(t('waitingForAccept', {name: hostName}));
+    for (;;) {
+      if (current.cancelled) throw Error(t('cancelled'));
+      const answer = await request(`/peer/status/${encodeURIComponent(reply.id)}`, {headers: {'X-Transfer-Secret': reply.secret}});
+      if (answer.status === 'accepted') break;
+      if (answer.status !== 'waiting') throw Error(t('declined', {name: hostName}));
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    if (current.cancelled) throw Error(t('cancelled'));
+    phoneStatus(t('sendingTo', {name: hostName}));
+    await phoneUpload(current, tarStream(files));
+    phoneStatus(t('sentTo', {name: hostName}));
+    phoneFiles = phoneFiles.filter(file => !files.includes(file));
+    renderPhoneSelection();
+  } catch (error) {
+    phoneStatus('');
+    throw error;
+  } finally {
+    phoneTransfer = null;
+    phoneBusy(false);
+  }
+});
+// phoneCancel stops the transfer under way and tells the computer, even
+// when the page is closing.
+function phoneCancel() {
+  const current = phoneTransfer;
+  if (!current) return;
+  current.cancelled = true;
+  current.xhr?.abort();
+  fetch(`/peer/cancel/${encodeURIComponent(current.id)}`, {method: 'POST', headers: {'X-Transfer-Secret': current.secret}, keepalive: true}).catch(() => {});
+}
+$('phone-cancel').onclick = phoneCancel;
+addEventListener('pagehide', phoneCancel);
+
+// iPhones and iPads can't choose a folder from the browser.
+const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+$('phone-folder-button').hidden = ios || !('webkitdirectory' in $('phone-folder'));
+
 applyLanguage();
-pollPeriodically();
+if (mode !== 'phone') pollPeriodically();
 </script></body></html>

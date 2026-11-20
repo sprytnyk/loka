@@ -30,12 +30,17 @@ func TestPageCarriesKeyAndVersion(t *testing.T) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
+	if !strings.Contains(page, "const mode = 'desktop'") {
+		t.Error("this device got the phone view")
+	}
+	// Another site, or another device, gets the upload view without the key.
 	req, _ := http.NewRequest(http.MethodGet, base+"/", nil)
 	req.Host = "evil.example"
 	resp, _ = http.DefaultClient.Do(req)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("another site got the page: %d", resp.StatusCode)
+	body, _ = io.ReadAll(resp.Body)
+	page = string(body)
+	if resp.StatusCode != http.StatusOK || strings.Contains(page, s.key) || !strings.Contains(page, "const mode = 'phone'") {
+		t.Fatalf("another site got %d, key shown %v", resp.StatusCode, strings.Contains(page, s.key))
 	}
 }
 

@@ -2,6 +2,7 @@ package server
 
 import (
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,18 +20,25 @@ import (
 //go:embed index.html
 var page string
 
-// index serves the page, with the key it uses for the API, only to this
-// device.
+// index serves the page. This device gets it with the key it uses for the
+// API. Other devices, such as phones, get its upload view, which sends the
+// way another Loka does and needs no key.
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
-	if !fromThisDevice(r) {
-		writeError(w, http.StatusForbidden, errors.New("Local access only"))
-		return
-	}
 	label := s.version
 	if label != "" && label[0] >= '0' && label[0] <= '9' {
 		label = "v" + label
 	}
-	body := strings.NewReplacer("__LOKA_KEY__", s.key, "__LOKA_VERSION__", label).Replace(page)
+	key, mode := s.key, "desktop"
+	if !fromThisDevice(r) {
+		key, mode = "", "phone"
+	}
+	name, _ := json.Marshal(s.name) // escapes <, > and &, so it is safe in a script
+	body := strings.NewReplacer(
+		"__LOKA_KEY__", key,
+		"__LOKA_MODE__", mode,
+		"__LOKA_NAME__", string(name),
+		"__LOKA_VERSION__", label,
+	).Replace(page)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	io.WriteString(w, body)
