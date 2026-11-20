@@ -15,9 +15,9 @@ const tlsHandshake = 0x16
 // firstByteTimeout is how long a new connection has to send its first byte.
 const firstByteTimeout = 10 * time.Second
 
-// Split shares one listening port between TLS, for other Lokas, and plain
-// HTTP, for browsers. It reads the first byte of each connection to tell
-// them apart. Closing either listener closes ln and both.
+// Split shares one listening port between TLS and plain HTTP. It reads
+// the first byte of each connection to tell them apart. Closing either
+// listener closes ln and both.
 func Split(ln net.Listener, config *tls.Config) (plain, secure net.Listener) {
 	s := &splitter{ln: ln, closed: make(chan struct{})}
 	p := &half{s: s, conns: make(chan net.Conn)}

@@ -121,17 +121,9 @@ func TestTransfersBetweenLokasAreEncrypted(t *testing.T) {
 	if !bytes.Equal(got, secret) {
 		t.Fatal("the received file differs")
 	}
-	if standing, _, _ := sender.Check(receiver.Trust.ID, fingerprint(t, receiver.Trust)); standing != trust.Known {
+	if standing, _, _ := sender.Check(receiver.Trust.ID, receiver.Trust.Fingerprint()); standing != trust.Known {
 		t.Fatalf("sender's view of the receiver: %v", standing)
 	}
-}
-
-// fingerprint returns a store's certificate fingerprint, as a peer sees it.
-func fingerprint(t *testing.T, s *trust.Store) string {
-	t.Helper()
-	cert := s.ServerConfig().Certificates[0].Leaf
-	_, fp := trust.Identify(cert)
-	return fp
 }
 
 // waitForIncomingStatus returns the newest incoming transfer at status.

@@ -2,6 +2,10 @@
 // sent to or received from before. Lokas talk to each other over TLS with
 // these certificates. A device is trusted the first time, then remembered
 // by its certificate, and refused if that certificate ever changes.
+//
+// Browsers can't pin a certificate, so this device also has its own
+// certificate authority, which a phone can install once. It vouches for
+// this device's local addresses only.
 package trust
 
 import (
@@ -19,6 +23,7 @@ import (
 	"fmt"
 	"io/fs"
 	"math/big"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -48,6 +53,11 @@ const (
 type Store struct {
 	ID   string // this device, also its certificate's common name
 	cert tls.Certificate
+	ca   tls.Certificate // signs the certificates browsers see
+
+	leafKey *ecdsa.PrivateKey // for every certificate browsers see in this run
+	leafMu  sync.Mutex
+	leaves  map[netip.Addr]*tls.Certificate // by the local address it names
 
 	mu      sync.Mutex // serialises changes to the devices file
 	devices string     // the devices file
@@ -55,48 +65,76 @@ type Store struct {
 
 const (
 	identityFile = "identity.pem"
+	caFile       = "ca.pem"
 	devicesFile  = "devices.json"
 )
 
-// Open reads the identity in dir, making one the first time.
+// Open reads the identity and the certificate authority in dir, making
+// them the first time.
 func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("could not make the settings directory: %w", err)
 	}
-	path := filepath.Join(dir, identityFile)
+	cert, err := load(filepath.Join(dir, identityFile), "this device's identity", identity)
+	if err != nil {
+		return nil, err
+	}
+	ca, err := load(filepath.Join(dir, caFile), "this device's certificate authority", authority)
+	if err != nil {
+		return nil, err
+	}
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{
+		ID:      cert.Leaf.Subject.CommonName,
+		cert:    cert,
+		ca:      ca,
+		leafKey: leafKey,
+		leaves:  map[netip.Addr]*tls.Certificate{},
+		devices: filepath.Join(dir, devicesFile),
+	}, nil
+}
+
+// load reads the certificate and key at path, making them with template
+// the first time.
+func load(path, what string, template func() *x509.Certificate) (tls.Certificate, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		data, err = create(path)
+		data, err = create(path, template())
 	}
 	if err != nil {
-		return nil, fmt.Errorf("could not read this device's identity in %s: %w", path, err)
+		return tls.Certificate{}, fmt.Errorf("could not read %s in %s: %w", what, path, err)
 	}
 	cert, err := tls.X509KeyPair(data, data)
 	if err != nil {
-		return nil, fmt.Errorf("could not read this device's identity in %s: %w", path, err)
+		return tls.Certificate{}, fmt.Errorf("could not read %s in %s: %w", what, path, err)
 	}
-	return &Store{ID: cert.Leaf.Subject.CommonName, cert: cert, devices: filepath.Join(dir, devicesFile)}, nil
+	return cert, nil
 }
 
-// create makes a key and a self-signed certificate naming a new random ID,
-// and saves both, readable only by this user, in one file at path.
-func create(path string) ([]byte, error) {
+// identity is this device's certificate for other Lokas. It names a new
+// random ID. Peers pin the certificate itself and never check its dates.
+func identity() *x509.Certificate {
+	return &x509.Certificate{
+		Subject:     pkix.Name{CommonName: rand.Text()},
+		NotBefore:   time.Now().Add(-time.Hour),
+		NotAfter:    time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC),
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+	}
+}
+
+// create makes a key and a self-signed certificate from template, and
+// saves both, readable only by this user, in one file at path.
+func create(path string, template *x509.Certificate) ([]byte, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err
 	}
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
+	if template.SerialNumber, err = serial(); err != nil {
 		return nil, err
-	}
-	// Peers pin the certificate itself and never check its dates.
-	template := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: rand.Text()},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	if err != nil {
@@ -129,19 +167,55 @@ func create(path string) ([]byte, error) {
 	return data, nil
 }
 
+func serial() (*big.Int, error) {
+	return rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+}
+
 // Identify returns the ID and fingerprint a peer's certificate shows.
 func Identify(cert *x509.Certificate) (id, fingerprint string) {
 	sum := sha256.Sum256(cert.Raw)
 	return cert.Subject.CommonName, hex.EncodeToString(sum[:])
 }
 
-// ServerConfig is for this device's port: it asks every TLS client for a
-// certificate, and the handlers check it.
+// Fingerprint is this device's certificate fingerprint, as other Lokas
+// see it.
+func (s *Store) Fingerprint() string {
+	_, fp := Identify(s.cert.Leaf)
+	return fp
+}
+
+// PeerName is the server name a Loka asks for when it connects to
+// another. It tells Lokas from browsers before any certificate is sent:
+// browsers send no name when they connect to an address.
+const PeerName = "peer.loka.invalid"
+
+// ServerConfig is for this device's port. Other Lokas get this device's
+// certificate and must show theirs, which the handlers check. Browsers
+// get a certificate from this device's authority.
 func (s *Store) ServerConfig() *tls.Config {
-	return &tls.Config{
+	peers := &tls.Config{
 		Certificates: []tls.Certificate{s.cert},
 		ClientAuth:   tls.RequireAnyClientCert,
 		MinVersion:   tls.VersionTLS13,
+	}
+	browsers := &tls.Config{
+		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			addr, err := netip.ParseAddrPort(hello.Conn.LocalAddr().String())
+			if err != nil {
+				return nil, err
+			}
+			return s.BrowserCertificate(addr.Addr())
+		},
+		MinVersion: tls.VersionTLS12,
+	}
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		GetConfigForClient: func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
+			if hello.ServerName == PeerName {
+				return peers, nil
+			}
+			return browsers, nil
+		},
 	}
 }
 
@@ -153,6 +227,7 @@ func (s *Store) ServerConfig() *tls.Config {
 func (s *Store) ClientConfig(check func(id, fingerprint string) error) *tls.Config {
 	return &tls.Config{
 		Certificates:       []tls.Certificate{s.cert},
+		ServerName:         PeerName,
 		InsecureSkipVerify: true,
 		MinVersion:         tls.VersionTLS13,
 		VerifyConnection: func(cs tls.ConnectionState) error {
