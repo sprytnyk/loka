@@ -242,7 +242,9 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, errors.New("The receiver remembers this device with a different certificate and refused the transfer"))
 		return
 	}
-	t.NewDevice = standing == trust.New
+	if standing == trust.New {
+		t.MarkNewDevice()
+	}
 	s.addOffer(w, t)
 }
 

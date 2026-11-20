@@ -207,6 +207,7 @@ const messages = {
     fromBrowser: 'From a browser at {name}',
     to: 'To {name}',
     newDevice: 'New device: Loka hasn’t seen it before. Make sure you expect this transfer.',
+    newReceiver: 'New device: Loka hasn’t sent to it before. Make sure it’s the one you meant.',
     forget: 'Forget this device',
     forgotten: 'Forgotten. Its certificate will be trusted on the next transfer.',
     names: {one: '{n} name', other: '{n} names'},
@@ -312,6 +313,7 @@ const messages = {
     fromBrowser: 'Від браузера за адресою {name}',
     to: 'До {name}',
     newDevice: 'Новий пристрій: Loka бачить його вперше. Переконайтеся, що чекаєте на це передавання.',
+    newReceiver: 'Новий пристрій: Loka надсилає на нього вперше. Переконайтеся, що це саме той пристрій.',
     forget: 'Забути цей пристрій',
     forgotten: 'Забуто. Його сертифікату буде довіра під час наступного передавання.',
     names: {one: '{n} назва', few: '{n} назви', many: '{n} назв', other: '{n} назви'},
@@ -832,8 +834,9 @@ function renderTransfers(transfers) {
       : '';
     card.querySelector('.transfer-status').textContent = `${statusText(transfer.status)} · ${transfer.progress}%${speed}`;
     const error = card.querySelector('.notice');
-    error.textContent = transfer.error ? fromServer(transfer.error) : '';
-    error.hidden = !transfer.error;
+    const newReceiver = transfer.direction !== 'incoming' && transfer.new_device && !transfer.error;
+    error.textContent = transfer.error ? fromServer(transfer.error) : newReceiver ? t('newReceiver') : '';
+    error.hidden = !error.textContent;
     const progress = card.querySelector('progress');
     progress.value = transfer.progress;
     progress.hidden = !active;

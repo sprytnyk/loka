@@ -58,7 +58,6 @@ type Transfer struct {
 	Browser     bool
 	DeviceID    string
 	Fingerprint string
-	NewDevice   bool         // the Loka has not been remembered yet
 	Token       string       // the download link token, only for links
 	shared      []sharedItem // what a link serves, only for links
 
@@ -71,6 +70,7 @@ type Transfer struct {
 	status      Status
 	err         string
 	forgetID    string // the device to forget to trust its new certificate
+	newDevice   bool   // the other Loka has not been remembered yet
 	destination string
 	speed       speedometer
 }
@@ -181,6 +181,21 @@ func (s Status) Final() bool {
 	return false
 }
 
+// MarkNewDevice notes that the other Loka has not been remembered yet. A
+// sender learns it while the transfer is already shown.
+func (t *Transfer) MarkNewDevice() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.newDevice = true
+}
+
+// NewDevice reports whether the other Loka had not been remembered.
+func (t *Transfer) NewDevice() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.newDevice
+}
+
 // View is what the page sees of a transfer.
 type View struct {
 	ID        string    `json:"id"`
@@ -202,7 +217,7 @@ type View struct {
 // speed, which reading the view measures.
 func (t *Transfer) View() View {
 	t.mu.Lock()
-	status, err, forgetID := t.status, t.err, t.forgetID
+	status, err, forgetID, newDevice := t.status, t.err, t.forgetID, t.newDevice
 	var speed *float64
 	if status == Sending || status == Receiving {
 		mbps := t.speed.read(t.Done.Load(), time.Now())
@@ -221,7 +236,7 @@ func (t *Transfer) View() View {
 		Token:     t.Token,
 		SpeedMbps: speed,
 		Browser:   t.Browser,
-		NewDevice: t.NewDevice,
+		NewDevice: newDevice,
 		ForgetID:  forgetID,
 	}
 }

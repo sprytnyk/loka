@@ -246,8 +246,14 @@ func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
 func follow(t *transfer.Transfer, stdout io.Writer) transfer.View {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
+	warned := false
 	for {
 		v := t.View()
+		// An incoming offer already said so when it was shown.
+		if t.Direction == transfer.Outgoing && v.NewDevice && !warned {
+			warned = true
+			fmt.Fprintf(stdout, "\r%s is a new device, not seen before. Make sure it's the one you meant.\n", v.Name)
+		}
 		label := fmt.Sprintf("%s: %d%%", v.Status, v.Progress)
 		if v.SpeedMbps != nil {
 			label += fmt.Sprintf(" at %.1f Mbps", *v.SpeedMbps)
@@ -353,7 +359,7 @@ func sender(t *transfer.Transfer) string {
 	switch {
 	case t.Browser:
 		return "A browser at " + t.Peer
-	case t.NewDevice:
+	case t.NewDevice():
 		return t.Peer + " (new device, not seen before)"
 	}
 	return t.Peer

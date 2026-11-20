@@ -135,7 +135,7 @@ it. The **?** button on the page explains the rest.
 Each Loka makes a certificate on its first run and keeps it in your settings
 folder (`~/.config/loka` on Linux, `~/Library/Application Support/loka` on
 macOS, `%AppData%\loka` on Windows). The first transfer with another device is
-trusted as it is, and the accept prompt marks that device as new. After that,
+trusted as it is, and Loka marks that device as new on both sides. After that,
 Loka remembers its certificate. If a remembered device shows a different one,
 another device may be posing as it, and Loka refuses the transfer. To trust it
 anyway, select **Forget this device**, or run the `loka forget` command Loka

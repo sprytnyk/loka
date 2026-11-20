@@ -112,8 +112,8 @@ func TestTransfersBetweenLokasAreEncrypted(t *testing.T) {
 			t.Fatalf("round %d: offer %+v, want new %v", round, v, wantNew)
 		}
 		receiver.Accept(in, destination)
-		if v := waitForEnd(t, out); v.Status != transfer.Complete {
-			t.Fatalf("round %d: sender ended %+v", round, v)
+		if v := waitForEnd(t, out); v.Status != transfer.Complete || v.NewDevice != wantNew {
+			t.Fatalf("round %d: sender ended %+v, want new %v", round, v, wantNew)
 		}
 	}
 	wire := rec.bytes()
@@ -177,7 +177,7 @@ func TestReceiverRefusesASenderWithANewCertificate(t *testing.T) {
 		t.Fatalf("forget answered %d", code)
 	}
 	sendFrom(t, sender, []string{file}, host, port)
-	if in := waitForIncomingStatus(t, receiver, transfer.Waiting); !in.NewDevice {
+	if in := waitForIncomingStatus(t, receiver, transfer.Waiting); !in.NewDevice() {
 		t.Fatal("a forgotten device should count as new")
 	}
 }

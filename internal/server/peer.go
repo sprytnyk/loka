@@ -30,7 +30,8 @@ var pollEvery = time.Second
 // ended, if not complete. The receiver is remembered once it accepts.
 //
 // id is the device picked from the list of devices, or empty for an
-// address typed in. Another device answering there is refused.
+// address typed in. Another device answering there is refused. A receiver
+// never remembered before marks the transfer as to a new device.
 func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, from, host string, port int, id string) error {
 	base := "https://" + net.JoinHostPort(host, strconv.Itoa(port))
 	receiver := &pinned{store: store, want: id}
@@ -43,6 +44,9 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 	o := offer{Name: from, Items: t.Items[:min(len(t.Items), transfer.MaxOfferItems)], Size: t.Size}
 	if err := call(t.Context(), client, http.MethodPost, base+"/peer/offer", "", o, &reply); err != nil {
 		return err
+	}
+	if receiver.isNew() {
+		t.MarkNewDevice()
 	}
 	tellReceiver := sync.OnceFunc(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -81,6 +85,7 @@ type pinned struct {
 
 	mu              sync.Mutex
 	id, fingerprint string
+	standing        trust.Standing
 }
 
 // errNotPicked is another device answering at the address of the one
@@ -106,8 +111,15 @@ func (p *pinned) check(id, fingerprint string) error {
 	if standing == trust.Changed {
 		return &trust.ChangedError{Device: known}
 	}
-	p.id, p.fingerprint = id, fingerprint
+	p.id, p.fingerprint, p.standing = id, fingerprint, standing
 	return nil
+}
+
+// isNew reports whether the receiver had not been remembered before.
+func (p *pinned) isNew() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.fingerprint != "" && p.standing == trust.New
 }
 
 func (p *pinned) device(name string) trust.Device {
