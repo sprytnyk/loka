@@ -28,9 +28,12 @@ var pollEvery = time.Second
 // SendTo offers entries to the device at host and port, waits for it to
 // accept, then streams them, all over TLS. It returns why the transfer
 // ended, if not complete. The receiver is remembered once it accepts.
-func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, from, host string, port int) error {
+//
+// id is the device picked from the list of devices, or empty for an
+// address typed in. Another device answering there is refused.
+func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, from, host string, port int, id string) error {
 	base := "https://" + net.JoinHostPort(host, strconv.Itoa(port))
-	receiver := &pinned{store: store}
+	receiver := &pinned{store: store, want: id}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = store.ClientConfig(receiver.check)
 	defer transport.CloseIdleConnections()
@@ -74,10 +77,15 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 // connection of the same transfer must show the same certificate.
 type pinned struct {
 	store *trust.Store
+	want  string // the device picked, if any
 
 	mu              sync.Mutex
 	id, fingerprint string
 }
+
+// errNotPicked is another device answering at the address of the one
+// picked: one posing as it, or one that took its address.
+var errNotPicked = errors.New("Another device answered at this address, not the one you picked. It may be posing as it")
 
 func (p *pinned) check(id, fingerprint string) error {
 	p.mu.Lock()
@@ -87,6 +95,9 @@ func (p *pinned) check(id, fingerprint string) error {
 			return errors.New("The other device's certificate changed during the transfer")
 		}
 		return nil
+	}
+	if p.want != "" && id != p.want {
+		return errNotPicked
 	}
 	standing, known, err := p.store.Check(id, fingerprint)
 	if err != nil {
@@ -218,6 +229,9 @@ func connectionError(ctx context.Context, err error) error {
 	}
 	if changed, ok := errors.AsType[*trust.ChangedError](err); ok {
 		return changed
+	}
+	if errors.Is(err, errNotPicked) {
+		return errNotPicked
 	}
 	// An answer that isn't TLS: Loka 0.1, or not Loka at all. Go's client
 	// reports a plain HTTP answer only in words.

@@ -229,7 +229,7 @@ func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
 		return err
 	}
 	t := transfer.New(transfer.Outgoing, o.to, items, size, transfer.Waiting)
-	go func() { t.Finish(server.SendTo(t, entries, store, hostname(), o.to, o.peerPort)) }()
+	go func() { t.Finish(server.SendTo(t, entries, store, hostname(), o.to, o.peerPort, "")) }()
 	stop := context.AfterFunc(ctx, t.Stop)
 	defer stop()
 	v := follow(t, stdout)

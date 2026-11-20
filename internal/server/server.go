@@ -322,6 +322,7 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		Paths []string `json:"paths"`
 		Host  string   `json:"host"`
 		Port  int      `json:"port"`
+		ID    string   `json:"id"` // the device picked from the list, if any
 	}
 	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -338,7 +339,9 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 	}
 	t := transfer.New(transfer.Outgoing, req.Host, items, size, transfer.Waiting)
 	s.Transfers.Add(t)
-	go func() { t.Finish(SendTo(t, entries, s.Trust, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort))) }()
+	go func() {
+		t.Finish(SendTo(t, entries, s.Trust, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort), req.ID))
+	}()
 	writeJSON(w, http.StatusOK, map[string]string{"id": t.ID})
 }
 

@@ -72,15 +72,23 @@ func startRecorded(t *testing.T) (*Server, string, int, *recorder) {
 	return s, "127.0.0.1", ln.Addr().(*net.TCPAddr).Port, rec
 }
 
-// sendFrom sends paths from a Loka with this identity, as /api/send does.
+// sendFrom sends paths from a Loka with this identity, as /api/send does
+// for an address typed in.
 func sendFrom(t *testing.T, store *trust.Store, paths []string, host string, port int) *transfer.Transfer {
+	t.Helper()
+	return sendPicked(t, store, paths, host, port, "")
+}
+
+// sendPicked sends paths as /api/send does for the device with this ID,
+// picked from the list.
+func sendPicked(t *testing.T, store *trust.Store, paths []string, host string, port int, id string) *transfer.Transfer {
 	t.Helper()
 	entries, items, size, err := transfer.Collect(paths)
 	if err != nil {
 		t.Fatal(err)
 	}
 	out := transfer.New(transfer.Outgoing, host, items, size, transfer.Waiting)
-	go func() { out.Finish(SendTo(out, entries, store, "laptop", host, port)) }()
+	go func() { out.Finish(SendTo(out, entries, store, "laptop", host, port, id)) }()
 	return out
 }
 
@@ -190,6 +198,36 @@ func TestSenderRefusesAReceiverWithANewCertificate(t *testing.T) {
 	}
 	if len(receiver.Transfers.All()) != 0 {
 		t.Fatal("the receiver got an offer")
+	}
+}
+
+// TestSenderRefusesAnotherDeviceThanPicked picks the remembered receiver
+// from the list, has a device with another identity answer at its address,
+// and checks the sender refuses before offering anything.
+func TestSenderRefusesAnotherDeviceThanPicked(t *testing.T) {
+	picked := openTrust(t)
+	other, host, port, _ := startRecorded(t)
+	sender := openTrust(t)
+	sender.Remember(trust.Device{ID: picked.ID, Name: "desktop", Fingerprint: picked.Fingerprint()})
+	file := filepath.Join(t.TempDir(), "file")
+	treetest.Write(t, filepath.Dir(file), map[string]string{"file": "abc"})
+
+	v := waitForEnd(t, sendPicked(t, sender, []string{file}, host, port, picked.ID))
+	if v.Status != transfer.Failed || v.Error != errNotPicked.Error() || v.ForgetID != "" {
+		t.Fatalf("sender ended %+v", v)
+	}
+	if n := len(other.Transfers.All()); n != 0 {
+		t.Fatalf("the other device got %d offers", n)
+	}
+	if devices, _ := sender.Devices(); len(devices) != 1 {
+		t.Fatalf("sender remembers %+v", devices)
+	}
+
+	// Picking it from the list works when it is the one answering.
+	out := sendPicked(t, sender, []string{file}, host, port, other.Trust.ID)
+	other.Accept(waitForIncomingStatus(t, other, transfer.Waiting), t.TempDir())
+	if v := waitForEnd(t, out); v.Status != transfer.Complete {
+		t.Fatalf("sender ended %+v", v)
 	}
 }
 

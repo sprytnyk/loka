@@ -403,6 +403,7 @@ const serverMessages = {
     [/^Could not connect securely to the other device\. Check that it runs the latest Loka$/, 'Не вдалося встановити захищене з’єднання з іншим пристроєм. Перевірте, чи на ньому остання версія Loka'],
     [/^The other device's certificate changed during the transfer$/, 'Сертифікат іншого пристрою змінився під час передавання'],
     [/^(.*) showed a different certificate than before, so another device may be posing as it\. To trust it anyway, forget it and try again$/s, '$1 показав інший сертифікат, ніж раніше, тож інший пристрій може видавати себе за нього. Щоб однаково довіряти йому, забудьте його й спробуйте знову'],
+    [/^Another device answered at this address, not the one you picked\. It may be posing as it$/, 'За цією адресою відповів інший пристрій, а не той, який ви вибрали. Можливо, він видає себе за нього'],
     [/^The receiver remembers this device with a different certificate and refused the transfer$/, 'Отримувач пам’ятає цей пристрій з іншим сертифікатом і відхилив передавання'],
     [/^Choose one or more files or directories$/, 'Виберіть один чи кілька файлів або тек'],
     [/^Cannot send (.*): only files and directories can be sent$/s, 'Не можна надіслати $1: надсилати можна лише файли й теки'],
@@ -686,10 +687,12 @@ async function paths(items = selected) {
 
 // Sending, sharing and cancelling
 
-function send(host, port, button) {
+// send sends the selection to host and port. id is the device picked from
+// the list, which the server makes sure is the one that answers.
+function send(host, port, button, id = '') {
   return run(button, async () => {
     const items = [...selected];
-    const result = await api('/api/send', {paths: await paths(items), host, port: Number(port)});
+    const result = await api('/api/send', {paths: await paths(items), host, port: Number(port), id});
     pendingSelections.set(result.id, items);
     await refresh();
   });
@@ -697,7 +700,7 @@ function send(host, port, button) {
 $('send').onclick = e => send($('address').value.trim(), $('port').value, e.target);
 $('peers').onclick = e => {
   const button = e.target.closest('button[data-host]');
-  if (button) send(button.dataset.host, button.dataset.port, button);
+  if (button) send(button.dataset.host, button.dataset.port, button, button.dataset.id);
 };
 $('share').onclick = e => run(e.target, async () => {
   await api('/api/share', {paths: await paths()});
@@ -774,7 +777,7 @@ $('decline-incoming').onclick = e => incomingAction(e.target, () => api('/api/ca
 function renderPeers(data) {
   const list = $('peers');
   const markup = data.peers.length
-    ? data.peers.map(peer => `<div class="item row"><span><strong>${escapeHtml(peer.name)}</strong><br><small>${escapeHtml(peer.host)}</small></span><button data-host="${escapeHtml(peer.host)}" data-port="${peer.port}">${escapeHtml(t('send'))}</button></div>`).join('')
+    ? data.peers.map(peer => `<div class="item row"><span><strong>${escapeHtml(peer.name)}</strong><br><small>${escapeHtml(peer.host)}</small></span><button data-host="${escapeHtml(peer.host)}" data-port="${peer.port}" data-id="${escapeHtml(peer.id)}">${escapeHtml(t('send'))}</button></div>`).join('')
     : `<p>${escapeHtml(data.discovery_error ? fromServer(data.discovery_error) : t('noDevices'))}</p>`;
   if (markup === renderedPeers) return;
   const active = document.activeElement;

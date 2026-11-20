@@ -43,7 +43,7 @@ func startSending(t *testing.T, from string, paths []string, host string, port i
 		t.Fatal(err)
 	}
 	out := transfer.New(transfer.Outgoing, host, items, size, transfer.Waiting)
-	go func() { out.Finish(SendTo(out, entries, openTrust(t), from, host, port)) }()
+	go func() { out.Finish(SendTo(out, entries, openTrust(t), from, host, port, "")) }()
 	return out
 }
 
