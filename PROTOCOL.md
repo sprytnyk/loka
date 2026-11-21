@@ -178,6 +178,10 @@ A link looks like `http://192.0.2.10:45873/#d=TOKEN`. Browsers never send
 the part after `#`, so the token doesn't cross the network in plain text.
 The page reads the token and opens `https://192.0.2.10:45873/download/TOKEN`.
 
+`loka share` prints a curl command with `--pinnedpubkey`, the SHA-256 of the
+key in the certificates browsers get. Loka makes that key on each start, so
+the command works only while that run lasts.
+
 One shared file downloads as it is. Several download as one zip file,
 without compression. `loka share` serves only the page, the certificate
 and the links.

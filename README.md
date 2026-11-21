@@ -120,10 +120,9 @@ Ctrl+C. `--address` limits it to one address. `devices` lists nearby devices
 and marks a device as remembered only when it shows the certificate Loka knows
 for it. `forget` forgets a device.
 
-The `curl` command uses `-k`, since curl doesn't know Loka's certificate. To
-check it instead, download the certificate from the help on the page, convert
-it with `openssl x509 -inform DER -in loka-ca.crt -out loka-ca.pem`, and give
-curl `--cacert loka-ca.pem` in place of `-k`.
+curl doesn't know Loka's certificate, so the command turns that check off with
+`-k`. Instead, `--pinnedpubkey` makes curl check the key Loka uses in this run.
+If another device answers, curl stops before it sends the link.
 
 Run `loka -h` for all options and `loka --version` for the version. If the port
 is busy, add `--port 0` to use a free one. Help and errors are in colour in a

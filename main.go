@@ -545,9 +545,13 @@ func shareCommand(ctx context.Context, o options, stdout io.Writer) error {
 	s.Transfers.Add(link)
 	fmt.Fprintln(stdout, "Open this on a phone or in a browser:")
 	printLinks(stdout, store, addresses, port, "/#d="+link.Token)
+	pin, err := store.BrowserKeyPin()
+	if err != nil {
+		return err
+	}
 	fmt.Fprintln(stdout, "With curl:")
 	for _, address := range addresses {
-		fmt.Fprintf(stdout, "curl -kOJ %s\n", hostURL("https", address, port, "/download/"+link.Token))
+		fmt.Fprintf(stdout, "curl -kOJ --pinnedpubkey %s %s\n", pin, hostURL("https", address, port, "/download/"+link.Token))
 	}
 	return s.Serve(ctx, ln)
 }

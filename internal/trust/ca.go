@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -142,4 +143,17 @@ func (s *Store) CA() []byte {
 func (s *Store) CAFingerprint() string {
 	sum := sha256.Sum256(s.ca.Leaf.Raw)
 	return hex.EncodeToString(sum[:])
+}
+
+// BrowserKeyPin is the public key in every certificate browsers see in
+// this run, in the form curl's --pinnedpubkey takes. curl doesn't know
+// Loka's authority, so the pin is how it checks it's talking to this
+// device.
+func (s *Store) BrowserKeyPin() (string, error) {
+	der, err := x509.MarshalPKIXPublicKey(&s.leafKey.PublicKey)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(der)
+	return "sha256//" + base64.StdEncoding.EncodeToString(sum[:]), nil
 }

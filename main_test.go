@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"io"
 	"net"
 	"net/http"
@@ -192,8 +194,9 @@ func TestShareCommandServesUntilStopped(t *testing.T) {
 	// The browser link keeps its token after #, which browsers never send.
 	m := out.wait(t, `(http://127\.0\.0\.1:\d+)/#d=(\S+)`)
 	base, token := m[1], m[2]
-	curl := out.wait(t, `curl -kOJ (https://127\.0\.0\.1:\d+/download/(\S+))`)
-	if curl[2] != token {
+	curl := out.wait(t, `curl -kOJ --pinnedpubkey (\S+) (https://127\.0\.0\.1:\d+/download/(\S+))`)
+	pin, download := curl[1], curl[2]
+	if curl[3] != token {
 		t.Fatalf("the curl line has another token: %q", curl[0])
 	}
 	// Another device gets nothing from the link over plain HTTP.
@@ -202,13 +205,18 @@ func TestShareCommandServesUntilStopped(t *testing.T) {
 	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("plain HTTP download answered %v %v", resp, err)
 	}
-	resp, err := browser(t).Get(curl[1])
+	resp, err := browser(t).Get(download)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	if body, _ := io.ReadAll(resp.Body); string(body) != "hello" {
 		t.Fatalf("got %q", body)
+	}
+	// The pin is the key of the certificate curl gets.
+	der, _ := x509.MarshalPKIXPublicKey(resp.TLS.PeerCertificates[0].PublicKey)
+	if sum := sha256.Sum256(der); pin != "sha256//"+base64.StdEncoding.EncodeToString(sum[:]) {
+		t.Fatalf("curl pins %s, not the key Loka shows", pin)
 	}
 	stop()
 	if c := <-code; c != 0 {
