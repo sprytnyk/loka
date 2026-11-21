@@ -55,8 +55,9 @@ Run `loka` on both computers. It opens in your browser.
    Both computers show a pairing code. The first time, check it's the same
    on both.
 
-Several transfers can arrive at once, and each shows its speed. Loka remembers
-the last destination until it stops.
+Several transfers can arrive at once, and each shows its speed. A finished
+transfer shows its average speed, on the page and in the terminal. Loka
+remembers the last destination until it stops.
 
 The page follows your system's light or dark setting and your browser's
 language, English or Ukrainian. Buttons in the header switch both, and the
