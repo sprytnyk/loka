@@ -1,8 +1,8 @@
 # How Loka devices talk
 
 This is how Loka finds other devices, proves who they are and moves
-files. Everything uses plain HTTP, TLS and JSON, so you can check it with
-curl. The README covers using Loka.
+files. Everything is HTTP, TLS and JSON, so you can check it with curl.
+The README covers using Loka.
 
 ## Finding devices
 
@@ -29,8 +29,8 @@ flowchart TD
     C[New connection] --> B{First byte 0x16?}
     B -- no --> P[Plain HTTP]
     B -- yes --> T{TLS server name}
-    T -- peer.loka.invalid --> L["Another Loka gets the device certificate<br>over TLS 1.3 and must show its own"]
-    T -- none --> W["A browser gets a certificate<br>from this device's authority"]
+    T -- peer.loka.invalid --> L["Another Loka gets the public certificate<br>from identity.pem over TLS 1.3<br>and must show its own"]
+    T -- anything else --> W["A browser gets a certificate<br>signed with ca.pem"]
     P --> H{From this computer?}
     H -- yes --> D[The full page and its API]
     H -- no --> O["The check page and<br>the certificate only"]
@@ -40,8 +40,8 @@ A connection has 10 seconds to send its first byte. Loka keeps at most 128
 connections from other devices that aren't part of a transfer, whether
 new, idle or busy with another request. Past that, it closes the oldest, so
 connections that send nothing can't use up the file handles a transfer
-needs. Loka doesn't count an upload with its secret or a download with its
-link while it runs.
+needs. A connection stops counting once it sends an upload with the right
+secret or a download with a working link.
 
 ## Who is who
 
@@ -51,13 +51,29 @@ settings directory, `~/.config/sprytnyk.dev/Loka` on Linux:
 | File | What | Lasts |
 | --- | --- | --- |
 | `identity.pem` | The device certificate. Its common name is a random ID. | Forever |
-| `ca.pem` | A certificate authority for browsers | 10 years |
+| `ca.pem` | A certificate authority for browsers. Phones install its certificate as `loka-ca.crt`. | 10 years |
 | `devices.json` | The devices it remembers: ID, name and SHA-256 of their certificate | |
 | `devices.lock` | A Loka locks it while it changes `devices.json`, so two Lokas running at once don't lose each other's changes | |
 
-Two Lokas connect with TLS 1.3, and each shows its device certificate.
-No authority signs these certificates. Instead, each Loka remembers the
-other's:
+`identity.pem` and `ca.pem` each hold a private key and its certificate,
+like an SSH key pair. A certificate is the public key with a name and
+dates. The private key never leaves the computer. Others get only the
+public certificate.
+
+Two Lokas work like SSH and its `known_hosts` file. The first time, each
+remembers the other's certificate. Later, it refuses a device that shows a
+different one:
+
+```mermaid
+sequenceDiagram
+    participant A as Loka A<br>keeps its private key
+    participant B as Loka B<br>keeps its private key
+    A->>B: Its public certificate, and proof it holds the private key
+    B->>A: Its public certificate, and proof it holds the private key
+    Note over A,B: Each compares the certificate with the one it remembers
+```
+
+What Loka does depends on whether it remembers the other device:
 
 | The other device's ID is | And its certificate | Loka |
 | --- | --- | --- |
@@ -66,22 +82,54 @@ other's:
 | Remembered | Different | Refuses it, since another device may be posing as it |
 
 Both devices remember each other once the receiver accepts a transfer.
-A reinstalled Loka makes a new ID. So a changed certificate means another
-device is using a remembered ID, which anyone can read from the
-announcements. Loka refuses it, shows the refusal once per device, and
-never suggests forgetting the device. `loka forget NAME` or
-`loka forget ID` drops a remembered device. The first time two devices
-meet, there is nothing to compare yet, which is what the pairing code below
-is for.
+A Loka's certificate never changes, and a Loka with a new settings
+directory makes a new ID. So when a remembered ID shows a different
+certificate, another device copied that ID from the announcements. Loka
+refuses it, shows the refusal once per device, and never suggests
+forgetting the device. `loka forget NAME` or `loka forget ID` drops a
+remembered device. The first time two devices meet, there is nothing to
+compare yet, which is what the pairing code below is for.
+
+A phone can't remember certificates that way. Instead, you install the
+certificate from `ca.pem` on it once, as `loka-ca.crt`. Loka signs a
+certificate for each of its addresses with the private key from `ca.pem`,
+and the phone checks the signature with `loka-ca.crt`:
+
+```mermaid
+sequenceDiagram
+    participant P as Phone<br>has loka-ca.crt
+    participant L as Loka at 192.168.1.20<br>keeps the private key in ca.pem
+    Note over P,L: Once
+    L->>P: loka-ca.crt, the public certificate you install
+    Note over P,L: Each connection
+    P->>L: Connects to 192.168.1.20
+    Note over L: Signs a certificate for 192.168.1.20<br>with the private key, or reuses one
+    L->>P: The signed certificate
+    Note over P: Checks the signature with loka-ca.crt
+```
 
 The certificate authority may only vouch for local addresses: `10/8`,
 `172.16/12`, `192.168/16`, `100.64/10`, `169.254/16`, `127/8`, `fc00::/7`,
 `fe80::/10` and `::1`. Browsers reject anything else it signs, so someone
-who copied it still couldn't pose as a web site. Carrier NAT and Tailscale
-use `100.64/10`. For each of its addresses where phones can't trust it, Loka
-shows a warning, and the phone's page at that address doesn't offer the
-certificate. For each address a browser connects to, Loka makes a
-certificate that lasts 397 days.
+who copied `ca.pem`, private key included, still couldn't pose as a web
+site. Carrier NAT and Tailscale use `100.64/10`. If the computer has an
+address outside these ranges, Loka warns about it. The page at that address
+doesn't offer `loka-ca.crt`.
+
+`ca.pem` lasts 10 years. Each address's certificate lasts 397 days, the
+most phones accept. Loka keeps those only in memory and makes them again
+when needed. For example:
+
+| What happens | Certificate the browser gets |
+| --- | --- |
+| A phone opens `http://192.168.1.20:45873/` and moves to HTTPS | A new one for `192.168.1.20` |
+| The phone connects again | The same one |
+| The computer's address changes to `192.168.1.21`, and the phone opens the new link | A new one for `192.168.1.21` |
+| Loka restarts | A new one on the next connection |
+| Loka keeps running for 396 days, so the one in use would run out the next day | A new one, so it never runs out |
+
+The link for `192.168.1.20` stops working once the computer leaves that
+address.
 
 ## Sending
 
@@ -129,9 +177,15 @@ sequenceDiagram
   was picked from the list, the receiver's certificate must also have
   that device's ID.
 
-A browser has no certificate, so the receiver lists it as "A browser
-at" and its address. Its offer has no commitment and waits for an answer
-at once. The phone page builds the tar stream itself.
+A phone sends from its browser, which differs from a Loka in three ways:
+
+- It has no certificate, so the receiver can't remember it. The receiver
+  shows the transfer as "From a browser at 192.168.1.30", with the phone's
+  address.
+- There's no pairing code, since it needs both devices' certificates. The
+  offer goes straight to the person at the receiver, who accepts or
+  declines it.
+- The page on the phone packs the files into the tar stream itself.
 
 ## The pairing code
 
@@ -178,15 +232,15 @@ then, and both sides show the code while they wait.
 
 ## Download links
 
-A link looks like `http://192.0.2.10:45873/#d=TOKEN`. Browsers never send
+A link looks like `http://192.168.1.20:45873/#d=TOKEN`. Browsers never send
 the part after `#`, so the token doesn't cross the network in plain text.
-The page reads the token and opens `https://192.0.2.10:45873/download/TOKEN`.
-A browser that trusts Loka's certificate can open
-`https://192.0.2.10:45873/#d=TOKEN` and skip the plain page.
+The page reads the token and opens
+`https://192.168.1.20:45873/download/TOKEN`. A phone with `loka-ca.crt` can
+open `https://192.168.1.20:45873/#d=TOKEN` and skip the plain page.
 
 `loka share` prints a curl command with `--pinnedpubkey`, the SHA-256 of the
-key in the certificates browsers get. Loka makes that key on each start, so
-the command works only while that run lasts.
+public key in the per-address certificates. They all share one key, which
+Loka makes on each start, so the command works only until Loka restarts.
 
 One shared file downloads as it is. Several download as one zip file,
 without compression. `loka share` serves only the page, the certificate
@@ -207,6 +261,6 @@ and the links.
   plain HTTP too, so don't use a fingerprint from it. Use `https://` once
   the phone has the right `loka-ca.crt`.
 - **Who uses a browser.** Anyone who can open the page can offer files,
-  and anyone with a link can download while it's shared. The person at the
+  and anyone who gets the link can download while it's shared. The person at the
   receiver still accepts each offer.
 - **Device names.** Anyone can announce any name.
