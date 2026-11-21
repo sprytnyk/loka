@@ -210,8 +210,9 @@ certificate, use `https://` links, which skip the first page.
 > address, so its fingerprint never matches.
 
 > [!CAUTION]
-> Anyone with a link can download while you're sharing. When you're done,
-> select **Stop sharing**, or press Ctrl+C after `loka share`.
+> Anyone who gets the link can download while you're sharing, so send it only
+> to people you mean to. When you're done, select **Stop sharing**, or press
+> Ctrl+C after `loka share`.
 
 An interrupted transfer starts over. If no bytes move for a minute, for
 example because a laptop went to sleep, the transfer stops. Loka skips
