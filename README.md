@@ -211,17 +211,17 @@ An interrupted transfer starts over. If no bytes move for a minute, for
 example because a laptop went to sleep, the transfer stops. Loka skips
 symbolic links inside the directories you choose.
 
-## Compared with LocalSend and st
+## Compared with LocalSend, st and Upgopher
 
-| | Loka | [LocalSend](https://localsend.org) | [st](https://github.com/chyok/st) |
-| --- | --- | --- | --- |
-| On computers | One program, used in the browser or the terminal | An app, or a separate command-line tool | One program, used in the terminal |
-| On phones | Nothing, the browser | The app | Nothing, the browser |
-| Between two installs | Encrypted | Encrypted by default | Not encrypted |
-| From a phone's browser | You accept each upload | Not offered | Saved without asking |
-| Download link for a browser | Yes | Yes | Yes |
-| Finding devices | Multicast | Multicast, then scanning the network | Multicast |
-| Account, server or internet | None | None | None |
+| | Loka | [LocalSend](https://localsend.org) | [st](https://github.com/chyok/st) | [Upgopher](https://github.com/wanetty/upgopher) |
+| --- | --- | --- | --- | --- |
+| On computers | One program, used in the browser or the terminal | An app, or a separate command-line tool | One program, used in the terminal | One program, used in the browser |
+| On phones | Nothing, the browser | The app | Nothing, the browser | Nothing, the browser |
+| Between two installs | Encrypted | Encrypted by default | Not encrypted | Not offered |
+| From a phone's browser | You accept each upload | You accept each upload, unless you turn that off | Saved without asking | Saved without asking |
+| Download link for a browser | Yes | Yes | Yes | Yes |
+| Finding devices | Multicast | Multicast, then scanning the network | Multicast | None, you type the address |
+| Account, server or internet | None | None | None | None |
 
 ## Planned
 
