@@ -198,7 +198,8 @@ and the links.
   plain HTTP. Someone who can change traffic could swap the first page and
   steal a link, or the files a phone sends. Use `https://` once the phone
   has the certificate. Compare the certificate's SHA-256 fingerprint on the
-  phone with the one in the page's help.
+  phone with the one on the computer's own page or in the terminal. Don't
+  trust one the phone shows.
 - **Who uses a browser.** Anyone who can open the page can offer files,
   and anyone with a link can download while it's shared. The person at the
   receiver still accepts each offer.

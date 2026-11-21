@@ -122,11 +122,12 @@ loka forget my-laptop
 
 `send` takes the receiver's address. `receive` asks where to put each transfer;
 leave the answer empty to decline. It also prints the address and QR code a
-phone can send from, and its `https://` form. `share` prints a link and its QR
-code for each local address, the same links over `https://` and a `curl`
-command. The link works until you press Ctrl+C. `--address` limits it to one
-address. `devices` lists nearby devices and marks a device as remembered only
-when it shows the certificate Loka knows for it. `forget` forgets a device.
+phone can send from, its `https://` form and the certificate's fingerprint.
+`share` prints a link and its QR code for each local address, the same links
+over `https://`, the certificate's fingerprint and a `curl` command. The link
+works until you press Ctrl+C. `--address` limits it to one address. `devices`
+lists nearby devices and marks a device as remembered only when it shows the
+certificate Loka knows for it. `forget` forgets a device.
 
 curl doesn't know Loka's certificate, so the command turns that check off with
 `-k`. Instead, `--pinnedpubkey` makes curl check the key Loka uses in this run.
@@ -173,9 +174,14 @@ computer itself.
 Two steps still go over plain HTTP: the small page an `http://` address opens
 first, which moves the phone to HTTPS, and the download of the certificate.
 Someone on the network could change either. Once the phone has the
-certificate, open `https://` addresses and links, which skip the plain page. To
-be sure, compare the certificate's fingerprint in the phone's certificate
-details with the one in the page's help.
+certificate, open `https://` addresses and links, which skip the plain page.
+
+> [!IMPORTANT]
+> Check the certificate before you trust it. Compare the SHA-256 fingerprint in
+> the phone's certificate details with the one on the computer: in the **?**
+> help on Loka's page, or printed by `loka receive` and `loka share`. Don't
+> trust a fingerprint shown on the phone, since someone who can swap the
+> certificate can swap that page too.
 
 Anyone with a link can download while you're sharing.
 

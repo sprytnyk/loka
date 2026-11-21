@@ -157,3 +157,9 @@ func (s *Store) BrowserKeyPin() (string, error) {
 	sum := sha256.Sum256(der)
 	return "sha256//" + base64.StdEncoding.EncodeToString(sum[:]), nil
 }
+
+// FingerprintText is CAFingerprint in byte pairs, as phones show it.
+func (s *Store) FingerprintText() string {
+	sum := sha256.Sum256(s.ca.Leaf.Raw)
+	return fmt.Sprintf("% X", sum)
+}

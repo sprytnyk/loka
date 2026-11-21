@@ -566,8 +566,8 @@ func hostURL(scheme, address string, port int, path string) string {
 // plain HTTP: the page there moves the browser to HTTPS, or offers to
 // install Loka's certificate first. Someone on the network could change
 // that page, so it also prints HTTPS links for phones with the
-// certificate. It warns about the addresses where installing the
-// certificate won't help.
+// certificate, and the certificate's fingerprint to check it by. It warns
+// about the addresses where installing the certificate won't help.
 func printLinks(stdout io.Writer, store *trust.Store, addresses []string, port int, path string) {
 	f, ok := stdout.(*os.File)
 	codes := ok && isTerminal(f)
@@ -582,6 +582,7 @@ func printLinks(stdout io.Writer, store *trust.Store, addresses []string, port i
 	for _, address := range addresses {
 		fmt.Fprintln(stdout, hostURL("https", address, port, path))
 	}
+	fmt.Fprintf(stdout, "Loka's certificate fingerprint (SHA-256): %s\n", store.FingerprintText())
 	for _, problem := range store.AddressProblems(addresses) {
 		fmt.Fprintln(stdout, problem)
 	}
