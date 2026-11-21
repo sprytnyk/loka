@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Made in Ukraine](https://img.shields.io/badge/made_in-Ukraine-ffd700.svg?labelColor=0057b7)
 [![Linux test coverage](https://codecov.io/gh/sprytnyk/loka/branch/main/graph/badge.svg)](https://codecov.io/gh/sprytnyk/loka)
+![AI Generated](https://img.shields.io/badge/AI-generated-orange)
 
 Share files and directories with computers and phones on your local network.
 Files go straight from one device to the other, encrypted, and never pass
