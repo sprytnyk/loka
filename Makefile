@@ -12,9 +12,10 @@ build:
 
 check: lint test
 
+# This needs golangci-lint v2. See
+# https://golangci-lint.run/docs/welcome/install/
 lint:
-	test -z "$$(gofmt -l .)" || { gofmt -l .; exit 1; }
-	go vet ./...
+	golangci-lint run
 
 test:
 	go test -race ./...

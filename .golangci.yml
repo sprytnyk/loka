@@ -1,0 +1,21 @@
+version: "2"
+
+linters:
+  # The standard set turns on errcheck, govet, ineffassign, staticcheck and
+  # unused.
+  default: standard
+  disable:
+    # Most unchecked errors here are on purpose, like Close in cleanup.
+    - errcheck
+  enable:
+    - errorlint
+    - misspell
+  exclusions:
+    rules:
+      # Error messages start with a capital letter because people read them.
+      - linters: [staticcheck]
+        text: "ST1005:"
+
+formatters:
+  enable:
+    - gofmt
