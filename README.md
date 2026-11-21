@@ -185,10 +185,14 @@ addresses on local networks, so even if someone copied it from your computer,
 they couldn't use it to pose as a web site. Loka never installs it on the
 computer itself.
 
-Two steps still go over plain HTTP: the small page an `http://` address opens
-first, which moves the phone to HTTPS, and the download of the certificate.
-Someone on the network could change either. Once the phone has the
-certificate, open `https://` addresses and links, which skip the plain page.
+Two steps aren't encrypted:
+
+1. The page an `http://` link or QR code opens first. It moves the phone to
+   HTTPS.
+2. The download of Loka's certificate, which that page offers.
+
+Someone on the same network could swap either one. Once the phone has the
+certificate, use `https://` links, which skip the first page.
 
 > [!IMPORTANT]
 > Check the certificate before you trust it. Compare the SHA-256 fingerprint of
