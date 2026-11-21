@@ -83,7 +83,7 @@ leaves nothing behind.
 
 A phone doesn't need Loka. On the computer, select **Receive from a phone** and
 scan the QR code with the phone's camera, or open the link in the phone's
-browser. Use the whole link: the part after `#r=` lets the phone send, and
+browser. Use the whole link. The part after `#r=` lets the phone send, and it
 changes each time Loka starts. Choose files or a directory and send. The
 computer asks you to accept, as with any transfer. iPhones and iPads can send
 files but not directories, because their browsers can't choose a directory.

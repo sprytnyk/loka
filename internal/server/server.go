@@ -324,7 +324,7 @@ const maxOffers = 16
 
 // keptForKnown is how many of those places only remembered Lokas may
 // take. Anyone can offer as a new Loka, and anyone with the phone link from
-// a browser, so a flood of those can't hold off a remembered device.
+// a browser, so a flood of those can't lock out a remembered device.
 const keptForKnown = 4
 
 // fromUnknown reports whether t comes from a browser or a new Loka, which

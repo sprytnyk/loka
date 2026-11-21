@@ -155,9 +155,9 @@ sequenceDiagram
 
 - The offer lists up to 100 top-level names and the total size of the
   files. Up to 16 offers can wait at once, and more get `503`. Browsers
-  and new devices may take only 12 of those places, so remembered devices
-  always find room. An offer that nobody answers within a minute fails,
-  and `/peer/status` then gives the reason in `error`.
+  and new devices may take only 12 of those places, so 4 are always left
+  for remembered devices. An offer that nobody answers within a minute
+  fails, and `/peer/status` then gives the reason in `error`.
 - Every later request carries the `secret` in an `X-Transfer-Secret`
   header.
 - The upload is a tar stream: a header per directory or file, then its
@@ -198,8 +198,8 @@ Offers without it get `403`.
 
 Treat the phone link as a secret. The page an `http://` link opens comes
 over plain HTTP, so someone who can change traffic could swap it for one
-that reads the token. The `https://` link, on a phone with the right
-`loka-ca.crt`, keeps the token from them.
+that reads the token. Over the `https://` link, on a phone with the right
+`loka-ca.crt`, they can't read it.
 
 ## The pairing code
 
