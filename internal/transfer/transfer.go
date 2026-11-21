@@ -76,6 +76,8 @@ type Transfer struct {
 	code        string // the pairing code, once both nonces are known
 	destination string
 	speed       speedometer
+	started     time.Time // when bytes started moving
+	ended       time.Time // when the transfer completed
 }
 
 // New makes a transfer that starts at status.
@@ -121,8 +123,9 @@ func (t *Transfer) Move(to Status, from ...Status) bool {
 	}
 	t.status = to
 	if to == Sending || to == Receiving {
+		t.started = time.Now()
 		t.speed = speedometer{} // start measuring as the bytes start
-		t.speed.read(t.Done.Load(), time.Now())
+		t.speed.read(t.Done.Load(), t.started)
 	}
 	return true
 }
@@ -164,6 +167,7 @@ func (t *Transfer) Finish(err error) {
 	switch {
 	case err == nil:
 		t.status = Complete
+		t.ended = time.Now()
 	case t.ctx.Err() != nil || errors.Is(err, context.Canceled):
 		t.status = Cancelled
 	default:
@@ -231,20 +235,25 @@ type View struct {
 	Progress  int       `json:"progress"`
 	Error     string    `json:"error,omitempty"`
 	Token     string    `json:"token,omitempty"`
-	SpeedMbps *float64  `json:"speed_mbps,omitempty"` // only while bytes move
+	SpeedMbps *float64  `json:"speed_mbps,omitempty"` // while bytes move, then the average once complete
 	Browser   bool      `json:"browser,omitempty"`
 	NewDevice bool      `json:"new_device,omitempty"`
 	Code      string    `json:"code,omitempty"` // the pairing code, between Lokas
 }
 
-// View returns what the page shows now. While bytes move it includes the
-// speed, which reading the view measures.
+// View returns what the page shows now. While bytes move, it includes the
+// current speed, which reading the view measures. Once the transfer
+// completes, it includes the average speed.
 func (t *Transfer) View() View {
 	t.mu.Lock()
 	status, err, newDevice, code := t.status, t.err, t.newDevice, t.code
 	var speed *float64
-	if status == Sending || status == Receiving {
+	switch {
+	case status == Sending || status == Receiving:
 		mbps := t.speed.read(t.Done.Load(), time.Now())
+		speed = &mbps
+	case status == Complete && !t.started.IsZero() && t.ended.After(t.started):
+		mbps := float64(t.Done.Load()) * 8 / t.ended.Sub(t.started).Seconds() / 1e6
 		speed = &mbps
 	}
 	t.mu.Unlock()

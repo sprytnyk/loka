@@ -278,6 +278,7 @@ const messages = {
     waitingForAccept: 'Waiting for {name} to accept…',
     sendingTo: 'Sending to {name}…',
     sentTo: 'Sent to {name}.',
+    sentToAt: 'Sent to {name} at {speed}.',
     declined: '{name} declined or cancelled.',
     cancelled: 'Cancelled.',
     checkTitle: 'Secure connection',
@@ -387,6 +388,7 @@ const messages = {
     waitingForAccept: 'Чекаю, поки {name} прийме…',
     sendingTo: 'Надсилаю на {name}…',
     sentTo: 'Надіслано на {name}.',
+    sentToAt: 'Надіслано на {name} зі швидкістю {speed}.',
     declined: '{name} відхилив або скасував.',
     cancelled: 'Скасовано.',
     checkTitle: 'Захищене з’єднання',
@@ -822,6 +824,7 @@ function renderPeers(data) {
     replacement?.focus();
   }
 }
+const formatSpeed = mbps => mbps.toLocaleString(language, {minimumFractionDigits: 1, maximumFractionDigits: 1});
 function fileNames(items) {
   if (!items.length) return '';
   if (items.length === 1) return `<small class="transfer-file"><bdi>${escapeHtml(items[0])}</bdi></small>`;
@@ -857,9 +860,7 @@ function renderTransfers(transfers) {
     cards.delete(transfer.id);
     const waiting = transfer.direction === 'incoming' && transfer.status === 'waiting';
     const active = activeTransferStatuses.includes(transfer.status);
-    const speed = typeof transfer.speed_mbps === 'number'
-      ? ' · ' + t('speed', {speed: transfer.speed_mbps.toLocaleString(language, {minimumFractionDigits: 1, maximumFractionDigits: 1})})
-      : '';
+    const speed = typeof transfer.speed_mbps === 'number' ? ' · ' + t('speed', {speed: formatSpeed(transfer.speed_mbps)}) : '';
     card.querySelector('.transfer-status').textContent = `${statusText(transfer.status)} · ${transfer.progress}%${speed}`;
     const error = card.querySelector('.notice');
     const newReceiver = transfer.direction !== 'incoming' && transfer.new_device && !transfer.error;
@@ -1129,6 +1130,13 @@ function serverError(text) {
     return t('requestFailed');
   }
 }
+function parseReply(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+}
 function phoneUpload(current, body) {
   return new Promise((resolve, reject) => {
     const xhr = current.xhr = new XMLHttpRequest();
@@ -1137,7 +1145,7 @@ function phoneUpload(current, body) {
     xhr.upload.onprogress = e => {
       if (e.lengthComputable) $('phone-progress').value = Math.floor(e.loaded * 100 / e.total);
     };
-    xhr.onload = () => xhr.status < 300 ? resolve() : reject(Error(serverError(xhr.responseText)));
+    xhr.onload = () => xhr.status < 300 ? resolve(parseReply(xhr.responseText)) : reject(Error(serverError(xhr.responseText)));
     xhr.onerror = () => reject(Error(t('unreachable')));
     xhr.onabort = () => reject(Error(t('cancelled')));
     xhr.send(body);
@@ -1167,8 +1175,10 @@ $('phone-send').onclick = e => run(e.target, async () => {
     }
     if (current.cancelled) throw Error(t('cancelled'));
     phoneStatus(t('sendingTo', {name: hostName}));
-    await phoneUpload(current, tarStream(files));
-    phoneStatus(t('sentTo', {name: hostName}));
+    const sent = await phoneUpload(current, tarStream(files));
+    phoneStatus(typeof sent.speed_mbps === 'number'
+      ? t('sentToAt', {name: hostName, speed: t('speed', {speed: formatSpeed(sent.speed_mbps)})})
+      : t('sentTo', {name: hostName}));
     phoneFiles = phoneFiles.filter(file => !files.includes(file));
     renderPhoneSelection();
   } catch (error) {

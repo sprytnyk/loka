@@ -102,7 +102,7 @@ sequenceDiagram
         R-->>S: {status: waiting / accepted / ..., error}
     end
     S->>R: POST /peer/upload/{id} (tar stream)
-    R-->>S: {status: complete}
+    R-->>S: {status: complete, speed_mbps}
 ```
 
 - The offer lists up to 100 top-level names and the total size of the
@@ -114,6 +114,10 @@ sequenceDiagram
 - The upload is a tar stream: a header per directory or file, then its
   bytes. The receiver unpacks it as it arrives, refuses paths that leave
   the destination, and stops if more arrives than was offered.
+- When the upload completes, the receiver's answer includes the average
+  speed in `speed_mbps`, in megabits a second. The receiver measures it
+  from when the upload starts until it completes. A Loka that sends
+  ignores it. The phone page shows it.
 - Either side can cancel. The sender cancels with
   `POST /peer/cancel/{id}`. When the receiver cancels, the sender's next
   request fails.

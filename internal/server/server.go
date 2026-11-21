@@ -540,7 +540,7 @@ func (s *Server) peerUpload(w http.ResponseWriter, r *http.Request, t *transfer.
 	case err != nil:
 		writeError(w, http.StatusBadRequest, err)
 	default:
-		writeJSON(w, http.StatusOK, map[string]transfer.Status{"status": transfer.Complete})
+		writeJSON(w, http.StatusOK, map[string]any{"status": transfer.Complete, "speed_mbps": t.View().SpeedMbps})
 	}
 }
 

@@ -28,7 +28,7 @@ func TestSpeedometer(t *testing.T) {
 	}
 }
 
-func TestViewShowsSpeedOnlyWhileBytesMove(t *testing.T) {
+func TestViewShowsSpeedWhileBytesMoveAndAverageAtTheEnd(t *testing.T) {
 	tr := New(Outgoing, "receiver", nil, 10, Waiting)
 	if v := tr.View(); v.SpeedMbps != nil {
 		t.Fatalf("waiting transfer has speed %v", *v.SpeedMbps)
@@ -45,8 +45,22 @@ func TestViewShowsSpeedOnlyWhileBytesMove(t *testing.T) {
 		t.Fatalf("moving send has speed %v", v.SpeedMbps)
 	}
 	tr.Finish(nil)
-	if v := tr.View(); v.SpeedMbps != nil {
-		t.Fatalf("finished transfer has speed %v", *v.SpeedMbps)
+	// 10 bytes in at least speedEvery is at most 160 bits a second.
+	if v := tr.View(); v.SpeedMbps == nil || *v.SpeedMbps <= 0 || *v.SpeedMbps > 160e-6 {
+		t.Fatalf("complete transfer has average speed %v", v.SpeedMbps)
+	}
+}
+
+func TestViewShowsNoSpeedWhenNothingMoved(t *testing.T) {
+	for _, end := range []func(*Transfer){
+		func(tr *Transfer) { tr.Stop() },
+		func(tr *Transfer) { tr.Move(Sending, Waiting); tr.Finish(errors.New("broken")) },
+	} {
+		tr := New(Outgoing, "receiver", nil, 10, Waiting)
+		end(tr)
+		if v := tr.View(); v.SpeedMbps != nil {
+			t.Fatalf("%s transfer has speed %v", v.Status, *v.SpeedMbps)
+		}
 	}
 }
 
