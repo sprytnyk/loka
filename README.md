@@ -130,14 +130,16 @@ loka share /path/to/file
 loka forget my-laptop
 ```
 
-`send` takes the receiver's address. `receive` asks where to put each transfer;
-leave the answer empty to decline. It also prints the address and QR code a
-phone can send from, its `https://` form and the certificate's fingerprint.
-`share` prints a link and its QR code for each local address, the same links
-over `https://`, the certificate's fingerprint and a `curl` command. The link
-works until you press Ctrl+C. `--address` limits it to one address. `devices`
-lists nearby devices and marks a device as remembered only when it shows the
-certificate Loka knows for it. `forget` forgets a device.
+- `receive` asks where to put each transfer; leave the answer empty to
+  decline. It also prints the address and QR code a phone can send from, its
+  `https://` form and the certificate's fingerprint.
+- `devices` lists nearby devices and marks a device as remembered only when it
+  shows the certificate Loka knows for it.
+- `send` takes the receiver's address.
+- `share` prints a link and its QR code for each local address, the same links
+  over `https://`, the certificate's fingerprint and a `curl` command. The link
+  works until you press Ctrl+C. `--address` limits it to one address.
+- `forget` forgets a device.
 
 curl doesn't know Loka's certificate, so the command turns that check off with
 `-k`. Instead, `--pinnedpubkey` makes curl check the key Loka uses in this run.
