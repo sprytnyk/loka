@@ -3,6 +3,7 @@
 package desktop
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -46,7 +47,7 @@ func TestLinuxPickerCancelAndFallback(t *testing.T) {
 		t.Fatalf("kdialog returned %v %v", got, err)
 	}
 	t.Setenv("PATH", t.TempDir())
-	if _, err := Pick(Directory); err != ErrNoPicker {
+	if _, err := Pick(Directory); !errors.Is(err, ErrNoPicker) {
 		t.Fatalf("no picker returned %v", err)
 	}
 }
@@ -54,7 +55,7 @@ func TestLinuxPickerCancelAndFallback(t *testing.T) {
 func TestLinuxPickerNeedsADisplay(t *testing.T) {
 	fakeTool(t, "zenity", "exit 1")
 	t.Setenv("DISPLAY", "")
-	if _, err := Pick(Files); err != ErrNoPicker {
+	if _, err := Pick(Files); !errors.Is(err, ErrNoPicker) {
 		t.Fatalf("returned %v", err)
 	}
 }

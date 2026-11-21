@@ -89,7 +89,7 @@ func (s *Server) pickPaths(w http.ResponseWriter, r *http.Request) {
 	paths, err := s.pick(req.Kind)
 	if err != nil {
 		if !errors.Is(err, desktop.ErrNoPicker) {
-			err = fmt.Errorf("%w (%v)", desktop.ErrNoPicker, err)
+			err = fmt.Errorf("%w (%w)", desktop.ErrNoPicker, err)
 		}
 		writeError(w, http.StatusBadRequest, err)
 		return

@@ -71,7 +71,7 @@ func TestSplitServesHTTPAndTLSOnOnePort(t *testing.T) {
 	defer cancel()
 	srv.Shutdown(ctx)
 	for range 2 {
-		if err := <-served; err != http.ErrServerClosed {
+		if err := <-served; !errors.Is(err, http.ErrServerClosed) {
 			t.Fatalf("Serve returned %v", err)
 		}
 	}
@@ -155,7 +155,7 @@ func TestSplitStopsOnOtherErrors(t *testing.T) {
 	f.errs <- broken
 	plain, secure := Split(f, nil)
 	for _, half := range []net.Listener{plain, secure} {
-		if _, err := half.Accept(); err != broken {
+		if _, err := half.Accept(); !errors.Is(err, broken) {
 			t.Fatalf("Accept returned %v, want %v", err, broken)
 		}
 	}
@@ -228,7 +228,7 @@ func TestSplitClosesTheOldestSilentConnections(t *testing.T) {
 		c.SetReadDeadline(time.Now().Add(wait))
 		_, err := c.Read(make([]byte, 1))
 		var ne net.Error
-		return !(errors.As(err, &ne) && ne.Timeout())
+		return !errors.As(err, &ne) || !ne.Timeout()
 	}
 	for i, c := range silent[:6] {
 		if !closed(c, 2*time.Second) {

@@ -97,7 +97,9 @@ func (s *splitter) accept(plain, secure *half, config *tls.Config) {
 	var wait time.Duration
 	for {
 		raw, err := s.ln.Accept()
-		if ne, ok := err.(net.Error); ok && ne.Temporary() {
+		// This is how http.Server checks Accept errors, which aren't wrapped.
+		// Temporary is deprecated, but nothing replaces it for this.
+		if ne, ok := err.(net.Error); ok && ne.Temporary() { //nolint:errorlint,staticcheck
 			// Such as running out of file handles: wait for some to close,
 			// as http.Server does.
 			wait = min(max(2*wait, 5*time.Millisecond), time.Second)
