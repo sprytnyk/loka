@@ -53,6 +53,7 @@ settings directory, `~/.config/sprytnyk.dev/Loka` on Linux:
 | `identity.pem` | The device certificate. Its common name is a random ID. | Forever |
 | `ca.pem` | A certificate authority for browsers | 10 years |
 | `devices.json` | The devices it remembers: ID, name and SHA-256 of their certificate | |
+| `devices.lock` | A Loka locks it while it changes `devices.json`, so two Lokas running at once don't lose each other's changes | |
 
 Two Lokas connect with TLS 1.3, and each shows its device certificate.
 No authority signs these certificates. Instead, each Loka remembers the

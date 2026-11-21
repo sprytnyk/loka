@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 )
@@ -101,6 +103,48 @@ func TestConcurrentRemembersKeepEveryDevice(t *testing.T) {
 	wg.Wait()
 	if devices, _ := s.Devices(); len(devices) != 40 {
 		t.Fatalf("kept %d of 40 devices", len(devices))
+	}
+}
+
+// TestSeparateProcessesKeepEveryDevice runs real Loka-like processes
+// that each remember devices in one settings directory at once, so the
+// lock must work between processes, not only between open files.
+func TestSeparateProcessesKeepEveryDevice(t *testing.T) {
+	const processes, each = 8, 15
+	dir := t.TempDir()
+	open(t, dir) // makes the identity, so the others only read it
+	var wg sync.WaitGroup
+	for p := range processes {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestRememberInChild$")
+		cmd.Env = append(os.Environ(), "LOKA_TEST_DIR="+dir, fmt.Sprintf("LOKA_TEST_PREFIX=%d-", p), fmt.Sprintf("LOKA_TEST_COUNT=%d", each))
+		wg.Go(func() {
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Errorf("process %d: %v\n%s", p, err, out)
+			}
+		})
+	}
+	wg.Wait()
+	if devices, _ := open(t, dir).Devices(); len(devices) != processes*each {
+		t.Fatalf("kept %d of %d devices", len(devices), processes*each)
+	}
+}
+
+// TestRememberInChild is the process TestSeparateProcessesKeepEveryDevice
+// starts. On its own it does nothing.
+func TestRememberInChild(t *testing.T) {
+	dir := os.Getenv("LOKA_TEST_DIR")
+	if dir == "" {
+		t.Skip("run by TestSeparateProcessesKeepEveryDevice")
+	}
+	count, err := strconv.Atoi(os.Getenv("LOKA_TEST_COUNT"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := open(t, dir)
+	for i := range count {
+		if err := s.Remember(Device{ID: os.Getenv("LOKA_TEST_PREFIX") + fmt.Sprint(i), Name: "d", Fingerprint: "f"}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

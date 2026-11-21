@@ -59,8 +59,9 @@ type Store struct {
 	leafMu  sync.Mutex
 	leaves  map[netip.Addr]*tls.Certificate // by the local address it names
 
-	mu      sync.Mutex // serialises changes to the devices file
+	mu      sync.Mutex // serialises changes to the devices file in this process
 	devices string     // the devices file
+	lock    string     // locked while a process changes the devices file
 	caPath  string     // the authority's file
 }
 
@@ -68,6 +69,7 @@ const (
 	identityFile = "identity.pem"
 	caFile       = "ca.pem"
 	devicesFile  = "devices.json"
+	devicesLock  = "devices.lock"
 )
 
 // Open reads the identity and the certificate authority in dir, making
@@ -95,6 +97,7 @@ func Open(dir string) (*Store, error) {
 		leafKey: leafKey,
 		leaves:  map[netip.Addr]*tls.Certificate{},
 		devices: filepath.Join(dir, devicesFile),
+		lock:    filepath.Join(dir, devicesLock),
 		caPath:  filepath.Join(dir, caFile),
 	}, nil
 }
@@ -265,8 +268,11 @@ func (s *Store) Check(id, fingerprint string) (Standing, Device, error) {
 // Remember saves a device, or its new name. It never replaces a device's
 // certificate: that takes Forget first.
 func (s *Store) Remember(d Device) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	unlock, err := s.lockDevices()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	devices, err := s.read()
 	if err != nil {
 		return err
@@ -287,8 +293,11 @@ func (s *Store) Remember(d Device) error {
 
 // Forget drops the devices that match and returns them.
 func (s *Store) Forget(match func(Device) bool) ([]Device, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	unlock, err := s.lockDevices()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	devices, err := s.read()
 	if err != nil {
 		return nil, err
@@ -305,6 +314,28 @@ func (s *Store) Forget(match func(Device) bool) ([]Device, error) {
 		return nil, nil
 	}
 	return forgotten, s.write(devices)
+}
+
+// lockDevices keeps other goroutines and other Loka processes, such as
+// loka send next to a running loka, from changing the devices file until
+// unlock. Without it, two that read the file at once would each save
+// their own change, and one would be lost.
+func (s *Store) lockDevices() (unlock func(), err error) {
+	s.mu.Lock()
+	f, err := os.OpenFile(s.lock, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("could not lock the remembered devices: %w", err)
+	}
+	if err := lockFile(f); err != nil {
+		f.Close()
+		s.mu.Unlock()
+		return nil, fmt.Errorf("could not lock the remembered devices: %w", err)
+	}
+	return func() {
+		f.Close() // releases the lock
+		s.mu.Unlock()
+	}, nil
 }
 
 // Devices returns the remembered devices.
