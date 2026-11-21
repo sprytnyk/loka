@@ -194,6 +194,7 @@ func TestShareCommandServesUntilStopped(t *testing.T) {
 	// The browser link keeps its token after #, which browsers never send.
 	m := out.wait(t, `(http://127\.0\.0\.1:\d+)/#d=(\S+)`)
 	base, token := m[1], m[2]
+	out.wait(t, `\nhttps://127\.0\.0\.1:\d+/#d=`+regexp.QuoteMeta(token)+`\n`)
 	curl := out.wait(t, `curl -kOJ --pinnedpubkey (\S+) (https://127\.0\.0\.1:\d+/download/(\S+))`)
 	pin, download := curl[1], curl[2]
 	if curl[3] != token {

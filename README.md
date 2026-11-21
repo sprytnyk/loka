@@ -95,7 +95,15 @@ several networks.
 
 A link looks like `http://192.0.2.10:45873/#d=…`. Browsers never send the part
 after `#`, so the page moves to HTTPS before the link's secret leaves the
-device, the same way as for phones above.
+device, the same way as for phones above. Each link also has an `https://`
+form, and the QR code window has a **The phone has Loka's certificate** box
+that switches the codes to it.
+
+> [!WARNING]
+> An `http://` link opens a small page over plain HTTP first. Someone on the
+> network who can change traffic could swap that page and steal the link. Once
+> a phone has Loka's certificate, use the `https://` link instead. The same
+> goes for the address in **Receive from a phone**.
 
 A single file downloads as itself, and an interrupted download can resume.
 Directories and several files download as a ZIP that Loka builds during the
@@ -112,13 +120,13 @@ loka share /path/to/file
 loka forget my-laptop
 ```
 
-`send` takes the receiver's address. `receive` asks where to put each
-transfer; leave the answer empty to decline. It also prints the address and QR
-code a phone can send from. `share` prints a link and its QR code for each
-local address, plus a `curl` command, and the link works until you press
-Ctrl+C. `--address` limits it to one address. `devices` lists nearby devices
-and marks a device as remembered only when it shows the certificate Loka knows
-for it. `forget` forgets a device.
+`send` takes the receiver's address. `receive` asks where to put each transfer;
+leave the answer empty to decline. It also prints the address and QR code a
+phone can send from, and its `https://` form. `share` prints a link and its QR
+code for each local address, the same links over `https://` and a `curl`
+command. The link works until you press Ctrl+C. `--address` limits it to one
+address. `devices` lists nearby devices and marks a device as remembered only
+when it shows the certificate Loka knows for it. `forget` forgets a device.
 
 curl doesn't know Loka's certificate, so the command turns that check off with
 `-k`. Instead, `--pinnedpubkey` makes curl check the key Loka uses in this run.
@@ -162,12 +170,14 @@ addresses on local networks, so even if someone copied it from your computer,
 they couldn't use it to pose as a web site. Loka never installs it on the
 computer itself.
 
-Two steps still go over plain HTTP: the small page a phone opens first, which
-moves it to HTTPS, and the download of the certificate. Someone on the network
-could change either. To be sure, compare the certificate's fingerprint in the
-phone's certificate details with the one in the page's help. Once it's
-installed, you can open `https://` and the address directly. Anyone with a link
-can download while you're sharing.
+Two steps still go over plain HTTP: the small page an `http://` address opens
+first, which moves the phone to HTTPS, and the download of the certificate.
+Someone on the network could change either. Once the phone has the
+certificate, open `https://` addresses and links, which skip the plain page. To
+be sure, compare the certificate's fingerprint in the phone's certificate
+details with the one in the page's help.
+
+Anyone with a link can download while you're sharing.
 
 An interrupted transfer starts over. If no bytes move for a minute, for
 example because a laptop went to sleep, the transfer stops. Loka skips

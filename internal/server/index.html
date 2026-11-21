@@ -98,7 +98,7 @@ label.button{display:inline-block}
 #phone-selected{margin:8px 0 12px;padding:0;list-style:none;max-height:20rem;overflow-y:auto;overflow-wrap:anywhere}#phone-selected:empty{display:none}#phone-selected li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}#phone-selected button{flex:none;padding:5px 10px;font-size:12px}
 #phone-status{margin:12px 0 6px;font-size:14px}#phone-status:empty{display:none}
 .transfers-card .card-heading{align-items:center}#receive-phone{margin-inline-start:auto;padding:6px 11px;font-size:12px}
-#qr-codes{margin-top:8px}.link-urls{display:flex;flex-direction:column;gap:4px;font-size:13px}.link-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.link-buttons button{margin:0}
+#qr-codes{margin-top:8px}.qr-secure{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px}.link-secure-label{margin-top:6px;color:var(--muted);font-size:12px}.link-urls{display:flex;flex-direction:column;gap:4px;font-size:13px}.link-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.link-buttons button{margin:0}
 @media(min-width:1240px){.layout{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;grid-template-areas:"choose device transfers" "choose link transfers"}#peers{max-height:max(14rem,100vh - 30rem);max-height:max(14rem,100dvh - 30rem)}}
 @media(max-width:720px){main{padding:0 16px 24px}header{flex-wrap:wrap;margin:0 -16px;padding:10px 16px}.intro{padding:32px 0 22px}.layout{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-template-areas:"choose" "device" "transfers" "link";gap:12px}.card{padding:18px;border-radius:18px}#message{margin-bottom:14px}#transfers{max-height:24rem}}
 @media(max-width:400px){.device-badge{font-size:11px}}
@@ -150,7 +150,7 @@ label.button{display:inline-block}
 <div class="row"><a class="button secondary" href="/loka-ca.crt" data-i18n="downloadCertificate">Download the certificate</a><button type="button" class="secondary" id="close-help" data-i18n="close">Close</button></div>
 </dialog>
 <dialog id="qr-dialog" aria-labelledby="qr-dialog-title">
-<h2 id="qr-dialog-title"></h2><p id="qr-dialog-hint"></p><div id="qr-codes"></div>
+<h2 id="qr-dialog-title"></h2><p id="qr-dialog-hint"></p><label class="qr-secure"><input type="checkbox" id="qr-secure"><span data-i18n="qrSecure">The phone has Loka’s certificate</span></label><div id="qr-codes"></div>
 <div class="row"><button type="button" class="secondary" id="close-qr-dialog" data-i18n="close">Close</button></div>
 </dialog>
 <script>
@@ -224,6 +224,8 @@ const messages = {
     qrCode: 'QR code',
     downloadByPhone: 'Download on a phone',
     downloadByPhoneHint: 'Scan a code with the phone’s camera. If there are several, use the one on the phone’s network.',
+    qrSecure: 'The phone has Loka’s certificate',
+    secureLinks: 'Safer, once the phone has Loka’s certificate:',
     transfers: 'Transfers',
     noTransfers: 'No transfers yet.',
     from: 'From {name}',
@@ -242,7 +244,7 @@ const messages = {
     helpLokasTitle: 'Between Lokas',
     helpLokas: 'Always encrypted. The first time two Lokas talk, each remembers the other’s certificate. If a remembered device ever shows a different one, Loka refuses the transfer, since another device may be posing as it. Both also show a pairing code for each transfer. The first time, check it’s the same on both, so you know no other device sits between them.',
     helpBrowsersTitle: 'Phones and share links',
-    helpBrowsers: 'Also encrypted, with a certificate from this computer’s own authority. A browser trusts it only once you install the authority. Until then the phone offers to install it, or warns that the connection isn’t private when you continue without it.',
+    helpBrowsers: 'Also encrypted, with a certificate from this computer’s own authority. A browser trusts it only once you install the authority. Until then the phone offers to install it, or warns that the connection isn’t private when you continue without it. An http:// address first opens a small page over plain HTTP, which moves the phone to HTTPS. Someone on the network could change that page and steal a link. Once the phone has the certificate, use the https:// address, or tick The phone has Loka’s certificate in the QR code window.',
     helpInstallTitle: 'Installing the certificate',
     helpInstall: 'Open Loka’s address on the phone, from Receive from a phone, and tap Install certificate. The page there shows the steps for Android and iPhone. You do it once per phone. Loka’s authority can only vouch for addresses on local networks, so it can’t be used to pose as a web site.',
     helpCheckTitle: 'Checking it’s this computer’s',
@@ -330,6 +332,8 @@ const messages = {
     qrCode: 'QR-код',
     downloadByPhone: 'Завантажити на телефон',
     downloadByPhoneHint: 'Відскануйте код камерою телефона. Якщо кодів кілька, виберіть той, що в мережі телефона.',
+    qrSecure: 'На телефоні є сертифікат Loka',
+    secureLinks: 'Безпечніше, коли на телефоні вже є сертифікат Loka:',
     transfers: 'Передавання',
     noTransfers: 'Передавань ще немає.',
     from: 'Від {name}',
@@ -348,7 +352,7 @@ const messages = {
     helpLokasTitle: 'Між пристроями з Loka',
     helpLokas: 'Завжди зашифровані. Коли два пристрої з Loka зв’язуються вперше, кожен запам’ятовує сертифікат іншого. Якщо знайомий пристрій колись покаже інший, Loka відхилить передавання, бо за нього може видавати себе інший пристрій. Обидва також показують код з’єднання для кожного передавання. Уперше перевірте, що він однаковий на обох. Тоді ви знаєте, що між ними немає іншого пристрою.',
     helpBrowsersTitle: 'Телефони й посилання',
-    helpBrowsers: 'Теж зашифровані, сертифікатом від власного центру сертифікації цього комп’ютера. Браузер довіряє йому, лише коли ви встановите цей центр. Доти телефон пропонує його встановити або попереджає, що з’єднання не приватне, якщо продовжити без нього.',
+    helpBrowsers: 'Теж зашифровані, сертифікатом від власного центру сертифікації цього комп’ютера. Браузер довіряє йому, лише коли ви встановите цей центр. Доти телефон пропонує його встановити або попереджає, що з’єднання не приватне, якщо продовжити без нього. Адреса http:// спершу відкриває невелику сторінку через звичайний HTTP, яка переводить телефон на HTTPS. Хтось у мережі може підмінити цю сторінку й викрасти посилання. Коли на телефоні вже є сертифікат, відкривайте адресу https:// або позначте "На телефоні є сертифікат Loka" у вікні QR-коду.',
     helpInstallTitle: 'Як установити сертифікат',
     helpInstall: 'Відкрийте адресу Loka на телефоні (через "Отримати з телефона") і натисніть "Установити сертифікат". Там є кроки для Android та iPhone. Це треба зробити один раз для кожного телефона. Центр сертифікації Loka може ручатися лише за адреси в локальних мережах, тож видавати себе за вебсайт із ним не вийде.',
     helpCheckTitle: 'Як перевірити, що він від цього комп’ютера',
@@ -752,7 +756,7 @@ $('transfers').onclick = e => {
 $('links').onclick = e => {
   const qr = e.target.closest('button[data-link-qr]');
   if (qr) {
-    showQrCodes(t('downloadByPhone'), t('downloadByPhoneHint'), linkUrls.get(qr.dataset.linkQr) || []);
+    showQrCodes(t('downloadByPhone'), t('downloadByPhoneHint'), linkPaths.get(qr.dataset.linkQr) || '/');
     return;
   }
   const button = e.target.closest('button[data-unshare]');
@@ -913,11 +917,13 @@ function renderIncoming(data) {
   }
 }
 // addressUrls gives a path on this device at each of its local addresses,
-// since the other device may be on any of those networks. They are plain
-// HTTP: the page there moves the browser to HTTPS.
-function addressUrls(addresses, path) {
+// since the other device may be on any of those networks. Plain HTTP ones
+// work in any browser: the page there moves it to HTTPS. But someone on the
+// network could change that page, so a phone that has Loka's certificate
+// is better off with HTTPS ones.
+function addressUrls(addresses, path, scheme = 'http') {
   const hosts = addresses.length ? addresses : [location.hostname];
-  return hosts.map(host => `http://${host}:${location.port}${path}`);
+  return hosts.map(host => `${scheme}://${host}:${location.port}${path}`);
 }
 // QR codes are drawn by the server, once per link.
 const qrCodes = new Map(); // url -> a promise of its SVG
@@ -939,14 +945,16 @@ function drawQrCodes(container) {
   }
 }
 let renderedLinks;
-const linkUrls = new Map(); // shared transfer id -> its link at each address
+const linkPaths = new Map(); // shared transfer id -> its link's path
 function renderLinks(shared, addresses) {
-  linkUrls.clear();
+  linkPaths.clear();
+  const anchors = urls => urls.map(url => `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`).join('');
   const markup = shared.map(transfer => {
-    const urls = addressUrls(addresses, `/#d=${transfer.token}`);
-    linkUrls.set(transfer.id, urls);
+    const path = `/#d=${transfer.token}`;
+    linkPaths.set(transfer.id, path);
     const id = escapeHtml(transfer.id);
-    return `<div class="item">${fileNames(transfer.items || [])}<div class="link-urls">${urls.map(url => `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`).join('')}</div>
+    return `<div class="item">${fileNames(transfer.items || [])}<div class="link-urls">${anchors(addressUrls(addresses, path))}</div>
+      <p class="link-secure-label">${escapeHtml(t('secureLinks'))}</p><div class="link-urls">${anchors(addressUrls(addresses, path, 'https'))}</div>
       <div class="link-buttons"><button class="secondary" data-link-qr="${id}">${escapeHtml(t('qrCode'))}</button><button class="secondary" data-unshare="${id}">${escapeHtml(t('stopSharing'))}</button></div></div>`;
   }).join('');
   if (markup === renderedLinks) return;
@@ -991,15 +999,22 @@ async function pollPeriodically() {
 // the phone view below.
 
 let addresses = []; // this device's local addresses, from the server
-// showQrCodes opens the dialog with a QR code for each url.
-function showQrCodes(title, hint, urls) {
+// showQrCodes opens the dialog with a QR code for path at each address,
+// over HTTPS when the phone has Loka's certificate.
+let qrPath = '/';
+function drawQrDialog() {
+  $('qr-codes').innerHTML = qrList(addressUrls(addresses, qrPath, $('qr-secure').checked ? 'https' : 'http'));
+  drawQrCodes($('qr-codes'));
+}
+function showQrCodes(title, hint, path) {
   $('qr-dialog-title').textContent = title;
   $('qr-dialog-hint').textContent = hint;
-  $('qr-codes').innerHTML = qrList(urls);
-  drawQrCodes($('qr-codes'));
+  qrPath = path;
+  drawQrDialog();
   $('qr-dialog').showModal();
 }
-$('receive-phone').onclick = () => showQrCodes(t('receivePhone'), t('receivePhoneHint'), addressUrls(addresses, '/'));
+$('qr-secure').onchange = drawQrDialog;
+$('receive-phone').onclick = () => showQrCodes(t('receivePhone'), t('receivePhoneHint'), '/');
 $('close-qr-dialog').onclick = () => $('qr-dialog').close();
 // The fingerprint in byte pairs, as phones show it.
 $('ca-fingerprint').textContent = caFingerprint.toUpperCase().match(/../g).join(' ');

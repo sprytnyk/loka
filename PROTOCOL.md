@@ -177,6 +177,8 @@ then, and both sides show the code while they wait.
 A link looks like `http://192.0.2.10:45873/#d=TOKEN`. Browsers never send
 the part after `#`, so the token doesn't cross the network in plain text.
 The page reads the token and opens `https://192.0.2.10:45873/download/TOKEN`.
+A browser that trusts Loka's certificate can open
+`https://192.0.2.10:45873/#d=TOKEN` and skip the plain page.
 
 `loka share` prints a curl command with `--pinnedpubkey`, the SHA-256 of the
 key in the certificates browsers get. Loka makes that key on each start, so
@@ -192,9 +194,11 @@ and the links.
   device as it is. Someone on the same network could sit between two
   devices that first time. The pairing code shows it only if you compare
   it.
-- **The phone's first page and the certificate download.** Both go over
-  plain HTTP. Compare the certificate's SHA-256 fingerprint on the phone
-  with the one in the page's help.
+- **`http://` addresses and the certificate download.** Both go over
+  plain HTTP. Someone who can change traffic could swap the first page and
+  steal a link, or the files a phone sends. Use `https://` once the phone
+  has the certificate. Compare the certificate's SHA-256 fingerprint on the
+  phone with the one in the page's help.
 - **Who uses a browser.** Anyone who can open the page can offer files,
   and anyone with a link can download while it's shared. The person at the
   receiver still accepts each offer.
