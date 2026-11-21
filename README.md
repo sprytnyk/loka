@@ -23,8 +23,9 @@ Download the archive for your computer from
 | Linux | `loka_X.Y.Z_linux_amd64.tar.gz` |
 | Windows | `loka_X.Y.Z_windows_amd64.zip` |
 
-macOS refuses to open downloaded programs from unidentified developers. After
-unpacking, run `xattr -d com.apple.quarantine loka` once.
+> [!NOTE]
+> macOS refuses to open downloaded programs from unidentified developers. After
+> unpacking, run `xattr -d com.apple.quarantine loka` once.
 
 To check a download, put `SHA256SUMS` and `SHA256SUMS.asc` from the release
 next to it and run:
@@ -66,8 +67,10 @@ Incoming files go to a hidden directory inside the destination and move into
 place when the transfer finishes. Nothing is overwritten, and a failed transfer
 leaves nothing behind.
 
-If the computers can't see each other, the Wi-Fi network may block connections
-between devices. On Windows, allow Loka through the firewall when asked.
+> [!TIP]
+> If the computers can't see each other, the Wi-Fi network may block
+> connections between devices. On Windows, allow Loka through the firewall when
+> asked.
 
 ## From a phone
 
@@ -156,8 +159,12 @@ directory: `~/.config/sprytnyk.dev/Loka` on Linux,
 another device as it is, and marks that device as new on both sides.
 
 Both devices show a six-digit pairing code, made from both certificates and a
-random number from each side. If another device sits between them and passes
-the transfer on, the codes differ. Check them that first time.
+random number from each side.
+
+> [!IMPORTANT]
+> The first time two devices talk, check that both show the same pairing code.
+> If another device sits between them and passes the transfer on, the codes
+> differ.
 
 After the first transfer, Loka remembers the other device's certificate. If a
 remembered device shows a different one, another device is probably posing as
@@ -183,7 +190,9 @@ certificate, open `https://` addresses and links, which skip the plain page.
 > trust a fingerprint shown on the phone, since someone who can swap the
 > certificate can swap that page too.
 
-Anyone with a link can download while you're sharing.
+> [!CAUTION]
+> Anyone with a link can download while you're sharing. When you're done,
+> select **Stop sharing**, or press Ctrl+C after `loka share`.
 
 An interrupted transfer starts over. If no bytes move for a minute, for
 example because a laptop went to sleep, the transfer stops. Loka skips
