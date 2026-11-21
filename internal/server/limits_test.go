@@ -97,7 +97,7 @@ func TestUnrevealedOfferExpires(t *testing.T) {
 // is refused.
 func TestTooManyOffersWait(t *testing.T) {
 	receiver, base := startServer(t)
-	o := offer{Items: []string{"f"}, Size: 1}
+	o := offer{Items: []string{"f"}, Size: 1, Token: receiver.ReceiveToken}
 	for i := range maxOffers {
 		if err := call(t.Context(), browser(receiver), http.MethodPost, secure(base)+"/peer/offer", "", o, nil); err != nil {
 			t.Fatalf("offer %d: %v", i, err)
@@ -205,7 +205,7 @@ func TestUnansweredOffersExpire(t *testing.T) {
 	defer func(d time.Duration) { answerTimeout = d }(answerTimeout)
 	answerTimeout = 100 * time.Millisecond
 	receiver, base := startServer(t)
-	o := offer{Items: []string{"f"}, Size: 1}
+	o := offer{Items: []string{"f"}, Size: 1, Token: receiver.ReceiveToken}
 	for i := range maxOffers {
 		if err := call(t.Context(), browser(receiver), http.MethodPost, secure(base)+"/peer/offer", "", o, nil); err != nil {
 			t.Fatalf("offer %d: %v", i, err)

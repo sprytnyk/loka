@@ -36,6 +36,10 @@ type Server struct {
 	pick      func(kind desktop.Kind) ([]string, error)
 	temp      string // holds files dropped on the page, made when needed
 
+	// ReceiveToken is in the phone link, after #r=. A browser's offer
+	// must carry it, so only someone shown the link can offer from one.
+	ReceiveToken string
+
 	Transfers   transfer.Registry
 	Trust       *trust.Store           // this device's certificates
 	OnlyLinks   bool                   // serve only download links, as loka share does
@@ -49,12 +53,13 @@ type Server struct {
 // New makes a server that names this device name to other devices.
 func New(name, version string) *Server {
 	return &Server{
-		name:      name,
-		version:   version,
-		key:       transfer.RandomToken(24),
-		localName: transfer.LocalName,
-		pick:      desktop.Pick,
-		temp:      filepath.Join(os.TempDir(), "loka-"+transfer.RandomToken(9)),
+		name:         name,
+		version:      version,
+		key:          transfer.RandomToken(24),
+		ReceiveToken: transfer.RandomToken(18),
+		localName:    transfer.LocalName,
+		pick:         desktop.Pick,
+		temp:         filepath.Join(os.TempDir(), "loka-"+transfer.RandomToken(9)),
 	}
 }
 
@@ -198,6 +203,7 @@ type offer struct {
 	Items      []string `json:"items"`
 	Size       int64    `json:"size"`
 	Commitment string   `json:"commitment,omitempty"` // to the sender's nonce, from a Loka
+	Token      string   `json:"token,omitempty"`      // the receive token, from a browser
 }
 
 type offerReply struct {
@@ -214,6 +220,11 @@ var errNeedsHTTPS = errors.New("Loka takes offers only over HTTPS")
 // errDeclined is how a sender learns that the person at the receiver
 // declined or cancelled, whichever request it was making.
 var errDeclined = errors.New("The receiver declined or cancelled")
+
+// errNeedsReceiveToken refuses a browser's offer without the receive
+// token. Without it, a device between two Lokas could pose as a browser,
+// which shows no pairing code.
+var errNeedsReceiveToken = errors.New("To send from a browser, open the link or QR code the receiver shows")
 
 // errTooManyOffers refuses an offer while many others wait for an answer.
 var errTooManyOffers = errors.New("The receiver has too many offers waiting. Try again later")
@@ -256,6 +267,10 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
 	if len(r.TLS.PeerCertificates) == 0 {
 		// A browser: it can't show which device it is.
+		if subtle.ConstantTimeCompare([]byte(o.Token), []byte(s.ReceiveToken)) != 1 {
+			writeError(w, http.StatusForbidden, errNeedsReceiveToken)
+			return
+		}
 		t := transfer.New(transfer.Incoming, host, items, o.Size, transfer.Waiting)
 		t.Browser = true
 		s.addOffer(w, t)

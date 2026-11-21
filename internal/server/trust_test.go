@@ -239,7 +239,7 @@ func TestSenderRefusesAnotherDeviceThanPicked(t *testing.T) {
 func TestBrowserOffersAreLabelled(t *testing.T) {
 	receiver, base := startServer(t)
 	var reply offerReply
-	if err := call(t.Context(), browser(receiver), http.MethodPost, secure(base)+"/peer/offer", "", offer{Name: "posing as laptop", Items: []string{"f"}, Size: 1}, &reply); err != nil {
+	if err := call(t.Context(), browser(receiver), http.MethodPost, secure(base)+"/peer/offer", "", offer{Name: "posing as laptop", Items: []string{"f"}, Size: 1, Token: receiver.ReceiveToken}, &reply); err != nil {
 		t.Fatal(err)
 	}
 	in := receiver.Transfers.Get(reply.ID)

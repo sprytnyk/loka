@@ -155,6 +155,7 @@ label.button{display:inline-block}
 </dialog>
 <script>
 const key = '__LOKA_KEY__';
+const receiveToken = '__LOKA_RECEIVE_TOKEN__'; // for the phone link, on this device's page only
 const mode = document.documentElement.dataset.mode;
 const hostName = __LOKA_NAME__; // the computer this page belongs to
 const caFingerprint = '__LOKA_CA_FINGERPRINT__'; // SHA-256 of this computer's authority, in hex
@@ -270,11 +271,12 @@ const messages = {
     chooseDestination: 'Choose or enter a destination directory.',
     statuses: {pairing: 'pairing', waiting: 'waiting', accepted: 'accepted', sending: 'sending', receiving: 'receiving', complete: 'complete', failed: 'failed', cancelled: 'cancelled'},
     receivePhone: 'Receive from a phone',
-    receivePhoneHint: 'Scan a code with the phone’s camera, or open the address in its browser. If there are several, use the one on the phone’s network. Loka asks here before saving anything.',
+    receivePhoneHint: 'Scan a code with the phone’s camera, or open the whole link in its browser. If there are several, use the one on the phone’s network. Loka asks here before saving anything.',
     close: 'Close',
     phoneHeading: 'Send files to {name}',
     phoneTitle: 'Choose what to send',
     phoneHint: 'The computer asks before it saves anything.',
+    openPhoneLink: 'To send, open the link or QR code that {name} shows.',
     waitingForAccept: 'Waiting for {name} to accept…',
     sendingTo: 'Sending to {name}…',
     sentTo: 'Sent to {name}.',
@@ -380,11 +382,12 @@ const messages = {
     chooseDestination: 'Виберіть або введіть теку призначення.',
     statuses: {pairing: 'з’єднання', waiting: 'очікує', accepted: 'прийнято', sending: 'надсилання', receiving: 'отримання', complete: 'завершено', failed: 'помилка', cancelled: 'скасовано'},
     receivePhone: 'Отримати з телефона',
-    receivePhoneHint: 'Відскануйте код камерою телефона або відкрийте адресу в його браузері. Якщо адрес кілька, виберіть ту, що в мережі телефона. Loka спитає тут, перш ніж щось зберегти.',
+    receivePhoneHint: 'Відскануйте код камерою телефона або відкрийте все посилання в його браузері. Якщо посилань кілька, виберіть те, що в мережі телефона. Loka спитає тут, перш ніж щось зберегти.',
     close: 'Закрити',
     phoneHeading: 'Надіслати файли на {name}',
     phoneTitle: 'Виберіть, що надіслати',
     phoneHint: 'Комп’ютер спитає, перш ніж щось зберегти.',
+    openPhoneLink: 'Щоб надіслати, відкрийте посилання або QR-код, які показує {name}.',
     waitingForAccept: 'Чекаю, поки {name} прийме…',
     sendingTo: 'Надсилаю на {name}…',
     sentTo: 'Надіслано на {name}.',
@@ -437,6 +440,7 @@ const serverMessages = {
     [/^The other device's certificate changed during the transfer$/, 'Сертифікат іншого пристрою змінився під час передавання'],
     [/^(.*) showed a different certificate than before, so another device is probably posing as it\. Loka refused it$/s, '$1 показав інший сертифікат, ніж раніше, тож, імовірно, інший пристрій видає себе за нього. Loka його відхилила'],
     [/^The receiver has too many offers waiting\. Try again later$/, 'На отримувачі чекає забагато пропозицій. Спробуйте пізніше'],
+    [/^To send from a browser, open the link or QR code the receiver shows$/, 'Щоб надіслати з браузера, відкрийте посилання або QR-код, які показує отримувач'],
     [/^The receiver refuses Lokas it hasn't seen before for a minute, as several didn't finish pairing\. Try again later$/, 'Отримувач на хвилину відхиляє Loka, яких раніше не бачив, бо кілька з’єднань не завершилися. Спробуйте пізніше'],
     [/^The receiver refuses this device for a minute, as it started pairing several times and didn't finish\. Try again later$/, 'Отримувач на хвилину відхиляє цей пристрій, бо він кілька разів почав з’єднання й не завершив його. Спробуйте пізніше'],
     [/^(.*) started pairing here several times and didn't finish\. It may be trying to sit between two Lokas, so it waits for a minute$/s, '$1 кілька разів почав з’єднання тут і не завершив його. Можливо, він намагається стати між двома Loka, тож він зачекає хвилину'],
@@ -1017,7 +1021,7 @@ function showQrCodes(title, hint, path) {
   $('qr-dialog').showModal();
 }
 $('qr-secure').onchange = drawQrDialog;
-$('receive-phone').onclick = () => showQrCodes(t('receivePhone'), t('receivePhoneHint'), '/');
+$('receive-phone').onclick = () => showQrCodes(t('receivePhone'), t('receivePhoneHint'), `/#r=${receiveToken}`);
 $('close-qr-dialog').onclick = () => $('qr-dialog').close();
 // The fingerprint in byte pairs, as phones show it. Only this computer's
 // own page shows it: a phone gets its page the way it gets the
@@ -1035,6 +1039,9 @@ $('close-help').onclick = () => $('help-dialog').close();
 // offer, a wait for the computer to accept, then a tar stream the browser
 // builds from the files as it uploads them.
 
+// The phone link carries the receive token after #r=. Browsers never send
+// that part, and the page sends it only over HTTPS, with the offer.
+const phoneToken = new URLSearchParams(location.hash.slice(1)).get('r') || '';
 let phoneFiles = [];
 let phoneTransfer = null; // the transfer under way: {id, secret, xhr, cancelled}
 const phonePath = file => file.webkitRelativePath || file.name;
@@ -1160,7 +1167,7 @@ $('phone-send').onclick = e => run(e.target, async () => {
   const reply = await request('/peer/offer', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name: '', items, size}),
+    body: JSON.stringify({name: '', items, size, token: phoneToken}),
   });
   const current = phoneTransfer = {id: reply.id, secret: reply.secret};
   phoneBusy(true);
@@ -1215,7 +1222,8 @@ const linkToken = new URLSearchParams(location.hash.slice(1)).get('d');
 // The page moves to HTTPS before a link's download starts. Phone browsers
 // call a download insecure when a plain HTTP page starts it, even one
 // that comes over HTTPS.
-const secureUrl = `https://${location.host}/${linkToken ? '#d=' + encodeURIComponent(linkToken) : ''}`;
+const secureHash = linkToken ? '#d=' + encodeURIComponent(linkToken) : phoneToken ? '#r=' + encodeURIComponent(phoneToken) : '';
+const secureUrl = `https://${location.host}/${secureHash}`;
 let checkStatus = '';
 function showCheckStatus(name) {
   checkStatus = name;
@@ -1255,5 +1263,7 @@ if (linkToken && location.protocol === 'https:') {
   else showCheckStatus('nothingShared');
 } else if (mode === 'desktop') {
   pollPeriodically();
+} else if (mode === 'phone' && !phoneToken) {
+  phoneStatus(t('openPhoneLink', {name: hostName}));
 }
 </script></body></html>

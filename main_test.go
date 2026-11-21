@@ -292,8 +292,21 @@ func TestReceiveStopsAfterAccepting(t *testing.T) {
 	defer answer.Close()
 	received, stopReceiving, receiveCode := runLoka(t, stdin, "receive", "--port", "0")
 	port := received.wait(t, `on port (\d+)`)[1]
+	// This device's own page holds the receive token, even on a machine
+	// with no network address to print a phone link for.
+	page, err := http.Get("http://127.0.0.1:" + port + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(page.Body)
+	page.Body.Close()
+	m := regexp.MustCompile(`const receiveToken = '([^']+)'`).FindSubmatch(body)
+	if m == nil {
+		t.Fatal("this device's page has no receive token")
+	}
+	token := string(m[1])
 
-	offer := strings.NewReader(`{"name":"stalled","items":["x"],"size":1}`)
+	offer := strings.NewReader(`{"name":"stalled","items":["x"],"size":1,"token":"` + token + `"}`)
 	resp, err := browser(t).Post("https://127.0.0.1:"+port+"/peer/offer", "application/json", offer)
 	if err != nil {
 		t.Fatal(err)

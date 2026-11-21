@@ -187,6 +187,19 @@ A phone sends from its browser, which differs from a Loka in three ways:
   declines it.
 - The page on the phone packs the files into the tar stream itself.
 
+A browser shows no pairing code, so a device between two Lokas could pose
+as one to the receiver. To stop that, a browser's offer must carry
+`token`, the receive token. It is in the phone link,
+`http://192.168.1.20:45873/#r=TOKEN`, which the receiver's page and
+`loka receive` show. Browsers never send the part after `#`, and the page
+sends the token only over HTTPS. Loka makes a new token on each start.
+Offers without it get `403`.
+
+Treat the phone link as a secret. The page an `http://` link opens comes
+over plain HTTP, so someone who can change traffic could swap it for one
+that reads the token. The `https://` link, on a phone with the right
+`loka-ca.crt`, keeps the token from them.
+
 ## The pairing code
 
 The code lets two people check that their Lokas talk to each other, and
@@ -260,7 +273,7 @@ and the links.
   Loka's page there or in the terminal. Loka's page on the phone came over
   plain HTTP too, so don't use a fingerprint from it. Use `https://` once
   the phone has the right `loka-ca.crt`.
-- **Who uses a browser.** Anyone who can open the page can offer files,
+- **Who uses a browser.** Anyone with the phone link can offer files,
   and anyone who gets the link can download while it's shared. The person at the
   receiver still accepts each offer.
 - **Device names.** Anyone can announce any name.

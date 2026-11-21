@@ -282,7 +282,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d (Ctrl+C to stop)\n", version, port)
 	if addresses := network.LocalAddresses(); len(addresses) > 0 {
 		fmt.Fprintln(stdout, "To send from a phone, open this in its browser:")
-		printLinks(stdout, s.Trust, addresses, port, "/")
+		printLinks(stdout, s.Trust, addresses, port, "/#r="+s.ReceiveToken)
 	}
 
 	answers := make(chan string)

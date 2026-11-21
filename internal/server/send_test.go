@@ -217,7 +217,7 @@ func TestPeerRoutesNeedTheSecret(t *testing.T) {
 	receiver, base := startServer(t)
 	var reply offerReply
 	client, base := browser(receiver), secure(base)
-	if err := call(t.Context(), client, http.MethodPost, base+"/peer/offer", "", offer{Name: "x", Items: []string{"f"}, Size: 1}, &reply); err != nil {
+	if err := call(t.Context(), client, http.MethodPost, base+"/peer/offer", "", offer{Name: "x", Items: []string{"f"}, Size: 1, Token: receiver.ReceiveToken}, &reply); err != nil {
 		t.Fatal(err)
 	}
 	if err := call(t.Context(), client, http.MethodPost, base+"/peer/cancel/"+reply.ID, "wrong", nil, nil); err == nil {
@@ -245,7 +245,7 @@ func TestDestinationKeepsSpaces(t *testing.T) {
 
 func TestOffersMustNameItemsAndASize(t *testing.T) {
 	receiver, receiverURL := startServer(t)
-	for _, o := range []offer{{Name: "x", Size: 1}, {Name: "x", Items: []string{"f"}, Size: -1}} {
+	for _, o := range []offer{{Name: "x", Size: 1, Token: receiver.ReceiveToken}, {Name: "x", Items: []string{"f"}, Size: -1, Token: receiver.ReceiveToken}} {
 		if err := call(t.Context(), browser(receiver), http.MethodPost, secure(receiverURL)+"/peer/offer", "", o, nil); err == nil {
 			t.Errorf("accepted %+v", o)
 		}
@@ -326,7 +326,7 @@ func TestReceiverCancelDuringUpload(t *testing.T) {
 
 	var reply offerReply
 	client := browser(receiver)
-	if err := call(t.Context(), client, http.MethodPost, secure(base)+"/peer/offer", "", offer{Name: "s", Items: []string{"file"}, Size: size}, &reply); err != nil {
+	if err := call(t.Context(), client, http.MethodPost, secure(base)+"/peer/offer", "", offer{Name: "s", Items: []string{"file"}, Size: size, Token: receiver.ReceiveToken}, &reply); err != nil {
 		t.Fatal(err)
 	}
 	api(t, receiver, base, "/api/accept", map[string]string{"id": reply.ID, "destination": destination}, nil)

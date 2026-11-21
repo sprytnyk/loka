@@ -33,13 +33,13 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	if label != "" && label[0] >= '0' && label[0] <= '9' {
 		label = "v" + label
 	}
-	key, mode := "", "phone"
+	key, receiveToken, mode := "", "", "phone"
 	local := fromThisDevice(r)
 	switch {
 	case s.OnlyLinks || r.TLS == nil && !local:
 		mode = "check"
 	case local:
-		key, mode = s.key, "desktop"
+		key, receiveToken, mode = s.key, s.ReceiveToken, "desktop"
 	}
 	name, _ := json.Marshal(s.name) // escapes <, > and &, so it is safe in a script
 	// Whether installing the authority helps at the address this browser
@@ -52,6 +52,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 	body := strings.NewReplacer(
 		"__LOKA_KEY__", key,
+		"__LOKA_RECEIVE_TOKEN__", receiveToken,
 		"__LOKA_MODE__", mode,
 		"__LOKA_NAME__", string(name),
 		"__LOKA_VERSION__", label,
