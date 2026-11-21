@@ -198,12 +198,14 @@ and the links.
   device as it is. Someone on the same network could sit between two
   devices that first time. The pairing code shows it only if you compare
   it.
-- **`http://` addresses and the certificate download.** Both go over
+- **`http://` addresses and the download of `loka-ca.crt`.** Both go over
   plain HTTP. Someone who can change traffic could swap the first page and
-  steal a link, or the files a phone sends. Use `https://` once the phone
-  has the certificate. Compare the certificate's SHA-256 fingerprint on the
-  phone with the one on the computer's own page or in the terminal. Don't
-  trust one the phone shows.
+  steal a link or the files a phone sends. They could also swap
+  `loka-ca.crt` for their own. To catch that, compare the SHA-256
+  fingerprint in the phone's settings with the one on the computer, on
+  Loka's page there or in the terminal. Loka's page on the phone came over
+  plain HTTP too, so don't use a fingerprint from it. Use `https://` once
+  the phone has the right `loka-ca.crt`.
 - **Who uses a browser.** Anyone who can open the page can offer files,
   and anyone with a link can download while it's shared. The person at the
   receiver still accepts each offer.
