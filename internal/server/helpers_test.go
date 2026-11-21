@@ -63,6 +63,16 @@ func serve(t *testing.T, s *Server, wrap func(http.Handler) http.Handler) string
 	return "http://" + ln.Addr().String()
 }
 
+// rememberedClient makes a Loka the receiver already remembers.
+func rememberedClient(t *testing.T, receiver *Server, name string) *http.Client {
+	t.Helper()
+	store := openTrust(t)
+	if err := receiver.Trust.Remember(trust.Device{ID: store.ID, Name: name, Fingerprint: store.Fingerprint()}); err != nil {
+		t.Fatal(err)
+	}
+	return lokaClient(store)
+}
+
 // browser is an HTTP client that trusts s's certificate authority, as a
 // phone that installed it does. It shows no certificate of its own.
 func browser(s *Server) *http.Client {

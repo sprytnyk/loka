@@ -322,6 +322,17 @@ func (s *Server) refuseChanged(t *transfer.Transfer, known trust.Device) {
 // for the person's answer.
 const maxOffers = 16
 
+// keptForKnown is how many of those places only remembered Lokas may
+// take. Anyone can offer as a new Loka, and anyone with the phone link from
+// a browser, so a flood of those can't hold off a remembered device.
+const keptForKnown = 4
+
+// fromUnknown reports whether t comes from a browser or a new Loka, which
+// may not take the places kept for remembered Lokas.
+func fromUnknown(t *transfer.Transfer) bool {
+	return t.Browser || t.NewDevice()
+}
+
 // answerTimeout is how long an offer waits for the person to answer.
 // Anyone on the network can offer from a browser, so offers left waiting
 // would soon block all others.
@@ -342,13 +353,16 @@ var pairingTimeout = 10 * time.Second
 func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
 	s.offerMu.Lock()
 	defer s.offerMu.Unlock()
-	waiting := 0
+	waiting, unknown := 0, 0
 	for _, other := range s.Transfers.All() {
 		if other.Direction == transfer.Incoming && (other.Status() == transfer.Pairing || other.Status() == transfer.Waiting) {
 			waiting++
+			if fromUnknown(other) {
+				unknown++
+			}
 		}
 	}
-	if waiting >= maxOffers {
+	if waiting >= maxOffers || fromUnknown(t) && unknown >= maxOffers-keptForKnown {
 		writeError(w, http.StatusServiceUnavailable, errTooManyOffers)
 		return
 	}

@@ -93,18 +93,31 @@ func TestUnrevealedOfferExpires(t *testing.T) {
 	}
 }
 
-// TestTooManyOffersWait fills the offers that may wait and checks the next
-// is refused.
+// TestTooManyOffersWait fills the places browsers may take, without
+// spending pairing tries, and checks the next browser is refused. Then
+// remembered devices fill the places kept for them, and the next one is
+// refused too.
 func TestTooManyOffersWait(t *testing.T) {
 	receiver, base := startServer(t)
 	o := offer{Items: []string{"f"}, Size: 1, Token: receiver.ReceiveToken}
-	for i := range maxOffers {
+	for i := range maxOffers - keptForKnown {
 		if err := call(t.Context(), browser(receiver), http.MethodPost, secure(base)+"/peer/offer", "", o, nil); err != nil {
 			t.Fatalf("offer %d: %v", i, err)
 		}
 	}
+	if n := receiver.pairings.used(""); n != 0 {
+		t.Fatalf("browser offers spent %d pairing tries", n)
+	}
 	err := call(t.Context(), browser(receiver), http.MethodPost, secure(base)+"/peer/offer", "", o, nil)
 	if err == nil || err.Error() != errTooManyOffers.Error() {
+		t.Fatalf("browser offer %d answered %v", maxOffers-keptForKnown+1, err)
+	}
+	for i := range keptForKnown {
+		if _, err := tryOffer(t, rememberedClient(t, receiver, "desktop"), base, trust.Nonce()); err != nil {
+			t.Fatalf("remembered device %d: %v", i, err)
+		}
+	}
+	if _, err := tryOffer(t, rememberedClient(t, receiver, "desktop"), base, trust.Nonce()); err == nil || err.Error() != errTooManyOffers.Error() {
 		t.Fatalf("offer %d answered %v", maxOffers+1, err)
 	}
 }
@@ -153,14 +166,7 @@ func TestRememberedDevicesHaveTheirOwnTries(t *testing.T) {
 		t.Fatalf("a new device after the tries ran out got %v", err)
 	}
 
-	remembered := func(name string) *http.Client {
-		store := openTrust(t)
-		if err := receiver.Trust.Remember(trust.Device{ID: store.ID, Name: name, Fingerprint: store.Fingerprint()}); err != nil {
-			t.Fatal(err)
-		}
-		return lokaClient(store)
-	}
-	guest := remembered("guest laptop") // renamed "laptop" once accepted
+	guest := rememberedClient(t, receiver, "guest laptop") // renamed "laptop" once accepted
 	for i := range pairingTries + 3 {
 		nonce := trust.Nonce()
 		reply, err := tryOffer(t, guest, base, nonce)
@@ -187,7 +193,7 @@ func TestRememberedDevicesHaveTheirOwnTries(t *testing.T) {
 	if err := giveUp(guest); err == nil || err.Error() != errPairingLimitKnown.Error() {
 		t.Fatalf("a remembered device that kept trying got %v", err)
 	}
-	if err := giveUp(remembered("desktop")); err != nil {
+	if err := giveUp(rememberedClient(t, receiver, "desktop")); err != nil {
 		t.Fatalf("another remembered device got %v", err)
 	}
 	receiver.pairings.mu.Lock()
@@ -198,15 +204,15 @@ func TestRememberedDevicesHaveTheirOwnTries(t *testing.T) {
 	}
 }
 
-// TestUnansweredOffersExpire fills every place for a waiting offer from
-// browsers, which anyone can do, and checks the offers fail once nobody
-// answers them, so others get through again.
+// TestUnansweredOffersExpire fills every place browsers may take, which
+// anyone with the phone link can do, and checks the offers fail once
+// nobody answers them, so others get through again.
 func TestUnansweredOffersExpire(t *testing.T) {
 	defer func(d time.Duration) { answerTimeout = d }(answerTimeout)
 	answerTimeout = 100 * time.Millisecond
 	receiver, base := startServer(t)
 	o := offer{Items: []string{"f"}, Size: 1, Token: receiver.ReceiveToken}
-	for i := range maxOffers {
+	for i := range maxOffers - keptForKnown {
 		if err := call(t.Context(), browser(receiver), http.MethodPost, secure(base)+"/peer/offer", "", o, nil); err != nil {
 			t.Fatalf("offer %d: %v", i, err)
 		}

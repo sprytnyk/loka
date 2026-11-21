@@ -154,9 +154,10 @@ sequenceDiagram
 ```
 
 - The offer lists up to 100 top-level names and the total size of the
-  files. Up to 16 offers can wait at once, and more get `503`. An offer
-  that nobody answers within a minute fails, and `/peer/status` then
-  gives the reason in `error`.
+  files. Up to 16 offers can wait at once, and more get `503`. Browsers
+  and new devices may take only 12 of those places, so remembered devices
+  always find room. An offer that nobody answers within a minute fails,
+  and `/peer/status` then gives the reason in `error`.
 - Every later request carries the `secret` in an `X-Transfer-Secret`
   header.
 - The upload is a tar stream: a header per directory or file, then its
