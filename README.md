@@ -190,11 +190,17 @@ Someone on the network could change either. Once the phone has the
 certificate, open `https://` addresses and links, which skip the plain page.
 
 > [!IMPORTANT]
-> Check the certificate before you trust it. Compare the SHA-256 fingerprint in
-> the phone's certificate details with the one on the computer: in the **?**
-> help on Loka's page, or printed by `loka receive` and `loka share`. Don't
-> trust a fingerprint shown on the phone, since someone who can swap the
-> certificate can swap that page too.
+> Check the certificate before you trust it. Compare the SHA-256 fingerprint of
+> the installed certificate with the one on the computer. It's in the **?** help
+> on Loka's page, and `loka receive` and `loka share` print it. Don't trust a
+> fingerprint shown on the phone, since someone who can swap the certificate
+> can swap that page too.
+>
+> On Android, search Settings for "Trusted credentials" and open the **User**
+> tab. On iPhone, open **Settings › General › VPN & Device Management**, then
+> the Loka profile and **More Details**. Don't check the padlock in the
+> browser. It shows a different certificate, which Loka makes for each
+> address, so its fingerprint never matches.
 
 > [!CAUTION]
 > Anyone with a link can download while you're sharing. When you're done,
