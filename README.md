@@ -8,7 +8,7 @@ Loka is one program with nothing else to install, used in the browser or the
 terminal. It finds other devices by itself, and phones need only a browser. It
 needs no account and sends nothing outside your network.
 
-![Loka showing selected files, nearby devices, and transfer progress](docs/loka.png)
+![Loka showing selected files, nearby devices, transfers and a download link](docs/loka.png)
 
 ## Install
 
