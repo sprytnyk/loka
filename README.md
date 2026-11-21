@@ -1,5 +1,11 @@
 # Loka
 
+[![Latest release](https://img.shields.io/github/v/release/sprytnyk/loka?label=release)](https://github.com/sprytnyk/loka/releases/latest)
+[![Platforms: Linux, Windows, and macOS](https://img.shields.io/badge/platform-Linux%2C_Windows%2C_macOS-blue)](#install)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![Made in Ukraine](https://img.shields.io/badge/made_in-Ukraine-ffd700.svg?labelColor=0057b7)
+[![Linux test coverage](https://codecov.io/gh/sprytnyk/loka/branch/main/graph/badge.svg)](https://codecov.io/gh/sprytnyk/loka)
+
 Share files and directories with computers and phones on your local network.
 Files go straight from one device to the other, encrypted, and never pass
 through a server or the internet.
