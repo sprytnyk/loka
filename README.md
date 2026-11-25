@@ -88,6 +88,7 @@ browser. Use the whole link. The part after `#r=` lets the phone send, and it
 changes each time Loka starts. Choose files or a directory and send. The
 computer asks you to accept, as with any transfer. iPhones and iPads can send
 files but not directories, because their browsers can't choose a directory.
+To send text instead, switch to **Text** and paste it. See [Text](#text).
 
 The first time, the phone offers to install Loka's certificate, with the steps
 for Android and iPhone. Do it once, and from then on the page opens over HTTPS
@@ -122,6 +123,24 @@ Directories and several files download as a ZIP that Loka builds during the
 download. Each download has the current contents. If a shared file or
 directory is deleted or replaced, the link stops working.
 
+## Text
+
+To send text instead of files, switch **Items to share** to **Text**, then
+type or paste it. **Paste** fills it from the clipboard where the browser
+allows. Send it to a device as usual, or select **Create link** for a phone.
+
+- The receiving computer shows the text in a window with **Copy**. Loka keeps
+  it in memory until you close the window, and never saves it.
+- If either Loka hasn't seen the other before, check the pairing code and
+  accept on the receiving computer. Once both remember each other, text
+  shows at once.
+- A phone sends text the same way, from the page it opens from **Receive from
+  a phone**. It shows at once.
+- A text link opens a page with the text and **Copy**. It works like a
+  download link, until you stop it or Loka stops.
+
+Text can be up to 1 MB. `loka receive` can't show text yet, so it refuses it.
+
 ## Command line
 
 ```sh
@@ -133,7 +152,7 @@ loka forget my-laptop
 ```
 
 - `receive` asks where to put each transfer; leave the answer empty to
-  decline. It also prints the address and QR code a phone can send from, its
+  decline. It refuses text. It also prints the address and QR code a phone can send from, its
   `https://` form and the certificate's fingerprint.
 - `devices` lists nearby devices and marks a device as remembered only when it
   shows the certificate Loka knows for it.

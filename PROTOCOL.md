@@ -201,6 +201,26 @@ over plain HTTP, so someone who can change traffic could swap it for one
 that reads the token. Over the `https://` link, on a phone with the right
 `loka-ca.crt`, they can't read it.
 
+### Text
+
+Text goes the same way as files, with these differences:
+
+- The offer has `"kind": "text"` and no `items`. `size` is the text's length
+  in bytes, at most 1 MB (1,048,576).
+- The upload is the text itself in UTF-8, not a tar stream. The receiver
+  refuses text that isn't valid UTF-8 or isn't the size offered.
+- Text from a browser with the receive token moves straight to `accepted`.
+  A Loka that remembers the receiver sends `"receiver_known": true` with
+  its nonce in `/peer/reveal`. The receiver skips the prompt only if it
+  also remembers the sender. Otherwise, it shows the code and waits for
+  the person's answer. Accepted text must arrive within a minute.
+- The receiver keeps the text in memory, never on disk, and drops it once
+  the person closes it. Until then it takes one of the 16 places for waiting
+  offers, so text that keeps coming can't fill the memory.
+
+A Loka from before text answers a text offer with `400` and `Invalid offer`.
+`loka receive` answers `400` too, since it can't show text yet.
+
 ## The pairing code
 
 The code lets two people check that their Lokas talk to each other, and
@@ -257,7 +277,12 @@ public key in the per-address certificates. They all share one key, which
 Loka makes on each start, so the command works only until Loka restarts.
 
 One shared file downloads as it is. Several download as one zip file,
-without compression. `loka share` serves only the page, the certificate
+without compression.
+
+A text link looks like `http://192.168.1.20:45873/#t=TOKEN`. The page moves
+to HTTPS the same way, reads
+`https://192.168.1.20:45873/download/TOKEN`, which serves the text as
+`text/plain`, and shows it with a button to copy it. `loka share` serves only the page, the certificate
 and the links.
 
 ## What it doesn't protect
@@ -274,7 +299,8 @@ and the links.
   Loka's page there or in the terminal. Loka's page on the phone came over
   plain HTTP too, so don't use a fingerprint from it. Use `https://` once
   the phone has the right `loka-ca.crt`.
-- **Who uses a browser.** Anyone with the phone link can offer files,
-  and anyone who gets the link can download while it's shared. The person at the
-  receiver still accepts each offer.
+- **Who uses a browser.** Anyone with the phone link can offer files and
+  send text, and anyone who gets a link can download while it's shared. The
+  person at the receiver still accepts each offer of files. Text shows at
+  once, but never touches the disk.
 - **Device names.** Anyone can announce any name.

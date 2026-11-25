@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -20,22 +21,33 @@ const shareArchiveName = "loka-share.zip"
 func (s *Server) share(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Paths []string `json:"paths"`
+		Text  string   `json:"text"` // shared instead of paths when not empty
 	}
-	if err := readJSON(w, r, &req); err != nil {
+	if err := readJSONUpTo(w, r, &req, maxTextRequest); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	t, err := transfer.NewLink(req.Paths)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	var t *transfer.Transfer
+	switch {
+	case len(req.Text) > transfer.MaxText:
+		writeError(w, http.StatusBadRequest, errTextTooLong)
 		return
+	case req.Text != "":
+		t = transfer.NewTextLink(req.Text)
+	default:
+		var err error
+		if t, err = transfer.NewLink(req.Paths); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
 	}
 	s.Transfers.Add(t)
 	writeJSON(w, http.StatusOK, map[string]string{"id": t.ID, "token": t.Token})
 }
 
-// download serves a link: a single file as itself, so browsers can resume
-// it, and anything else as a ZIP archive built while it downloads.
+// download serves a link: text as plain text, for the page to show, a
+// single file as itself, so browsers can resume it, and anything else as a
+// ZIP archive built while it downloads.
 func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	t := s.Transfers.Link(r.PathValue("token"))
 	if t == nil || t.Status() != transfer.Shared {
@@ -43,6 +55,13 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	network.Prove(r.Context())
+	if t.Kind == transfer.Text {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Cache-Control", "no-store")
+		io.WriteString(w, t.Text())
+		return
+	}
 	// Stopping the link also stops downloads in progress.
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()

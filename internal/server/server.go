@@ -20,6 +20,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sprytnyk/loka/internal/desktop"
 	"github.com/sprytnyk/loka/internal/network"
@@ -43,6 +44,7 @@ type Server struct {
 	Transfers   transfer.Registry
 	Trust       *trust.Store           // this device's certificates
 	OnlyLinks   bool                   // serve only download links, as loka share does
+	NoText      bool                   // refuse text, which nothing here can show
 	Devices     *network.Discovery     // nil when not looking for devices
 	destination atomic.Pointer[string] // the last accepted destination
 
@@ -153,6 +155,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/send", s.local(s.send))
 	mux.HandleFunc("POST /api/accept", s.local(s.accept))
 	mux.HandleFunc("POST /api/cancel", s.local(s.cancel))
+	mux.HandleFunc("POST /api/text", s.local(s.readText))
+	mux.HandleFunc("POST /api/dismiss", s.local(s.dismiss))
 	mux.HandleFunc("POST /api/share", s.local(s.share))
 	mux.HandleFunc("POST /api/qr", s.local(s.qrCode))
 	return handler
@@ -199,11 +203,12 @@ func (s *Server) peer(h func(http.ResponseWriter, *http.Request, *transfer.Trans
 
 // offer is what a sender tells the receiver before anything is sent.
 type offer struct {
-	Name       string   `json:"name"`
-	Items      []string `json:"items"`
-	Size       int64    `json:"size"`
-	Commitment string   `json:"commitment,omitempty"` // to the sender's nonce, from a Loka
-	Token      string   `json:"token,omitempty"`      // the receive token, from a browser
+	Name       string        `json:"name"`
+	Kind       transfer.Kind `json:"kind,omitempty"` // text, or files when empty
+	Items      []string      `json:"items"`          // none for text
+	Size       int64         `json:"size"`
+	Commitment string        `json:"commitment,omitempty"` // to the sender's nonce, from a Loka
+	Token      string        `json:"token,omitempty"`      // the receive token, from a browser
 }
 
 type offerReply struct {
@@ -225,6 +230,16 @@ var errDeclined = errors.New("The receiver declined or cancelled")
 // token. Without it, a device between two Lokas could pose as a browser,
 // which shows no pairing code.
 var errNeedsReceiveToken = errors.New("To send from a browser, open the link or QR code the receiver shows")
+
+// errTextTooLong refuses text past transfer.MaxText.
+var errTextTooLong = errors.New("The text is longer than 1 MB. Send it as a file instead")
+
+// errNoText refuses text where nothing can show it.
+var errNoText = errors.New("The receiver runs loka receive, which can't show text. Run loka there instead")
+
+// errTextLate ends a text transfer whose sender didn't send the text after
+// it was accepted.
+var errTextLate = errors.New("The sender didn't send the text in time")
 
 // errTooManyOffers refuses an offer while many others wait for an answer.
 var errTooManyOffers = errors.New("The receiver has too many offers waiting. Try again later")
@@ -256,8 +271,8 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if o.Size < 0 || len(o.Items) == 0 {
-		writeError(w, http.StatusBadRequest, errors.New("Invalid offer"))
+	if err := s.checkOffer(o); err != nil {
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	items := o.Items[:min(len(o.Items), transfer.MaxOfferItems)]
@@ -271,8 +286,14 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, errNeedsReceiveToken)
 			return
 		}
-		t := transfer.New(transfer.Incoming, host, items, o.Size, transfer.Waiting)
-		t.Browser = true
+		// Text needs no answer: it waits on the page until read, and
+		// the phone link already says who may send.
+		status := transfer.Waiting
+		if o.Kind == transfer.Text {
+			status = transfer.Accepted
+		}
+		t := transfer.New(transfer.Incoming, host, items, o.Size, status)
+		t.Kind, t.Browser = o.Kind, true
 		s.addOffer(w, t)
 		return
 	}
@@ -281,6 +302,7 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := transfer.New(transfer.Incoming, cmp.Or(truncate(o.Name, 255), host), items, o.Size, transfer.Pairing)
+	t.Kind = o.Kind
 	t.DeviceID, t.Fingerprint = trust.Identify(r.TLS.PeerCertificates[0])
 	t.Commitment, t.Nonce = o.Commitment, trust.Nonce()
 	standing, known, err := s.Trust.Check(t.DeviceID, t.Fingerprint)
@@ -300,6 +322,33 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		t.MarkNewDevice()
 	}
 	s.addOffer(w, t)
+}
+
+// errInvalidOffer refuses an offer that doesn't say what it carries. A
+// Loka before text answers it to an offer of text.
+var errInvalidOffer = errors.New("Invalid offer")
+
+// checkOffer refuses an offer that doesn't say what it carries, and text
+// this device can't take.
+func (s *Server) checkOffer(o offer) error {
+	switch o.Kind {
+	case transfer.Files:
+		if o.Size < 0 || len(o.Items) == 0 {
+			return errInvalidOffer
+		}
+	case transfer.Text:
+		switch {
+		case len(o.Items) != 0 || o.Size <= 0:
+			return errInvalidOffer
+		case o.Size > transfer.MaxText:
+			return errTextTooLong
+		case s.NoText:
+			return errNoText
+		}
+	default:
+		return errInvalidOffer
+	}
+	return nil
 }
 
 // refuseChanged shows that a device posing as a remembered one was
@@ -327,6 +376,22 @@ const maxOffers = 16
 // a browser, so a flood of those can't lock out a remembered device.
 const keptForKnown = 4
 
+// waitsHere reports whether an incoming transfer takes one of those
+// places: an offer in pairing or waiting for the person, text waiting for
+// its sender, or text waiting to be read.
+func waitsHere(t *transfer.Transfer) bool {
+	if t.Direction != transfer.Incoming {
+		return false
+	}
+	switch t.Status() {
+	case transfer.Pairing, transfer.Waiting:
+		return true
+	case transfer.Accepted, transfer.Receiving:
+		return t.Kind == transfer.Text
+	}
+	return t.Unread()
+}
+
 // fromUnknown reports whether t comes from a browser or a new Loka, which
 // may not take the places kept for remembered Lokas.
 func fromUnknown(t *transfer.Transfer) bool {
@@ -343,6 +408,11 @@ func waitForPerson(t *transfer.Transfer) {
 	time.AfterFunc(answerTimeout, func() { t.Expire(transfer.Waiting, errNoAnswer) })
 }
 
+// waitForText fails accepted text that its sender doesn't send in time.
+func waitForText(t *transfer.Transfer) {
+	time.AfterFunc(answerTimeout, func() { t.Expire(transfer.Accepted, errTextLate) })
+}
+
 // pairingTimeout is how long a Loka has to reveal its nonce after the
 // receiver answers its offer. A Loka reveals at once.
 var pairingTimeout = 10 * time.Second
@@ -355,7 +425,7 @@ func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
 	defer s.offerMu.Unlock()
 	waiting, unknown := 0, 0
 	for _, other := range s.Transfers.All() {
-		if other.Direction == transfer.Incoming && (other.Status() == transfer.Pairing || other.Status() == transfer.Waiting) {
+		if waitsHere(other) {
 			waiting++
 			if fromUnknown(other) {
 				unknown++
@@ -376,6 +446,8 @@ func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
 			return
 		}
 		time.AfterFunc(pairingTimeout, func() { t.Expire(transfer.Pairing, errPairingTimeout) })
+	} else if t.Status() == transfer.Accepted {
+		waitForText(t)
 	} else {
 		waitForPerson(t)
 	}
@@ -497,12 +569,16 @@ func (s *Server) Warning() string {
 	return pairingWarning("A remembered device")
 }
 
+type revealRequest struct {
+	Nonce         string `json:"nonce"`
+	ReceiverKnown bool   `json:"receiver_known,omitempty"`
+}
+
 // peerReveal takes the nonce a Loka committed to in its offer, which
-// makes the pairing code. Only then does the offer wait for an answer.
+// makes the pairing code. Text can skip the prompt when both Lokas
+// remember each other.
 func (s *Server) peerReveal(w http.ResponseWriter, r *http.Request, t *transfer.Transfer) {
-	var req struct {
-		Nonce string `json:"nonce"`
-	}
+	var req revealRequest
 	if err := readJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -517,7 +593,11 @@ func (s *Server) peerReveal(w http.ResponseWriter, r *http.Request, t *transfer.
 		writeError(w, http.StatusConflict, errDeclined)
 		return
 	}
-	waitForPerson(t)
+	if t.Kind == transfer.Text && req.ReceiverKnown && !t.NewDevice() {
+		s.Accept(t, "")
+	} else {
+		waitForPerson(t)
+	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -546,6 +626,10 @@ func (s *Server) peerUpload(w http.ResponseWriter, r *http.Request, t *transfer.
 		return
 	}
 	network.Prove(r.Context())
+	if t.Kind == transfer.Text {
+		receiveText(w, r, t)
+		return
+	}
 	// A cancel must also end a read that is waiting for bytes, as when the
 	// sender has stalled.
 	rc := http.NewResponseController(w)
@@ -565,12 +649,54 @@ func (s *Server) peerUpload(w http.ResponseWriter, r *http.Request, t *transfer.
 	t.Finish(err)
 	switch {
 	case t.Context().Err() != nil:
-		writeError(w, http.StatusConflict, errors.New("The receiver cancelled the transfer"))
+		writeError(w, http.StatusConflict, errReceiverCancelled)
 	case err != nil:
 		writeError(w, http.StatusBadRequest, err)
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"status": transfer.Complete, "speed_mbps": t.View().SpeedMbps})
 	}
+}
+
+// textTimeout is how long a sender has to send its text. Text is small,
+// so a sender that takes longer has stalled.
+var textTimeout = time.Minute
+
+// errReceiverCancelled tells a sender the receiver cancelled while bytes
+// were arriving.
+var errReceiverCancelled = errors.New("The receiver cancelled the transfer")
+
+// errTextMismatch ends a text transfer whose text isn't what was offered.
+var errTextMismatch = errors.New("The text didn't match what the sender offered")
+
+// receiveText keeps the text that arrives for t in memory, never on disk,
+// until the person reads it.
+func receiveText(w http.ResponseWriter, r *http.Request, t *transfer.Transfer) {
+	rc := http.NewResponseController(w)
+	rc.SetReadDeadline(time.Now().Add(textTimeout))
+	stop := context.AfterFunc(t.Context(), func() { rc.SetReadDeadline(time.Now()) })
+	defer stop()
+	data, err := io.ReadAll(io.LimitReader(r.Body, t.Size+1))
+	t.Done.Store(min(int64(len(data)), t.Size))
+	switch {
+	case err != nil:
+		err = transfer.ErrInterrupted
+	case int64(len(data)) != t.Size || !utf8.Valid(data):
+		err = errTextMismatch
+	}
+	if err != nil {
+		t.Finish(err)
+		if t.Context().Err() != nil {
+			writeError(w, http.StatusConflict, errReceiverCancelled)
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if !t.ReceiveText(string(data)) {
+		writeError(w, http.StatusConflict, errReceiverCancelled)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": transfer.Complete})
 }
 
 // state is everything the page shows.
@@ -612,11 +738,12 @@ func (s *Server) state(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Paths []string `json:"paths"`
+		Text  string   `json:"text"` // sent instead of paths when not empty
 		Host  string   `json:"host"`
 		Port  int      `json:"port"`
 		ID    string   `json:"id"` // the device picked from the list, if any
 	}
-	if err := readJSON(w, r, &req); err != nil {
+	if err := readJSONUpTo(w, r, &req, maxTextRequest); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -624,17 +751,32 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("Enter the device address"))
 		return
 	}
-	entries, items, size, err := transfer.Collect(req.Paths)
+	t, entries, err := outgoing(req.Host, req.Paths, req.Text)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	t := transfer.New(transfer.Outgoing, req.Host, items, size, transfer.Pairing)
 	s.Transfers.Add(t)
 	go func() {
 		t.Finish(SendTo(t, entries, s.Trust, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort), req.ID))
 	}()
 	writeJSON(w, http.StatusOK, map[string]string{"id": t.ID})
+}
+
+// outgoing makes a transfer to host: of text when there is any, and of
+// the paths otherwise.
+func outgoing(host string, paths []string, text string) (*transfer.Transfer, []transfer.Entry, error) {
+	if text != "" {
+		if len(text) > transfer.MaxText {
+			return nil, nil, errTextTooLong
+		}
+		return transfer.NewText(transfer.Outgoing, host, text, transfer.Pairing), nil, nil
+	}
+	entries, items, size, err := transfer.Collect(paths)
+	if err != nil {
+		return nil, nil, err
+	}
+	return transfer.New(transfer.Outgoing, host, items, size, transfer.Pairing), entries, nil
 }
 
 func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
@@ -651,10 +793,13 @@ func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, errors.New("Not found"))
 		return
 	}
-	destination, err := ExistingDir(req.Destination)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
+	var destination string
+	if t.Kind != transfer.Text {
+		var err error
+		if destination, err = ExistingDir(req.Destination); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
 	}
 	if !s.Accept(t, destination) {
 		writeError(w, http.StatusConflict, errors.New("The transfer is no longer waiting"))
@@ -664,14 +809,19 @@ func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
 }
 
 // Accept accepts a waiting incoming transfer into destination and offers
-// that destination for the next one. It remembers a sending Loka, so a
-// later change of its certificate is caught. It reports false when the
-// transfer was no longer waiting.
+// that destination for the next one. Text has no destination, and must
+// then arrive in time. Accept remembers a sending Loka, so a later change
+// of its certificate is caught. It reports false when the transfer was no
+// longer waiting.
 func (s *Server) Accept(t *transfer.Transfer, destination string) bool {
 	if !t.Accept(destination) {
 		return false
 	}
-	s.destination.Store(&destination)
+	if t.Kind == transfer.Text {
+		waitForText(t)
+	} else {
+		s.destination.Store(&destination)
+	}
 	if t.DeviceID != "" {
 		s.pairings.giveBack(t)
 		// A failure only means the sender counts as new next time.
@@ -697,6 +847,45 @@ func (s *Server) cancel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// receivedText finds the incoming text named in a request from the page.
+func (s *Server) receivedText(w http.ResponseWriter, r *http.Request) *transfer.Transfer {
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := readJSON(w, r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return nil
+	}
+	t := s.Transfers.Get(req.ID)
+	if t == nil || t.Direction != transfer.Incoming || t.Kind != transfer.Text {
+		writeError(w, http.StatusNotFound, errors.New("Not found"))
+		return nil
+	}
+	return t
+}
+
+// readText gives the page text that arrived and wasn't read yet.
+func (s *Server) readText(w http.ResponseWriter, r *http.Request) {
+	t := s.receivedText(w, r)
+	if t == nil {
+		return
+	}
+	text := t.Text()
+	if text == "" {
+		writeError(w, http.StatusGone, errors.New("The text was already closed"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"text": text})
+}
+
+// dismiss drops text the person has read.
+func (s *Server) dismiss(w http.ResponseWriter, r *http.Request) {
+	if t := s.receivedText(w, r); t != nil {
+		t.Dismiss()
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	}
+}
+
 // ExistingDir expands a leading ~ and returns the absolute path of an
 // existing directory.
 func ExistingDir(path string) (string, error) {
@@ -719,7 +908,16 @@ func ExistingDir(path string) (string, error) {
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	return readJSONUpTo(w, r, v, 1<<20)
+}
+
+// maxTextRequest is how big a request from the page that carries text may
+// be. JSON may write a byte of text as six.
+const maxTextRequest = 6*transfer.MaxText + 1<<16
+
+// readJSONUpTo reads a JSON request of at most limit bytes.
+func readJSONUpTo(w http.ResponseWriter, r *http.Request, v any, limit int64) error {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		return fmt.Errorf("Invalid request: %w", err)
 	}

@@ -277,6 +277,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 		return err
 	}
 	defer s.Close()
+	s.NoText = true // the terminal doesn't show text yet
 	served := make(chan error, 1)
 	go func() { served <- s.Serve(ctx, ln) }()
 	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d (Ctrl+C to stop)\n", version, port)

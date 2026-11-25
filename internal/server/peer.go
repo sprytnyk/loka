@@ -43,11 +43,15 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 
 	var reply offerReply
 	nonce := trust.Nonce()
-	o := offer{Name: from, Items: t.Items[:min(len(t.Items), transfer.MaxOfferItems)], Size: t.Size, Commitment: trust.Commit(nonce)}
+	o := offer{Name: from, Kind: t.Kind, Items: t.Items[:min(len(t.Items), transfer.MaxOfferItems)], Size: t.Size, Commitment: trust.Commit(nonce)}
 	if err := call(t.Context(), client, http.MethodPost, base+"/peer/offer", "", o, &reply); err != nil {
+		if t.Kind == transfer.Text && err.Error() == errInvalidOffer.Error() {
+			return errOldReceiver
+		}
 		return err
 	}
-	if receiver.isNew() {
+	newReceiver := receiver.isNew()
+	if newReceiver {
 		t.MarkNewDevice()
 	}
 	device := receiver.device(cmp.Or(truncate(reply.Name, 255), host))
@@ -69,7 +73,7 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 	if !t.Pair(trust.Code(store.Fingerprint(), device.Fingerprint, nonce, reply.Nonce)) {
 		return context.Canceled
 	}
-	reveal := map[string]string{"nonce": nonce}
+	reveal := revealRequest{Nonce: nonce, ReceiverKnown: t.Kind == transfer.Text && !newReceiver}
 	if err := call(t.Context(), client, http.MethodPost, base+"/peer/reveal/"+reply.ID, reply.Secret, reveal, nil); err != nil {
 		tellReceiver()
 		return err
@@ -94,12 +98,25 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 		stopUpload()
 	})
 	defer stopWatch()
-	err := upload(uploadCtx, client, base+"/peer/upload/"+reply.ID, reply.Secret, entries, &t.Done)
+	write := func(ctx context.Context, w io.Writer) error {
+		return transfer.WriteTar(ctx, w, entries, &t.Done)
+	}
+	if t.Kind == transfer.Text {
+		write = func(_ context.Context, w io.Writer) error {
+			n, err := io.WriteString(w, t.Text())
+			t.Done.Add(int64(n))
+			return err
+		}
+	}
+	err := upload(uploadCtx, client, base+"/peer/upload/"+reply.ID, reply.Secret, write)
 	if err != nil && stalled.Load() {
 		return transfer.ErrInterrupted
 	}
 	return err
 }
+
+// errOldReceiver is what a Loka from before text answers to text.
+var errOldReceiver = errors.New("The receiver's Loka can't receive text. Update it there")
 
 // pinned is the receiver as its first connection showed it. Every later
 // connection of the same transfer must show the same certificate.
@@ -179,13 +196,13 @@ func waitForAnswer(ctx context.Context, client *http.Client, url, secret string)
 	}
 }
 
-// upload streams the entries to the receiver.
-func upload(ctx context.Context, client *http.Client, url, secret string, entries []transfer.Entry, done *atomic.Int64) error {
+// upload streams to the receiver what write writes.
+func upload(ctx context.Context, client *http.Client, url, secret string, write func(context.Context, io.Writer) error) error {
 	pr, pw := io.Pipe()
 	defer pr.Close()
 	writeErr := make(chan error, 1)
 	go func() {
-		err := transfer.WriteTar(ctx, pw, entries, done)
+		err := write(ctx, pw)
 		writeErr <- err
 		pw.CloseWithError(err)
 	}()

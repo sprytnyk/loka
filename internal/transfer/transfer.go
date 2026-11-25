@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 // Status is a step in a transfer's life.
@@ -29,6 +30,17 @@ const (
 	Stopped   Status = "stopped" // a download link was stopped
 )
 
+// Kind says what a transfer carries.
+type Kind string
+
+const (
+	Files Kind = ""     // files and directories, as a tar stream
+	Text  Kind = "text" // text to copy, which never touches the disk
+)
+
+// MaxText is the most bytes of text one transfer or link carries.
+const MaxText = 1 << 20
+
 // Direction says whether a transfer leaves or arrives on this device.
 type Direction string
 
@@ -41,12 +53,13 @@ const (
 //
 // The fields from ID to shared are set before the transfer is added to a
 // Registry and never change after, so any goroutine may read them. Done
-// is written only by the goroutine that moves the bytes. Status, error and
-// destination change only through the methods below, under the transfer's
-// own lock.
+// is written only by the goroutine that moves the bytes. Status, error,
+// destination and text change only through the methods below, under the
+// transfer's own lock.
 type Transfer struct {
 	ID        string
 	Direction Direction
+	Kind      Kind
 	Peer      string   // the other device's name or address, or "Link"
 	Items     []string // the top-level names, for display
 	Size      int64    // bytes of file content
@@ -75,9 +88,13 @@ type Transfer struct {
 	newDevice   bool   // the other Loka has not been remembered yet
 	code        string // the pairing code, once both nonces are known
 	destination string
-	speed       speedometer
-	started     time.Time // when bytes started moving
-	ended       time.Time // when the transfer completed
+	// The text of a text transfer: to send, to serve as a link, or
+	// received and not yet read. It is dropped once it is no longer needed.
+	text    string
+	unread  bool
+	speed   speedometer
+	started time.Time // when bytes started moving
+	ended   time.Time // when the transfer completed
 }
 
 // New makes a transfer that starts at status.
@@ -92,6 +109,66 @@ func New(direction Direction, peer string, items []string, size int64, status St
 		ctx:       ctx,
 		cancel:    cancel,
 		status:    status,
+	}
+}
+
+// NewText makes a transfer of text that starts at status.
+func NewText(direction Direction, peer, text string, status Status) *Transfer {
+	t := New(direction, peer, nil, int64(len(text)), status)
+	t.Kind, t.text = Text, text
+	return t
+}
+
+// NewTextLink makes a link that shows text.
+func NewTextLink(text string) *Transfer {
+	t := NewText(Outgoing, "Link", text, Shared)
+	t.Token = RandomToken(24)
+	return t
+}
+
+// Text returns the text to send or serve, or the text received and not
+// yet read.
+func (t *Transfer) Text() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.text
+}
+
+// ReceiveText keeps the text until it is read and reports whether it
+// completed the transfer before cancellation.
+func (t *Transfer) ReceiveText(text string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.status != Receiving {
+		return false
+	}
+	if t.ctx.Err() != nil {
+		t.status = Cancelled
+		return false
+	}
+	t.text, t.unread, t.status = text, true, Complete
+	return true
+}
+
+// Unread reports whether received text waits to be read.
+func (t *Transfer) Unread() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.unread
+}
+
+// Dismiss drops received text once it was read.
+func (t *Transfer) Dismiss() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.text, t.unread = "", false
+}
+
+// dropSentText drops text this device no longer needs to send or serve,
+// once the transfer has ended. Callers hold the lock.
+func (t *Transfer) dropSentText() {
+	if t.Direction == Outgoing && t.status.Final() {
+		t.text = ""
 	}
 }
 
@@ -145,15 +222,16 @@ func (t *Transfer) Accept(destination string) bool {
 // Stop cancels the transfer. A transfer that is not moving bytes stops at
 // once; one that is notices the cancelled context and calls Finish.
 func (t *Transfer) Stop() {
-	t.cancel()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.cancel()
 	switch t.status {
 	case Pairing, Waiting, Accepted:
 		t.status = Cancelled
 	case Shared:
 		t.status = Stopped
 	}
+	t.dropSentText()
 }
 
 // Finish records how a transfer that was moving bytes ended. It does nothing
@@ -174,6 +252,7 @@ func (t *Transfer) Finish(err error) {
 		t.status = Failed
 		t.err = err.Error()
 	}
+	t.dropSentText()
 }
 
 // Expire fails the transfer with err if it is still at status.
@@ -185,6 +264,7 @@ func (t *Transfer) Expire(status Status, err error) {
 	}
 	t.cancel()
 	t.status, t.err = Failed, err.Error()
+	t.dropSentText()
 }
 
 // Final reports whether a transfer at this status has ended.
@@ -228,6 +308,7 @@ func (t *Transfer) Pair(code string) bool {
 type View struct {
 	ID        string    `json:"id"`
 	Direction Direction `json:"direction"`
+	Kind      Kind      `json:"kind,omitempty"`
 	Name      string    `json:"name"`
 	Items     []string  `json:"items"`
 	Size      int64     `json:"size"`
@@ -238,17 +319,27 @@ type View struct {
 	SpeedMbps *float64  `json:"speed_mbps,omitempty"` // while bytes move, then the average once complete
 	Browser   bool      `json:"browser,omitempty"`
 	NewDevice bool      `json:"new_device,omitempty"`
-	Code      string    `json:"code,omitempty"` // the pairing code, between Lokas
+	Code      string    `json:"code,omitempty"`    // the pairing code, between Lokas
+	Unread    bool      `json:"unread,omitempty"`  // received text waits to be read
+	Preview   string    `json:"preview,omitempty"` // the start of text this device sends or serves
 }
+
+// previewSize is how many bytes of outgoing text a view shows.
+const previewSize = 120
 
 // View returns what the page shows now. While bytes move, it includes the
 // current speed, which reading the view measures. Once the transfer
-// completes, it includes the average speed.
+// completes, it includes the average speed. Text has neither.
 func (t *Transfer) View() View {
 	t.mu.Lock()
-	status, err, newDevice, code := t.status, t.err, t.newDevice, t.code
+	status, err, newDevice, code, unread := t.status, t.err, t.newDevice, t.code, t.unread
+	var preview string
+	if t.Direction == Outgoing {
+		preview = t.text[:previewEnd(t.text)]
+	}
 	var speed *float64
 	switch {
+	case t.Kind == Text: // too small for a speed to mean anything
 	case status == Sending || status == Receiving:
 		mbps := t.speed.read(t.Done.Load(), time.Now())
 		speed = &mbps
@@ -260,6 +351,7 @@ func (t *Transfer) View() View {
 	return View{
 		ID:        t.ID,
 		Direction: t.Direction,
+		Kind:      t.Kind,
 		Name:      t.Peer,
 		Items:     t.Items,
 		Size:      t.Size,
@@ -271,7 +363,22 @@ func (t *Transfer) View() View {
 		Browser:   t.Browser,
 		NewDevice: newDevice,
 		Code:      code,
+		Unread:    unread,
+		Preview:   preview,
 	}
+}
+
+// previewEnd is where the preview of text ends, without splitting a
+// character.
+func previewEnd(text string) int {
+	if len(text) <= previewSize {
+		return len(text)
+	}
+	end := previewSize
+	for end > 0 && !utf8.RuneStart(text[end]) {
+		end--
+	}
+	return end
 }
 
 // speedEvery is the shortest time a speed is measured over.
@@ -341,7 +448,7 @@ func (r *Registry) Add(t *Transfer) {
 func (r *Registry) dropEnded() {
 	ended := 0
 	for _, t := range r.ordered {
-		if t.Status().Final() {
+		if droppable(t) {
 			ended++
 		}
 	}
@@ -349,7 +456,7 @@ func (r *Registry) dropEnded() {
 		return
 	}
 	r.ordered = slices.DeleteFunc(r.ordered, func(t *Transfer) bool {
-		if ended <= MaxEnded || !t.Status().Final() {
+		if ended <= MaxEnded || !droppable(t) {
 			return false
 		}
 		ended--
@@ -359,6 +466,12 @@ func (r *Registry) dropEnded() {
 		}
 		return true
 	})
+}
+
+// droppable reports whether a transfer has ended and holds no text
+// waiting to be read.
+func droppable(t *Transfer) bool {
+	return t.Status().Final() && !t.Unread()
 }
 
 // Get returns the transfer with this ID, or nil.

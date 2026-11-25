@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -177,5 +178,37 @@ func TestRegistryDropsTheOldestEndedTransfers(t *testing.T) {
 	}
 	if r.Get(ended[4].ID) != nil || r.Link(ended[4].Token) != nil || r.Get(ended[5].ID) != ended[5] {
 		t.Fatal("didn't drop exactly the oldest ended transfers")
+	}
+}
+
+func TestPreviewKeepsWholeCharacters(t *testing.T) {
+	text := strings.Repeat("a", previewSize-1) + "é and more"
+	tr := NewText(Outgoing, "receiver", text, Pairing)
+	if got := tr.View().Preview; got != strings.Repeat("a", previewSize-1) {
+		t.Fatalf("preview %q", got)
+	}
+	if got := NewText(Incoming, "sender", "secret", Pairing).View().Preview; got != "" {
+		t.Fatalf("incoming text shows preview %q", got)
+	}
+}
+
+func TestRegistryKeepsUnreadText(t *testing.T) {
+	var r Registry
+	unread := New(Incoming, "phone", nil, 4, Receiving)
+	unread.Kind = Text
+	unread.ReceiveText("note")
+	r.Add(unread)
+	for range MaxEnded + 1 {
+		ended := New(Outgoing, "receiver", nil, 1, Waiting)
+		ended.Stop()
+		r.Add(ended)
+	}
+	if r.Get(unread.ID) == nil {
+		t.Fatal("unread text was dropped")
+	}
+	unread.Dismiss()
+	r.Add(New(Outgoing, "receiver", nil, 1, Waiting))
+	if r.Get(unread.ID) != nil {
+		t.Fatal("read text was kept past the limit")
 	}
 }
