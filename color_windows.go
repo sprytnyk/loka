@@ -17,3 +17,8 @@ func isTerminal(f *os.File) bool {
 	const colorCodes = windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING
 	return mode&colorCodes != 0 || windows.SetConsoleMode(h, mode|colorCodes) == nil
 }
+
+func isTerminalInput(f *os.File) bool {
+	var mode uint32
+	return windows.GetConsoleMode(windows.Handle(f.Fd()), &mode) == nil
+}

@@ -271,6 +271,23 @@ func TestSendAndReceiveCommands(t *testing.T) {
 	}
 }
 
+func TestPipedAnswerIsKept(t *testing.T) {
+	stdin, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdin.Close()
+	defer writer.Close()
+	destination := t.TempDir()
+	answers := make(chan string, 1)
+	answers <- destination
+	close(answers)
+	skipStaleAnswer(stdin, answers)
+	if got := <-answers; got != destination {
+		t.Fatalf("piped destination %q, want %q", got, destination)
+	}
+}
+
 // browser is an HTTP client that trusts Loka's certificate authority, as a
 // phone that installed it does.
 func browser(t *testing.T) *http.Client {

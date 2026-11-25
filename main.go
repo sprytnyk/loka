@@ -328,7 +328,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 			continue
 		}
 		told[t.ID] = true // answerOffer says how it ends
-		skipStaleAnswer(answers)
+		skipStaleAnswer(stdin, answers)
 		fmt.Fprintf(stdout, "\n%s wants to send: %s\n", sender(t), strings.Join(t.Items, ", "))
 		if v := t.View(); v.Code != "" {
 			fmt.Fprintf(stdout, "Pairing code %s. Check that the sender shows the same.\n", v.Code)
@@ -400,10 +400,13 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 	}
 }
 
-// skipStaleAnswer drops a line typed while no offer was asked about, such
-// as just after one ended, so it can't answer the next offer before the
-// person sees it. A closed channel stays closed.
-func skipStaleAnswer(answers <-chan string) {
+// skipStaleAnswer drops an early answer typed at the terminal. A pipe or
+// file can supply each answer ahead of its prompt.
+func skipStaleAnswer(stdin io.Reader, answers <-chan string) {
+	f, ok := stdin.(*os.File)
+	if !ok || !isTerminalInput(f) {
+		return
+	}
 	select {
 	case <-answers:
 	default:
