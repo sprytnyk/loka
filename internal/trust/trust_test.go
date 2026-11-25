@@ -2,6 +2,7 @@ package trust
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -10,7 +11,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func open(t *testing.T, dir string) *Store {
@@ -37,6 +40,76 @@ func TestIdentityLastsAndIsPrivate(t *testing.T) {
 	}
 	if mode := info.Mode().Perm(); mode&0o077 != 0 && os.PathSeparator == '/' {
 		t.Fatalf("identity readable by others: %v", mode)
+	}
+}
+
+func TestConcurrentCertificateLoadsUseOneIdentity(t *testing.T) {
+	path := filepath.Join(t.TempDir(), identityFile)
+	var creations atomic.Int32
+	template := func() *x509.Certificate {
+		creations.Add(1)
+		// Give the other callers time to see that the identity is missing.
+		time.Sleep(20 * time.Millisecond)
+		return identity()
+	}
+
+	start := make(chan struct{})
+	var fingerprints [16]string
+	var wg sync.WaitGroup
+	for i := range fingerprints {
+		wg.Go(func() {
+			<-start
+			cert, err := load(path, "this device's identity", template)
+			if err != nil {
+				t.Errorf("could not load identity: %v", err)
+				return
+			}
+			_, fingerprints[i] = Identify(cert.Leaf)
+		})
+	}
+	close(start)
+	wg.Wait()
+	if got := creations.Load(); got != 1 {
+		t.Errorf("prepared %d certificate templates, want 1", got)
+	}
+	for _, fingerprint := range fingerprints {
+		if fingerprint == "" || fingerprint != fingerprints[0] {
+			t.Fatal("concurrent callers did not load the same identity")
+		}
+	}
+}
+
+func TestCertificateCreationKeepsLegacyIdentity(t *testing.T) {
+	legacyData, err := createIfMissing(filepath.Join(t.TempDir(), identityFile), identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := tls.X509KeyPair(legacyData, legacyData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, want := Identify(legacy.Leaf)
+	dir := t.TempDir()
+	path := filepath.Join(dir, identityFile)
+	cert, err := load(path, "this device's identity", func() *x509.Certificate {
+		// An older process writes directly to the final path without the lock.
+		if err := os.WriteFile(path, legacyData, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return identity()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, got := Identify(cert.Leaf); got != want {
+		t.Error("startup did not use the identity already saved by the older process")
+	}
+	saved, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Fingerprint() != want {
+		t.Error("startup replaced the identity saved by the older process")
 	}
 }
 
@@ -112,7 +185,6 @@ func TestConcurrentRemembersKeepEveryDevice(t *testing.T) {
 func TestSeparateProcessesKeepEveryDevice(t *testing.T) {
 	const processes, each = 8, 15
 	dir := t.TempDir()
-	open(t, dir) // makes the identity, so the others only read it
 	var wg sync.WaitGroup
 	for p := range processes {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestRememberInChild$")

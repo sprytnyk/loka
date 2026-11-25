@@ -29,6 +29,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/sprytnyk/loka/internal/filemove"
 )
 
 // Device is another Loka this device remembers.
@@ -66,10 +68,11 @@ type Store struct {
 }
 
 const (
-	identityFile = "identity.pem"
-	caFile       = "ca.pem"
-	devicesFile  = "devices.json"
-	devicesLock  = "devices.lock"
+	identityFile     = "identity.pem"
+	caFile           = "ca.pem"
+	certificatesLock = "certificates.lock"
+	devicesFile      = "devices.json"
+	devicesLock      = "devices.lock"
 )
 
 // Open reads the identity and the certificate authority in dir, making
@@ -107,7 +110,7 @@ func Open(dir string) (*Store, error) {
 func load(path, what string, template func() *x509.Certificate) (tls.Certificate, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		data, err = create(path, template())
+		data, err = createIfMissing(path, template)
 	}
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("could not read %s in %s: %w", what, path, err)
@@ -131,9 +134,21 @@ func identity() *x509.Certificate {
 	}
 }
 
-// create makes a key and a self-signed certificate from template, and
-// saves both, readable only by this user, in one file at path.
-func create(path string, template *x509.Certificate) ([]byte, error) {
+// createIfMissing serializes first-run certificate creation across Loka
+// processes. Readers can open an existing certificate without the lock
+// because it is written and closed before it appears at path.
+func createIfMissing(path string, makeTemplate func() *x509.Certificate) ([]byte, error) {
+	dir := filepath.Dir(path)
+	lock, err := openLockedFile(filepath.Join(dir, certificatesLock))
+	if err != nil {
+		return nil, fmt.Errorf("could not lock certificate creation: %w", err)
+	}
+	defer lock.Close()
+	if data, err := os.ReadFile(path); !errors.Is(err, fs.ErrNotExist) {
+		return data, err
+	}
+
+	template := makeTemplate()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err
@@ -153,23 +168,26 @@ func create(path string, template *x509.Certificate) ([]byte, error) {
 		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
 		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}),
 	)
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, fs.ErrExist) {
-		return os.ReadFile(path) // another Loka made it first
-	}
-	if err != nil {
-		return nil, err
-	}
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		os.Remove(path)
-		return nil, err
-	}
-	if err := f.Close(); err != nil {
-		os.Remove(path)
+	if err := writePrivateFile(path, ".certificate-*", data, publishCertificate); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return os.ReadFile(path) // an older Loka created it without taking the lock
+		}
 		return nil, err
 	}
 	return data, nil
+}
+
+func publishCertificate(from, to string) error {
+	err := filemove.NoReplace(from, to)
+	if !errors.Is(err, filemove.ErrUnsupported) {
+		return err
+	}
+	// A hard link also publishes the finished file without replacing a winner.
+	if err := os.Link(from, to); err != nil {
+		return err
+	}
+	os.Remove(from)
+	return nil
 }
 
 func serial() (*big.Int, error) {
@@ -322,13 +340,8 @@ func (s *Store) Forget(match func(Device) bool) ([]Device, error) {
 // their own change, and one would be lost.
 func (s *Store) lockDevices() (unlock func(), err error) {
 	s.mu.Lock()
-	f, err := os.OpenFile(s.lock, os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := openLockedFile(s.lock)
 	if err != nil {
-		s.mu.Unlock()
-		return nil, fmt.Errorf("could not lock the remembered devices: %w", err)
-	}
-	if err := lockFile(f); err != nil {
-		f.Close()
 		s.mu.Unlock()
 		return nil, fmt.Errorf("could not lock the remembered devices: %w", err)
 	}
@@ -336,6 +349,18 @@ func (s *Store) lockDevices() (unlock func(), err error) {
 		f.Close() // releases the lock
 		s.mu.Unlock()
 	}, nil
+}
+
+func openLockedFile(path string) (*os.File, error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := lockFile(f); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
 }
 
 // Devices returns the remembered devices.
@@ -360,29 +385,35 @@ func (s *Store) read() ([]Device, error) {
 	return devices, nil
 }
 
-// write replaces the devices file in one step, so a reader never sees half
-// of it.
 func (s *Store) write(devices []Device) error {
 	data, err := json.MarshalIndent(devices, "", "  ")
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(s.devices), ".devices-*")
-	if err != nil {
-		return fmt.Errorf("could not save the remembered devices: %w", err)
-	}
-	_, err = f.Write(append(data, '\n'))
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		err = os.Rename(f.Name(), s.devices)
-	}
-	if err != nil {
-		os.Remove(f.Name())
+	if err := writePrivateFile(s.devices, ".devices-*", append(data, '\n'), os.Rename); err != nil {
 		return fmt.Errorf("could not save the remembered devices: %w", err)
 	}
 	return nil
+}
+
+// writePrivateFile closes a temporary file before moving it into place,
+// so readers never see a partially written file. Callers hold their locks.
+func writePrivateFile(path, pattern string, data []byte, publish func(from, to string) error) error {
+	f, err := os.CreateTemp(filepath.Dir(path), pattern)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = publish(f.Name(), path)
+	}
+	if err != nil {
+		os.Remove(f.Name())
+	}
+	return err
 }
 
 // ChangedError is a remembered device showing a different certificate.

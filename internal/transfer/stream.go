@@ -16,6 +16,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sprytnyk/loka/internal/filemove"
 )
 
 // A transfer between devices is a tar stream: one header per directory or
@@ -306,7 +308,10 @@ func freePath(dir, name string) (string, error) {
 func moveNoReplace(from, dir, name string) (string, error) {
 	for i := 0; ; i++ {
 		to := filepath.Join(dir, numbered(name, i))
-		err := renameNoReplace(from, to)
+		err := filemove.NoReplace(from, to)
+		if errors.Is(err, filemove.ErrUnsupported) {
+			err = renameIfFree(from, to)
+		}
 		if !errors.Is(err, fs.ErrExist) {
 			return to, err
 		}
