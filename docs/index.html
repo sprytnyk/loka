@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Loka: share files on your local network</title>
+    <meta name="description" content="Share files and directories with computers and phones on your local network. Loka encrypts them and sends them straight from one device to the other, with no account, server or internet. It is free and open source, for Linux, Windows and macOS." />
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="canonical" href="https://sprytnyk.github.io/loka/" />
+    <link rel="alternate" hreflang="en" href="https://sprytnyk.github.io/loka/" />
+    <link rel="alternate" hreflang="uk" href="https://sprytnyk.github.io/loka/uk/" />
+    <link rel="alternate" hreflang="x-default" href="https://sprytnyk.github.io/loka/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Loka" />
+    <meta property="og:title" content="Loka: share files on your local network" />
+    <meta property="og:description" content="Share files and directories with computers and phones on your local network. Loka encrypts them and needs no account, server or internet." />
+    <meta property="og:url" content="https://sprytnyk.github.io/loka/" />
+    <meta property="og:image" content="https://sprytnyk.github.io/loka/loka.png" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="1051" />
+    <meta property="og:locale" content="en_GB" />
+    <meta property="og:locale:alternate" content="uk_UA" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Loka",
+        "description": "Share files and directories with computers and phones on your local network. Loka encrypts them and needs no account, server or internet.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Linux, Windows, macOS",
+        "url": "https://sprytnyk.github.io/loka/",
+        "downloadUrl": "https://github.com/sprytnyk/loka/releases/latest",
+        "codeRepository": "https://github.com/sprytnyk/loka",
+        "license": "https://opensource.org/license/mit",
+        "inLanguage": ["en", "uk"],
+        "screenshot": "https://sprytnyk.github.io/loka/loka.png",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <link rel="stylesheet" href="assets/site.css" />
+    <script>
+      // a browser set to Ukrainian goes to the Ukrainian page, unless the visitor picked English
+      try {
+        const first = (navigator.languages || [navigator.language])[0] || "";
+        if (!localStorage.getItem("lang") && /^uk\b/i.test(first)) location.replace("uk/");
+      } catch {
+        // no storage: stay on English
+      }
+    </script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap">
+        <a class="brand" href="./"
+          ><span class="logo" aria-hidden="true"
+            ><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6M4 7h5M4 17h5" /></svg></span
+          >Loka</a
+        >
+        <nav>
+          <a class="optional" href="#how">How it works</a>
+          <a class="optional" href="#features">Features</a>
+          <a class="optional" href="#faq">Questions</a>
+          <a href="https://github.com/sprytnyk/loka">GitHub</a>
+        </nav>
+        <div class="langs" aria-label="Language">
+          <span aria-current="page">EN</span>
+          <a href="uk/" data-lang="uk" hreflang="uk" lang="uk" title="Українською">УК</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="hero wrap">
+        <h1>Share files on your own network</h1>
+        <p class="lead">
+          Send files and directories between computers and phones nearby. They go straight
+          from one device to the other, encrypted, and never pass through a server or the
+          internet. Loka runs on Linux, Windows and macOS. Phones need only a browser.
+        </p>
+        <div data-downloads>
+          <div class="downloads">
+            <a class="button primary" href="https://github.com/sprytnyk/loka/releases/latest"
+              >Download</a
+            >
+          </div>
+          <p class="download-note">Loka is free and open source under the MIT licence.</p>
+        </div>
+
+        <div class="browser">
+          <div class="chrome">
+            <span class="address">127.0.0.1:45873</span>
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          </div>
+          <div class="app" data-app role="region" aria-label="A working copy of Loka's page. Try the buttons.">
+            <div class="m-header">
+              <div class="m-brand">
+                <span class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6M4 7h5M4 17h5" /></svg></span><span class="m-name">loka</span
+                ><span class="m-version" data-version>v0.3.0</span>
+              </div>
+              <div class="m-controls">
+                <span class="m-badge">This device: Studio Desktop</span>
+                <span class="m-langs" aria-hidden="true"><span class="on">EN</span><span>УКР</span></span>
+                <button type="button" class="m-round" data-theme-toggle title="Switch between light and dark" aria-label="Switch between light and dark">
+                  <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
+                </button>
+                <span class="m-round" aria-hidden="true">?</span>
+              </div>
+            </div>
+            <div class="m-intro">
+              <div class="m-title">Share files on your network</div>
+              <p class="m-note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg><span>Transfers between Lokas are encrypted. Phones and share links need Loka's certificate once.</span></p>
+            </div>
+            <div class="m-layout">
+              <div class="m-card m-choose">
+                <div class="m-head"><span class="m-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg></span><div class="m-h">Items to share</div></div>
+                <div class="m-drop">
+                  <span class="m-drop-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg></span>
+                  <p class="m-drop-title">Drop files or a directory here</p>
+                  <div class="m-row">
+                    <button type="button" class="m-btn sec" data-choose>Choose files</button>
+                    <button type="button" class="m-btn sec" data-choose>Choose directory</button>
+                  </div>
+                  <p class="m-count" data-count>2 items selected</p>
+                </div>
+                <label class="m-label" for="m-path-en">Add by path</label>
+                <form class="m-row m-pad" data-add>
+                  <input class="m-input" id="m-path-en" placeholder="File or directory path" autocomplete="off" />
+                  <button class="m-btn sec">Add path</button>
+                </form>
+                <ul class="m-list" data-selected>
+                  <li><span>/home/alex/Pictures/weekend-photos</span><button type="button" class="m-btn sec small">Remove</button></li>
+                  <li><span>/home/alex/Documents/itinerary.pdf</span><button type="button" class="m-btn sec small">Remove</button></li>
+                </ul>
+              </div>
+              <div class="m-card m-device">
+                <div class="m-head"><span class="m-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></svg></span><div class="m-h">Send to a device</div></div>
+                <div class="m-item m-peer">
+                  <div><strong>Studio Laptop</strong><br /><small>192.0.2.21</small></div>
+                  <button type="button" class="m-btn" data-send="Studio Laptop" data-speed="312">Send</button>
+                </div>
+                <div class="m-item m-peer">
+                  <div><strong>Living Room PC</strong><br /><small>192.0.2.22</small></div>
+                  <button type="button" class="m-btn" data-send="Living Room PC" data-speed="87">Send</button>
+                </div>
+                <form class="m-manual" data-manual>
+                  <label class="m-label" for="m-address-en">Or enter a device address</label>
+                  <div class="m-row m-pad">
+                    <input class="m-input" id="m-address-en" placeholder="Device address" autocomplete="off" />
+                    <input class="m-input m-port" value="45873" aria-label="Device port" />
+                    <button class="m-btn">Send</button>
+                  </div>
+                </form>
+              </div>
+              <div class="m-card m-link">
+                <div class="m-head start">
+                  <span class="m-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7" /></svg></span>
+                  <div><div class="m-h">Share a download link</div><p class="m-sub">The recipient can open the link in a browser.</p></div>
+                </div>
+                <div class="m-action"><button type="button" class="m-btn" data-create>Create link</button></div>
+                <div data-links>
+                  <div class="m-item">
+                    <small>itinerary.pdf</small>
+                    <div class="m-urls">
+                      <span class="url">http://192.0.2.20:45873/#d=Xq7mR2vLpT9cWb4nHs6kJd1fGz8yAe3u</span>
+                      <span class="hint">Safer, once the phone has Loka's certificate:</span>
+                      <span class="url">https://192.0.2.20:45873/#d=Xq7mR2vLpT9cWb4nHs6kJd1fGz8yAe3u</span>
+                    </div>
+                    <div class="m-link-buttons">
+                      <button type="button" class="m-btn sec" data-qr>QR code</button>
+                      <button type="button" class="m-btn sec" data-stop>Stop sharing</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="m-card m-transfers">
+                <div class="m-head">
+                  <span class="m-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3" /></svg></span><div class="m-h">Transfers</div>
+                  <button type="button" class="m-btn sec small" style="margin-inline-start: auto" data-phone>Receive from a phone</button>
+                </div>
+                <div data-transfers>
+                  <div class="m-item">
+                    <div class="m-row"><strong>To Studio Laptop</strong><span class="m-status">complete · 100% · 312.4 Mbps</span></div>
+                    <p><small>meeting-notes.pdf</small></p>
+                  </div>
+                  <div class="m-item">
+                    <div class="m-row"><strong>From Living Room PC</strong><span class="m-status">receiving · 62% · 87.4 Mbps</span></div>
+                    <p><small>holiday-video.mp4</small></p>
+                    <div class="m-bar"><i style="width: 62%"></i></div>
+                    <button type="button" class="m-btn sec">Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="m-foot">Source on GitHub</p>
+          </div>
+        </div>
+      </div>
+
+      <section id="how">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>How it works</h2>
+            <p class="muted">
+              Loka is one program with nothing else to install. Run it and it opens in your
+              browser.
+            </p>
+          </div>
+          <div class="steps">
+            <div class="card step">
+              <h3>Run Loka on both computers</h3>
+              <p>Each one finds the other on the network by itself. You don't need an account.</p>
+            </div>
+            <div class="card step">
+              <h3>Pick files and a device</h3>
+              <p>
+                Choose files or a directory, or drop them on the page. Then select the device to
+                send to.
+              </p>
+            </div>
+            <div class="card step">
+              <h3>Accept on the other side</h3>
+              <p>
+                The receiver chooses where to put the files. The first time, both show a pairing
+                code. Check it's the same on both.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Features</h2>
+          </div>
+          <div class="features">
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-blue)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5" y="11" width="14" height="10" rx="2" />
+                  <path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg
+              ></span>
+              <h3>Encrypted</h3>
+              <p>
+                Loka encrypts transfers between two computers running it. Each remembers the other after the
+                first transfer and refuses a device that only poses as it.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-violet)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="7" y="2" width="10" height="20" rx="2" />
+                  <path d="M11 18h2" /></svg
+              ></span>
+              <h3>Phones need only a browser</h3>
+              <p>
+                Scan the QR code from <strong>Receive from a phone</strong> and send files from
+                the phone's browser. The computer asks before it saves anything.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-green)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"
+                  /></svg
+              ></span>
+              <h3>Download links</h3>
+              <p>
+                For someone without Loka, create a link with a QR code. It works in any browser
+                while you share. Directories download as a ZIP.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-teal)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0" />
+                  <path d="M12 19.5h.01" /></svg
+              ></span>
+              <h3>Finds devices by itself</h3>
+              <p>
+                Computers running Loka on the same network show up on their own. If one doesn't,
+                enter its address.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-amber)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                  /></svg
+              ></span>
+              <h3>Files and whole directories</h3>
+              <p>
+                Send files of any size and whole directories. Several transfers can run at once,
+                and each shows its speed.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-rose)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z" />
+                  <path d="M9 12l2 2 4-4" /></svg
+              ></span>
+              <h3>Loka never overwrites files</h3>
+              <p>
+                Incoming files move into place only when the transfer finishes. A failed transfer
+                leaves nothing behind.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-blue)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path d="M7 9l3 3-3 3M13 15h4" /></svg
+              ></span>
+              <h3>Browser or terminal</h3>
+              <p>
+                Use the page in your browser, or send, receive and share from the terminal. Both
+                are the same program.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-green)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3" /></svg
+              ></span>
+              <h3>Nothing leaves your network</h3>
+              <p>
+                Files go straight between your devices. Loka has no account and no server, and
+                sends nothing outside your network.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-violet)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg
+              ></span>
+              <h3>Light or dark, English or Ukrainian</h3>
+              <p>
+                The page follows your system's light or dark setting and your browser's
+                language. Buttons in the header switch both.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="terminal">
+        <div class="wrap cli">
+          <div>
+            <div class="section-head">
+              <h2>In the terminal too</h2>
+              <p class="muted">The same program works without a browser, over SSH or in scripts.</p>
+            </div>
+            <ul>
+              <li><code>loka devices</code> lists nearby devices and marks the ones Loka remembers.</li>
+              <li><code>loka send</code> sends files and directories to an address.</li>
+              <li><code>loka receive</code> asks where to put each transfer.</li>
+              <li>
+                <code>loka share</code> prints a link and its QR code, and a <code>curl</code> command that stops if another device answers.
+              </li>
+            </ul>
+          </div>
+          <div class="terminal">
+            <div class="chrome">
+              <span>Terminal</span>
+              <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            </div>
+            <div class="screen" data-terminal aria-label="Loka in a terminal listing devices, sending a file and sharing a link"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="compare">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Compared with LocalSend, st and Upgopher</h2>
+          </div>
+          <div class="compare">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Loka</th>
+                  <th><a href="https://localsend.org">LocalSend</a></th>
+                  <th><a href="https://github.com/chyok/st">st</a></th>
+                  <th><a href="https://github.com/wanetty/upgopher">Upgopher</a></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>On computers</th>
+                  <td>One program, used in the browser or the terminal</td>
+                  <td>An app, or a separate command-line tool</td>
+                  <td>One program, used in the terminal</td>
+                  <td>One program, used in the browser</td>
+                </tr>
+                <tr>
+                  <th>On phones</th>
+                  <td>Nothing, the browser</td>
+                  <td>The app</td>
+                  <td>Nothing, the browser</td>
+                  <td>Nothing, the browser</td>
+                </tr>
+                <tr>
+                  <th>Between two installs</th>
+                  <td>Encrypted</td>
+                  <td>Encrypted by default</td>
+                  <td>Not encrypted</td>
+                  <td>Not offered</td>
+                </tr>
+                <tr>
+                  <th>From a phone's browser</th>
+                  <td>You accept each upload</td>
+                  <td>You accept each upload, unless you turn that off</td>
+                  <td>Saved without asking</td>
+                  <td>Saved without asking</td>
+                </tr>
+                <tr>
+                  <th>Download link for a browser</th>
+                  <td>Yes</td>
+                  <td>Yes</td>
+                  <td>Yes</td>
+                  <td>Yes</td>
+                </tr>
+                <tr>
+                  <th>Finding devices</th>
+                  <td>Multicast</td>
+                  <td>Multicast, then scanning the network</td>
+                  <td>Multicast</td>
+                  <td>None, you type the address</td>
+                </tr>
+                <tr>
+                  <th>Account, server or internet</th>
+                  <td>None</td>
+                  <td>None</td>
+                  <td>None</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="faq">
+        <div class="wrap faq">
+          <h2>Questions</h2>
+          <details>
+            <summary>Is it free?</summary>
+            <div>
+              <p>
+                Loka is free. The MIT-licensed code is
+                <a href="https://github.com/sprytnyk/loka">on GitHub</a>.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>How do I install it?</summary>
+            <div>
+              <p>
+                Download the archive for your computer from
+                <a href="https://github.com/sprytnyk/loka/releases/latest">Releases</a>, unpack
+                it, and put <code>loka</code> (<code>loka.exe</code> on Windows) in a directory
+                on your <code>PATH</code>. Then run <code>loka</code>.
+              </p>
+              <p>
+                macOS refuses to open downloaded programs from unidentified developers. After
+                unpacking, run this once.
+              </p>
+              <pre>xattr -d com.apple.quarantine loka</pre>
+              <p>
+                With Go installed, you can instead run
+                <code>go install github.com/sprytnyk/loka@latest</code>.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>How do I check a download?</summary>
+            <div>
+              <p>
+                Put <code>SHA256SUMS</code> and <code>SHA256SUMS.asc</code> from the release next
+                to the archive and run this.
+              </p>
+              <pre>gpg --verify SHA256SUMS.asc SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS</pre>
+            </div>
+          </details>
+          <details>
+            <summary>How do I send from a phone?</summary>
+            <div>
+              <p>
+                On the computer, select <strong>Receive from a phone</strong> and scan the QR code
+                with the phone's camera. Choose files or a directory and send. The computer asks
+                you to accept, as with any transfer. iPhones and iPads can send files but not
+                directories, because their browsers can't choose a directory.
+              </p>
+              <p>
+                A computer on several networks shows a QR code for each. Use the one on the same
+                network as the phone.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>Why does the phone ask to install a certificate?</summary>
+            <div>
+              <p>
+                So the phone's browser can check that it reached your computer and not another device. Install
+                it once, and from then on the page opens over HTTPS without a warning. You can also skip it. Loka still encrypts the connection, but the browser warns that it can't check which device answered.
+              </p>
+              <p>
+                The certificate can only vouch for addresses on local networks, so it can't be
+                used to pose as a web site. Loka never installs it on the computer itself. The
+                <a href="https://github.com/sprytnyk/loka#safety">README</a> shows how to check
+                its fingerprint before you trust it.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>What is the pairing code for?</summary>
+            <div>
+              <p>
+                The first time two devices talk, both show a six-digit code. If they match, no other device is passing the transfer on. If one is, the codes differ. After that first transfer, Loka remembers the other device and refuses
+                one that only poses as it.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>The computers can't see each other. What now?</summary>
+            <div>
+              <p>
+                Some Wi-Fi networks block connections between devices, often guest networks.
+                Try another network, or enter the other computer's address and port by hand. On
+                Windows, allow Loka through the firewall when asked. If the port is busy, run
+                <code>loka --port 0</code> to use a free one.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>Where do received files go?</summary>
+            <div>
+              <p>
+                To the directory you choose when you accept. Files arrive in a hidden directory
+                inside it and move into place when the transfer finishes. Loka never overwrites a file, and a failed transfer leaves nothing behind. Loka remembers the last
+                destination until it stops.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>Does it send anything outside my network?</summary>
+            <div>
+              <p>
+                No. Loka has no account, no server and no tracking. Files go straight from one
+                device to the other. The page on your own computer opens at
+                <code>http://127.0.0.1</code>, which never leaves it.
+                <a href="https://github.com/sprytnyk/loka/blob/main/PROTOCOL.md">PROTOCOL.md</a>
+                describes how devices talk, step by step.
+              </p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="cta">
+        <div class="wrap">
+          <span class="logo" aria-hidden="true"
+            ><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6M4 7h5M4 17h5" /></svg
+          ></span>
+          <h2>Try Loka</h2>
+          <div data-downloads>
+            <div class="downloads">
+              <a class="button primary" href="https://github.com/sprytnyk/loka/releases/latest"
+                >Download</a
+              >
+            </div>
+            <p class="download-note">Loka is free and open source under the MIT licence.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <div class="links">
+          <a href="https://github.com/sprytnyk/loka">GitHub</a>
+          <a href="https://github.com/sprytnyk/loka/releases">Releases</a>
+          <a href="https://github.com/sprytnyk/loka/blob/main/PROTOCOL.md">Protocol</a>
+          <a href="https://github.com/sprytnyk/loka/blob/main/LICENSE">MIT licence</a>
+          <a href="uk/" data-lang="uk" hreflang="uk" lang="uk">🇺🇦 Українською</a>
+        </div>
+        <p>Made in Ukraine by <a href="https://sprytnyk.dev">sprytnyk</a>.</p>
+      </div>
+    </footer>
+
+    <script src="assets/site.js"></script>
+  </body>
+</html>

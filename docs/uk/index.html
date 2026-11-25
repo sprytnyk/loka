@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Loka: обмін файлами в локальній мережі</title>
+    <meta name="description" content="Діліться файлами й теками з комп’ютерами й телефонами у своїй мережі. Loka шифрує їх і надсилає напряму з пристрою на пристрій, без облікового запису, сервера й інтернету. Вона безкоштовна й має відкритий код, для Linux, Windows і macOS." />
+    <link rel="icon" href="../assets/icon.svg" type="image/svg+xml" />
+    <link rel="canonical" href="https://sprytnyk.github.io/loka/uk/" />
+    <link rel="alternate" hreflang="en" href="https://sprytnyk.github.io/loka/" />
+    <link rel="alternate" hreflang="uk" href="https://sprytnyk.github.io/loka/uk/" />
+    <link rel="alternate" hreflang="x-default" href="https://sprytnyk.github.io/loka/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Loka" />
+    <meta property="og:title" content="Loka: обмін файлами в локальній мережі" />
+    <meta property="og:description" content="Діліться файлами й теками з комп’ютерами й телефонами у своїй мережі. Loka шифрує їх і не потребує облікового запису, сервера чи інтернету." />
+    <meta property="og:url" content="https://sprytnyk.github.io/loka/uk/" />
+    <meta property="og:image" content="https://sprytnyk.github.io/loka/loka.png" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="1051" />
+    <meta property="og:locale" content="uk_UA" />
+    <meta property="og:locale:alternate" content="en_GB" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Loka",
+        "description": "Діліться файлами й теками з комп’ютерами й телефонами у своїй мережі. Loka шифрує їх і не потребує облікового запису, сервера чи інтернету.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Linux, Windows, macOS",
+        "url": "https://sprytnyk.github.io/loka/uk/",
+        "downloadUrl": "https://github.com/sprytnyk/loka/releases/latest",
+        "codeRepository": "https://github.com/sprytnyk/loka",
+        "license": "https://opensource.org/license/mit",
+        "inLanguage": ["en", "uk"],
+        "screenshot": "https://sprytnyk.github.io/loka/loka.png",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <link rel="stylesheet" href="../assets/site.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap">
+        <a class="brand" href="./"
+          ><span class="logo" aria-hidden="true"
+            ><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6M4 7h5M4 17h5" /></svg></span
+          >Loka</a
+        >
+        <nav>
+          <a class="optional" href="#how">Як це працює</a>
+          <a class="optional" href="#features">Можливості</a>
+          <a class="optional" href="#faq">Питання</a>
+          <a href="https://github.com/sprytnyk/loka">GitHub</a>
+        </nav>
+        <div class="langs" aria-label="Мова">
+          <a href="../" data-lang="en" hreflang="en" lang="en" title="In English">EN</a>
+          <span aria-current="page">УК</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="hero wrap">
+        <h1>Діліться файлами у своїй мережі</h1>
+        <p class="lead">
+          Надсилайте файли й теки між комп’ютерами й телефонами поруч. Вони йдуть напряму з
+          одного пристрою на інший, зашифровані, і не проходять через сервер чи інтернет. Loka
+          працює на Linux, Windows і macOS. Телефону досить браузера.
+        </p>
+        <div data-downloads>
+          <div class="downloads">
+            <a class="button primary" href="https://github.com/sprytnyk/loka/releases/latest"
+              >Завантажити</a
+            >
+          </div>
+          <p class="download-note">Loka безкоштовна й має відкритий код за ліцензією MIT.</p>
+        </div>
+
+        <div class="browser">
+          <div class="chrome">
+            <span class="address">127.0.0.1:45873</span>
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          </div>
+          <div class="app" data-app role="region" aria-label="Робоча копія сторінки Loka. Спробуйте кнопки.">
+            <div class="m-header">
+              <div class="m-brand">
+                <span class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6M4 7h5M4 17h5" /></svg></span><span class="m-name">loka</span
+                ><span class="m-version" data-version>v0.3.0</span>
+              </div>
+              <div class="m-controls">
+                <span class="m-badge">Цей пристрій: Studio Desktop</span>
+                <span class="m-langs" aria-hidden="true"><span>EN</span><span class="on">УКР</span></span>
+                <button type="button" class="m-round" data-theme-toggle title="Перемкнути світлу й темну тему" aria-label="Перемкнути світлу й темну тему">
+                  <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
+                </button>
+                <span class="m-round" aria-hidden="true">?</span>
+              </div>
+            </div>
+            <div class="m-intro">
+              <div class="m-title">Діліться файлами у своїй мережі</div>
+              <p class="m-note"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg><span>Передавання між пристроями з Loka шифруються. Телефонам і посиланням потрібен сертифікат Loka.</span></p>
+            </div>
+            <div class="m-layout">
+              <div class="m-card m-choose">
+                <div class="m-head"><span class="m-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg></span><div class="m-h">Файли й теки</div></div>
+                <div class="m-drop">
+                  <span class="m-drop-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg></span>
+                  <p class="m-drop-title">Перетягніть сюди файли або теку</p>
+                  <div class="m-row">
+                    <button type="button" class="m-btn sec" data-choose>Вибрати файли</button>
+                    <button type="button" class="m-btn sec" data-choose>Вибрати теку</button>
+                  </div>
+                  <p class="m-count" data-count>Вибрано 2 елементи</p>
+                </div>
+                <label class="m-label" for="m-path-uk">Додати за шляхом</label>
+                <form class="m-row m-pad" data-add>
+                  <input class="m-input" id="m-path-uk" placeholder="Шлях до файлу або теки" autocomplete="off" />
+                  <button class="m-btn sec">Додати</button>
+                </form>
+                <ul class="m-list" data-selected>
+                  <li><span>/home/alex/Pictures/weekend-photos</span><button type="button" class="m-btn sec small">Прибрати</button></li>
+                  <li><span>/home/alex/Documents/itinerary.pdf</span><button type="button" class="m-btn sec small">Прибрати</button></li>
+                </ul>
+              </div>
+              <div class="m-card m-device">
+                <div class="m-head"><span class="m-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></svg></span><div class="m-h">Надіслати на пристрій</div></div>
+                <div class="m-item m-peer">
+                  <div><strong>Studio Laptop</strong><br /><small>192.0.2.21</small></div>
+                  <button type="button" class="m-btn" data-send="Studio Laptop" data-speed="312">Надіслати</button>
+                </div>
+                <div class="m-item m-peer">
+                  <div><strong>Living Room PC</strong><br /><small>192.0.2.22</small></div>
+                  <button type="button" class="m-btn" data-send="Living Room PC" data-speed="87">Надіслати</button>
+                </div>
+                <form class="m-manual" data-manual>
+                  <label class="m-label" for="m-address-uk">Або введіть адресу пристрою</label>
+                  <div class="m-row m-pad">
+                    <input class="m-input" id="m-address-uk" placeholder="Адреса пристрою" autocomplete="off" />
+                    <input class="m-input m-port" value="45873" aria-label="Порт пристрою" />
+                    <button class="m-btn">Надіслати</button>
+                  </div>
+                </form>
+              </div>
+              <div class="m-card m-link">
+                <div class="m-head start">
+                  <span class="m-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7" /></svg></span>
+                  <div><div class="m-h">Посилання для завантаження</div><p class="m-sub">Отримувач відкриє його в браузері.</p></div>
+                </div>
+                <div class="m-action"><button type="button" class="m-btn" data-create>Створити посилання</button></div>
+                <div data-links>
+                  <div class="m-item">
+                    <small>itinerary.pdf</small>
+                    <div class="m-urls">
+                      <span class="url">http://192.0.2.20:45873/#d=Xq7mR2vLpT9cWb4nHs6kJd1fGz8yAe3u</span>
+                      <span class="hint">Безпечніше, коли на телефоні вже є сертифікат Loka:</span>
+                      <span class="url">https://192.0.2.20:45873/#d=Xq7mR2vLpT9cWb4nHs6kJd1fGz8yAe3u</span>
+                    </div>
+                    <div class="m-link-buttons">
+                      <button type="button" class="m-btn sec" data-qr>QR-код</button>
+                      <button type="button" class="m-btn sec" data-stop>Закрити доступ</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="m-card m-transfers">
+                <div class="m-head">
+                  <span class="m-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3" /></svg></span><div class="m-h">Передавання</div>
+                  <button type="button" class="m-btn sec small" style="margin-inline-start: auto" data-phone>Отримати з телефона</button>
+                </div>
+                <div data-transfers>
+                  <div class="m-item">
+                    <div class="m-row"><strong>До Studio Laptop</strong><span class="m-status">завершено · 100% · 312,4 Мбіт/с</span></div>
+                    <p><small>meeting-notes.pdf</small></p>
+                  </div>
+                  <div class="m-item">
+                    <div class="m-row"><strong>Від Living Room PC</strong><span class="m-status">отримання · 62% · 87,4 Мбіт/с</span></div>
+                    <p><small>holiday-video.mp4</small></p>
+                    <div class="m-bar"><i style="width: 62%"></i></div>
+                    <button type="button" class="m-btn sec">Скасувати</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="m-foot">Код на GitHub</p>
+          </div>
+        </div>
+      </div>
+
+      <section id="how">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Як це працює</h2>
+            <p class="muted">
+              Встановити треба лише одну програму, саму Loka. Запустіть її, і
+              вона відкриється в браузері.
+            </p>
+          </div>
+          <div class="steps">
+            <div class="card step">
+              <h3>Запустіть Loka на обох комп’ютерах</h3>
+              <p>Вони самі знайдуть один одного в мережі. Обліковий запис не потрібен.</p>
+            </div>
+            <div class="card step">
+              <h3>Виберіть файли й пристрій</h3>
+              <p>
+                Виберіть файли чи теку або перетягніть їх на сторінку. Потім виберіть пристрій,
+                якому надіслати.
+              </p>
+            </div>
+            <div class="card step">
+              <h3>Прийміть на іншому боці</h3>
+              <p>
+                Отримувач вибирає, куди зберегти файли. Першого разу обидва показують код
+                з’єднання. Перевірте, що він однаковий.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Можливості</h2>
+          </div>
+          <div class="features">
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-blue)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5" y="11" width="14" height="10" rx="2" />
+                  <path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg
+              ></span>
+              <h3>Шифрування</h3>
+              <p>
+                Loka шифрує передавання між двома комп’ютерами з нею. Після першого передавання кожна запам’ятовує іншу й відмовляє пристрою, який лише видає себе за неї.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-violet)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="7" y="2" width="10" height="20" rx="2" />
+                  <path d="M11 18h2" /></svg
+              ></span>
+              <h3>Телефону досить браузера</h3>
+              <p>
+                Відскануйте QR-код з <strong>Отримати з телефона</strong> й надсилайте файли з
+                браузера телефона. Комп’ютер спитає, перш ніж щось зберегти.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-green)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M10 13a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7M14 11a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"
+                  /></svg
+              ></span>
+              <h3>Посилання для завантаження</h3>
+              <p>
+                Для того, в кого немає Loka, створіть посилання з QR-кодом. Воно працює в будь-якому
+                браузері, поки ви ділитеся. Теки завантажуються як ZIP.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-teal)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0" />
+                  <path d="M12 19.5h.01" /></svg
+              ></span>
+              <h3>Сама знаходить пристрої</h3>
+              <p>
+                Комп’ютери з Loka в тій самій мережі з’являються самі. Якщо якийсь не з’явився,
+                введіть його адресу.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-amber)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                  /></svg
+              ></span>
+              <h3>Файли й цілі теки</h3>
+              <p>
+                Надсилайте файли будь-якого розміру й цілі теки. Кілька передавань можуть іти
+                водночас, і кожне показує свою швидкість.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-rose)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z" />
+                  <path d="M9 12l2 2 4-4" /></svg
+              ></span>
+              <h3>Loka не перезаписує файли</h3>
+              <p>
+                Отримані файли стають на місце, лише коли передавання завершиться. Невдале
+                передавання нічого по собі не лишає.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-blue)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path d="M7 9l3 3-3 3M13 15h4" /></svg
+              ></span>
+              <h3>Браузер або термінал</h3>
+              <p>
+                Користуйтеся сторінкою в браузері або надсилайте, отримуйте й діліться з
+                термінала. Це та сама програма.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-green)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3" /></svg
+              ></span>
+              <h3>Нічого не виходить за межі мережі</h3>
+              <p>
+                Файли йдуть напряму між вашими пристроями. У Loka немає облікового запису й
+                сервера, і вона нічого не надсилає за межі вашої мережі.
+              </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-violet)"
+                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg
+              ></span>
+              <h3>Світла чи темна, українська чи англійська</h3>
+              <p>
+                Сторінка бере світлу чи темну тему із системи, а мову з браузера. Кнопки вгорі
+                перемикають і те, й те.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="terminal">
+        <div class="wrap cli">
+          <div>
+            <div class="section-head">
+              <h2>І в терміналі</h2>
+              <p class="muted">Та сама програма працює без браузера, через SSH чи в скриптах.</p>
+            </div>
+            <ul>
+              <li><code>loka devices</code> показує пристрої поруч і позначає ті, які Loka пам’ятає.</li>
+              <li><code>loka send</code> надсилає файли й теки на адресу.</li>
+              <li><code>loka receive</code> питає, куди зберегти кожне передавання.</li>
+              <li>
+                <code>loka share</code> друкує посилання з QR-кодом і команду <code>curl</code>, яка зупиняється, якщо відповість інший пристрій.
+              </li>
+            </ul>
+          </div>
+          <div class="terminal">
+            <div class="chrome">
+              <span>Термінал</span>
+              <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            </div>
+            <div class="screen" data-terminal aria-label="Loka в терміналі показує пристрої, надсилає файл і ділиться посиланням"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="compare">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Порівняно з LocalSend, st і Upgopher</h2>
+          </div>
+          <div class="compare">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Loka</th>
+                  <th><a href="https://localsend.org">LocalSend</a></th>
+                  <th><a href="https://github.com/chyok/st">st</a></th>
+                  <th><a href="https://github.com/wanetty/upgopher">Upgopher</a></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>На комп’ютерах</th>
+                  <td>Одна програма, у браузері або терміналі</td>
+                  <td>Застосунок або окремий інструмент для командного рядка</td>
+                  <td>Одна програма, у терміналі</td>
+                  <td>Одна програма, у браузері</td>
+                </tr>
+                <tr>
+                  <th>На телефонах</th>
+                  <td>Нічого, лише браузер</td>
+                  <td>Застосунок</td>
+                  <td>Нічого, лише браузер</td>
+                  <td>Нічого, лише браузер</td>
+                </tr>
+                <tr>
+                  <th>Між двома копіями</th>
+                  <td>Зашифровано</td>
+                  <td>Зашифровано за замовчуванням</td>
+                  <td>Не зашифровано</td>
+                  <td>Немає</td>
+                </tr>
+                <tr>
+                  <th>З браузера телефона</th>
+                  <td>Ви приймаєте кожне надсилання</td>
+                  <td>Ви приймаєте кожне надсилання, якщо цього не вимкнути</td>
+                  <td>Зберігається без питань</td>
+                  <td>Зберігається без питань</td>
+                </tr>
+                <tr>
+                  <th>Посилання для браузера</th>
+                  <td>Так</td>
+                  <td>Так</td>
+                  <td>Так</td>
+                  <td>Так</td>
+                </tr>
+                <tr>
+                  <th>Пошук пристроїв</th>
+                  <td>Multicast</td>
+                  <td>Multicast, потім сканування мережі</td>
+                  <td>Multicast</td>
+                  <td>Немає, адресу вводите ви</td>
+                </tr>
+                <tr>
+                  <th>Обліковий запис, сервер чи інтернет</th>
+                  <td>Не треба</td>
+                  <td>Не треба</td>
+                  <td>Не треба</td>
+                  <td>Не треба</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="faq">
+        <div class="wrap faq">
+          <h2>Питання</h2>
+          <details>
+            <summary>Це безкоштовно?</summary>
+            <div>
+              <p>
+                Так, Loka безкоштовна. Код за ліцензією MIT є
+                <a href="https://github.com/sprytnyk/loka">на GitHub</a>.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>Як її встановити?</summary>
+            <div>
+              <p>
+                Завантажте архів для свого комп’ютера з
+                <a href="https://github.com/sprytnyk/loka/releases/latest">Releases</a>,
+                розпакуйте й покладіть <code>loka</code> (<code>loka.exe</code> на Windows) у теку
+                з вашого <code>PATH</code>. Потім запустіть <code>loka</code>.
+              </p>
+              <p>
+                macOS не відкриває завантажені програми від невідомих розробників. Після
+                розпакування один раз виконайте цю команду.
+              </p>
+              <pre>xattr -d com.apple.quarantine loka</pre>
+              <p>
+                Якщо у вас є Go, можна натомість виконати
+                <code>go install github.com/sprytnyk/loka@latest</code>.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>Як перевірити завантажений архів?</summary>
+            <div>
+              <p>
+                Покладіть <code>SHA256SUMS</code> і <code>SHA256SUMS.asc</code> з релізу поруч з
+                архівом і виконайте це.
+              </p>
+              <pre>gpg --verify SHA256SUMS.asc SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS</pre>
+            </div>
+          </details>
+          <details>
+            <summary>Як надіслати з телефона?</summary>
+            <div>
+              <p>
+                На комп’ютері виберіть <strong>Отримати з телефона</strong> й відскануйте QR-код
+                камерою телефона. Виберіть файли чи теку й надішліть. Комп’ютер попросить
+                прийняти, як і будь-яке передавання. iPhone та iPad можуть надсилати файли, але
+                не теки, бо їхні браузери не вміють вибирати теку.
+              </p>
+              <p>
+                Комп’ютер у кількох мережах показує QR-код для кожної. Виберіть той, що в мережі
+                телефона.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>Чому телефон пропонує встановити сертифікат?</summary>
+            <div>
+              <p>
+                Щоб браузер телефона міг перевірити, що з’єднався саме з вашим комп’ютером, а не з іншим пристроєм.
+                Встановіть його один раз, і далі сторінка відкриватиметься через HTTPS без
+                попереджень. Можна й пропустити. Loka все одно шифрує з’єднання, але браузер попередить, що не може перевірити, який пристрій відповів.
+              </p>
+              <p>
+                Сертифікат може ручатися лише за адреси в локальних мережах, тож ним не вдасться
+                видати себе за вебсайт. Loka ніколи не встановлює його на сам комп’ютер. У
+                <a href="https://github.com/sprytnyk/loka#safety">README</a> написано, як
+                перевірити його відбиток, перш ніж довіряти.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>Навіщо код з’єднання?</summary>
+            <div>
+              <p>
+                Коли два пристрої зв’язуються вперше, обидва показують шестизначний код. Якщо коди однакові, жоден інший пристрій не передає передавання далі. Якщо передає, коди різні. Після першого передавання Loka запам’ятовує інший пристрій і
+                відмовляє тому, хто лише видає себе за нього.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>Комп’ютери не бачать один одного. Що робити?</summary>
+            <div>
+              <p>
+                Деякі мережі Wi-Fi, часто гостьові, блокують з’єднання між пристроями.
+                Спробуйте іншу мережу або введіть адресу й порт іншого комп’ютера вручну. На
+                Windows дозвольте Loka доступ через брандмауер, коли він спитає. Якщо порт
+                зайнятий, запустіть <code>loka --port 0</code>, щоб узяти вільний.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>Куди потрапляють отримані файли?</summary>
+            <div>
+              <p>
+                У теку, яку ви вибираєте, коли приймаєте. Файли спершу потрапляють у приховану
+                теку всередині неї й стають на місце, коли передавання завершиться. Loka не перезаписує файли, а невдале передавання нічого по собі не лишає. Loka пам’ятає
+                останню теку, доки працює.
+              </p>
+            </div>
+          </details>
+          <details>
+            <summary>Чи надсилає вона щось за межі моєї мережі?</summary>
+            <div>
+              <p>
+                Ні. У Loka немає облікового запису, сервера й стеження. Файли йдуть напряму з
+                пристрою на пристрій. Сторінка на вашому комп’ютері відкривається за адресою
+                <code>http://127.0.0.1</code>, яка не виходить за його межі. У
+                <a href="https://github.com/sprytnyk/loka/blob/main/PROTOCOL.md">PROTOCOL.md</a>
+                крок за кроком описано, як пристрої спілкуються.
+              </p>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="cta">
+        <div class="wrap">
+          <span class="logo" aria-hidden="true"
+            ><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6M4 7h5M4 17h5" /></svg
+          ></span>
+          <h2>Спробуйте Loka</h2>
+          <div data-downloads>
+            <div class="downloads">
+              <a class="button primary" href="https://github.com/sprytnyk/loka/releases/latest"
+                >Завантажити</a
+              >
+            </div>
+            <p class="download-note">Loka безкоштовна й має відкритий код за ліцензією MIT.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <div class="links">
+          <a href="https://github.com/sprytnyk/loka">GitHub</a>
+          <a href="https://github.com/sprytnyk/loka/releases">Релізи</a>
+          <a href="https://github.com/sprytnyk/loka/blob/main/PROTOCOL.md">Протокол</a>
+          <a href="https://github.com/sprytnyk/loka/blob/main/LICENSE">Ліцензія MIT</a>
+          <a href="../" data-lang="en" hreflang="en" lang="en">In English</a>
+        </div>
+        <p>Зробив <a href="https://sprytnyk.dev">sprytnyk</a> в Україні.</p>
+      </div>
+    </footer>
+
+    <script src="../assets/site.js"></script>
+  </body>
+</html>

@@ -1,4 +1,4 @@
-.PHONY: all run build check lint test test-large format release
+.PHONY: all run build check lint test test-large format release docs
 
 VERSION ?= $(patsubst v%,%,$(shell git describe --tags --always --dirty))
 
@@ -29,3 +29,7 @@ format:
 
 release:
 	scripts/build-release.sh dist
+
+# Serves the website in docs/ at http://127.0.0.1:8000
+docs:
+	python3 -m http.server -b 127.0.0.1 -d docs 8000

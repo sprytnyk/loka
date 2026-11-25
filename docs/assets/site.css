@@ -1,0 +1,1587 @@
+/* Loka's website. It has the same look as Loka's own page: a soft blue glow and a dot grid
+   at the top, a see-through header, see-through cards and a title that fades into blue. */
+
+:root {
+  color-scheme: light dark;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Fira Code", Menlo, Consolas,
+    monospace;
+  /* Inter only when the visitor has it installed */
+  --sans: "Inter var", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --radius: 14px;
+  --page: 1120px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  --bg: #f8fafc;
+  --text: #1e293b;
+  --strong: #020617;
+  --muted: #64748b;
+  --label: #334155;
+  --glow: #2563eb1f;
+  --dots: #0f172a14;
+  --line: #0f172a14;
+  --line-strong: #0f172a24;
+  --card: #ffffffcc;
+  --solid: #ffffff;
+  --highlight: inset 0 1px 0 #ffffffe6;
+  --shadow: 0 1px 2px #0f172a0a, 0 12px 32px -16px #0f172a29;
+  --window-shadow: 0 2px 4px #0f172a0a, 0 32px 64px -24px #0f172a40;
+  --header: #f8fafcb3;
+  --segment: #0f172a0d;
+  --segment-on: #ffffff;
+  --soft: #2563eb14;
+  --soft-line: #2563eb2e;
+  --accent: #2563eb;
+  --accent-top: #3b82f6;
+  --accent-glow: #2563eb73;
+  --link: #2563eb;
+  --title: linear-gradient(100deg, #020617 35%, #2563eb);
+  --chrome: #f1f5f9;
+  --yes: #047857;
+
+  --icon-blue: #2563eb;
+  --icon-violet: #7c3aed;
+  --icon-green: #059669;
+  --icon-amber: #d97706;
+  --icon-teal: #0d9488;
+  --icon-rose: #e11d48;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #020617;
+    --text: #cbd5e1;
+    --strong: #f8fafc;
+    --muted: #94a3b8;
+    --label: #cbd5e1;
+    --glow: #3b82f62e;
+    --dots: #94a3b81a;
+    --line: #94a3b81f;
+    --line-strong: #94a3b838;
+    --card: #0f172a99;
+    --solid: #0f172a;
+    --highlight: inset 0 1px 0 #ffffff0a;
+    --shadow: 0 12px 40px -16px #000c;
+    --window-shadow: 0 40px 80px -24px #000, 0 0 0 1px #94a3b80f;
+    --header: #020617a6;
+    --segment: #1e293b99;
+    --segment-on: #334155;
+    --soft: #3b82f61f;
+    --soft-line: #60a5fa40;
+    --accent-glow: #3b82f666;
+    --link: #93c5fd;
+    --title: linear-gradient(100deg, #f8fafc 35%, #93c5fd);
+    --chrome: #0f172a;
+    --yes: #7dd3ae;
+
+    --icon-blue: #60a5fa;
+    --icon-violet: #a78bfa;
+    --icon-green: #34d399;
+    --icon-amber: #fbbf24;
+    --icon-teal: #2dd4bf;
+    --icon-rose: #fb7185;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+  /* links to a section stop below the sticky header */
+  scroll-padding-top: 72px;
+  scrollbar-color: var(--line-strong) transparent;
+}
+::selection {
+  background: var(--soft-line);
+}
+body {
+  margin: 0;
+  /* a soft blue glow at the top of the page */
+  background:
+    radial-gradient(70rem 32rem at 50% -12rem, var(--glow), transparent 70%) no-repeat,
+    var(--bg);
+  color: var(--text);
+  font: 17px/1.6 var(--sans);
+  font-feature-settings: "cv11", "ss01"; /* only changes Inter */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+/* a faint dot grid that fades out down the page */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(var(--dots) 1px, transparent 1px) 0 0 / 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 50% at 50% 0, #000, transparent);
+  mask-image: radial-gradient(ellipse 80% 50% at 50% 0, #000, transparent);
+}
+a {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s;
+}
+a:hover {
+  text-decoration-color: currentColor;
+}
+/* links inside sentences keep a soft underline: their colour alone is close to the text's */
+p a,
+td a {
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+p a:hover,
+td a:hover {
+  text-decoration-color: currentColor;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+h1,
+h2,
+h3 {
+  color: var(--strong);
+  line-height: 1.2;
+  margin: 0 0 0.5em;
+}
+h1 {
+  font-size: clamp(2.2rem, 6vw, 3.6rem);
+  font-weight: 750;
+  line-height: 1.06;
+  letter-spacing: -0.045em;
+}
+h2 {
+  font-size: clamp(1.6rem, 4vw, 2.3rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+h3 {
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+p {
+  margin: 0 0 1em;
+}
+.wrap {
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 0 16px;
+}
+.muted {
+  color: var(--muted);
+}
+
+/* Icons: stroke drawings, like on Loka's page */
+svg.icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* an icon on a tile of its own colour */
+.tile {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--tint);
+  background: color-mix(in srgb, var(--tint) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tint) 26%, transparent);
+}
+
+/* Loka's logo: a blue tile with an arrow */
+.logo {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(140deg, var(--accent-top), #1d4ed8);
+  color: #fff;
+  box-shadow:
+    0 6px 16px -4px var(--accent-glow),
+    inset 0 1px 0 #ffffff40;
+}
+.logo svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Top bar: see-through, it stays at the top */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--header);
+  border-bottom: 1px solid var(--line);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  backdrop-filter: saturate(180%) blur(14px);
+}
+.top .wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 60px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--strong);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+  margin-right: auto;
+}
+.top nav {
+  display: flex;
+  gap: 4px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.top nav a {
+  padding: 5px 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+.top nav a:hover {
+  background: var(--segment);
+  color: var(--strong);
+}
+/* EN | УК, as a pill switch */
+.langs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  background: var(--segment);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+.langs > * {
+  padding: 2px 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.langs a:hover {
+  color: var(--strong);
+}
+.langs [aria-current] {
+  background: var(--segment-on);
+  color: var(--strong);
+  box-shadow: 0 1px 2px #0f172a1f, var(--highlight);
+}
+@media (max-width: 720px) {
+  .top .wrap {
+    gap: 10px;
+  }
+  .top nav .optional {
+    display: none;
+  }
+}
+/* the smallest phones: brand, GitHub and EN | УК still fit on one row */
+@media (max-width: 400px) {
+  .top .wrap {
+    gap: 6px;
+  }
+  .brand {
+    gap: 8px;
+  }
+  .top nav a {
+    padding: 5px 6px;
+  }
+}
+
+/* Hero */
+.hero {
+  padding-top: 80px;
+  padding-bottom: 40px;
+  text-align: center;
+}
+/* the title fades from the heading colour into blue */
+.hero h1 {
+  display: inline-block;
+  max-width: 860px;
+  padding-bottom: 0.08em; /* room for descenders */
+  background: var(--title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero .lead {
+  max-width: 660px;
+  margin: 0 auto 28px;
+  font-size: 1.2rem;
+  color: var(--label);
+}
+.hero .browser {
+  margin-top: 56px;
+  text-align: left;
+}
+.hero > * {
+  animation: rise 0.6s var(--ease) both;
+}
+.hero > :nth-child(2) {
+  animation-delay: 0.05s;
+}
+.hero > :nth-child(3) {
+  animation-delay: 0.1s;
+}
+.hero > :nth-child(4) {
+  animation-delay: 0.18s;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* Download buttons */
+.downloads {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--strong);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  box-shadow: 0 1px 2px #0f172a0d, var(--highlight);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.05s;
+}
+.button:hover {
+  border-color: var(--muted);
+}
+.button:active {
+  transform: translateY(1px);
+}
+/* filled blue, with a light top edge and a glow, like Loka's own buttons */
+.button.primary {
+  background: linear-gradient(180deg, var(--accent-top), var(--accent));
+  border-color: transparent;
+  color: #fff;
+  box-shadow:
+    0 1px 2px #0f172a26,
+    0 6px 16px -4px var(--accent-glow),
+    inset 0 1px 0 #ffffff33;
+}
+.button.primary:hover {
+  background: linear-gradient(180deg, var(--accent-top), color-mix(in srgb, var(--accent) 88%, #fff));
+}
+/* "All downloads": a plain link with an arrow, so the buttons for your system stand out */
+.button.quiet {
+  padding-inline: 12px;
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-weight: 500;
+}
+.button.quiet::after {
+  content: "→";
+  transition: transform 0.15s var(--ease);
+}
+.button.quiet:hover {
+  color: var(--strong);
+}
+.button.quiet:hover::after {
+  transform: translateX(3px);
+}
+.download-note {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* A browser window around the screenshot */
+.browser,
+.terminal {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--chrome);
+  box-shadow: var(--highlight), var(--window-shadow);
+  overflow: hidden;
+}
+.chrome {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 96px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+.address {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 420px;
+  width: 100%;
+  padding: 3px 12px;
+  border-radius: 8px;
+  background: var(--segment);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* window buttons on the right, as on most Linux desktops: minimise, maximise, close */
+.chrome .dots {
+  position: absolute;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+}
+.chrome .dots i {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--segment);
+}
+.chrome .dots i::before,
+.chrome .dots i::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+}
+.chrome .dots i:nth-child(1)::before {
+  width: 7px;
+  border-top: 1.5px solid var(--muted);
+  transform: translate(-50%, 2px);
+}
+.chrome .dots i:nth-child(2)::before {
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid var(--muted);
+  transform: translate(-50%, -50%);
+}
+.chrome .dots i:nth-child(3)::before,
+.chrome .dots i:nth-child(3)::after {
+  width: 8px;
+  border-top: 1.5px solid var(--muted);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.chrome .dots i:nth-child(3)::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+@media (max-width: 560px) {
+  .chrome {
+    padding: 0 12px;
+  }
+  .chrome .dots {
+    display: none;
+  }
+}
+
+/* Sections */
+section {
+  padding: 80px 0;
+}
+.section-head {
+  max-width: 680px;
+  margin-bottom: 36px;
+}
+.section-head p {
+  font-size: 1.05rem;
+}
+
+/* How it works: three numbered steps */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  counter-reset: step;
+}
+.step::before {
+  counter-increment: step;
+  content: counter(step);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: linear-gradient(140deg, var(--accent-top), #1d4ed8);
+  color: #fff;
+  font-weight: 700;
+  box-shadow:
+    0 6px 16px -4px var(--accent-glow),
+    inset 0 1px 0 #ffffff40;
+}
+@media (max-width: 760px) {
+  .steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Cards: see-through, they come in one after another */
+.card {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--highlight), var(--shadow);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition:
+    border-color 0.2s,
+    transform 0.2s var(--ease);
+  animation: rise 0.5s var(--ease) both;
+}
+.card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+}
+.card:nth-child(2) { animation-delay: 0.04s; }
+.card:nth-child(3) { animation-delay: 0.08s; }
+.card:nth-child(4) { animation-delay: 0.12s; }
+.card:nth-child(5) { animation-delay: 0.16s; }
+.card:nth-child(6) { animation-delay: 0.2s; }
+.card:nth-child(7) { animation-delay: 0.24s; }
+.card:nth-child(8) { animation-delay: 0.28s; }
+.card:nth-child(9) { animation-delay: 0.32s; }
+.card .tile {
+  margin-bottom: 14px;
+}
+.card p {
+  margin: 0;
+  color: var(--label);
+  font-size: 15.5px;
+}
+.features {
+  display: grid;
+  /* three across, so the nine cards fill three full rows; one column on phones */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+@media (max-width: 860px) {
+  .features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .features {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The terminal: text on the left, the window on the right */
+.cli {
+  display: grid;
+  grid-template-columns: minmax(240px, 360px) 1fr;
+  gap: 40px;
+  align-items: start;
+}
+.cli ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cli li {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  color: var(--label);
+  font-size: 15.5px;
+}
+.cli li:first-child {
+  border-top: 0;
+}
+@media (max-width: 860px) {
+  .cli {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+/* always dark, as most terminals are */
+.terminal {
+  --chrome: #0f172a;
+  background: #020617;
+  border-color: #94a3b838;
+}
+.terminal .chrome {
+  border-color: #94a3b81f;
+  color: #94a3b8;
+  padding: 0 96px;
+}
+.terminal .chrome .dots i {
+  background: #1e293b;
+}
+.terminal .chrome .dots i::before,
+.terminal .chrome .dots i::after {
+  border-color: #94a3b8 !important;
+}
+.screen {
+  height: 460px;
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  scrollbar-color: #334155 transparent;
+  color: #cbd5e1;
+  font: 13.5px/1.55 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.screen .prompt {
+  color: #34d399;
+  user-select: none;
+}
+.screen .cmd {
+  color: #f8fafc;
+}
+.screen .out {
+  color: #94a3b8;
+}
+.screen .url {
+  color: #93c5fd;
+}
+.screen .ok {
+  color: #7dd3ae;
+}
+/* the terminal draws a QR code from half blocks, so its rows must touch */
+.screen .qr {
+  display: block;
+  color: #f8fafc;
+  font-size: 9px;
+  line-height: 1;
+  /* closes the hairline gaps some fonts leave between full blocks */
+  letter-spacing: -0.5px;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.caret {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  background: #cbd5e1;
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Compared with other tools */
+.compare {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--highlight), var(--shadow);
+}
+table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+th,
+td {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+thead th {
+  border-top: 0;
+  color: var(--strong);
+  font-weight: 650;
+}
+tbody th {
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+td {
+  color: var(--label);
+}
+/* Loka's own column stands out a little */
+th:nth-child(2),
+td:nth-child(2) {
+  background: var(--soft);
+  color: var(--strong);
+}
+
+/* Questions: each one a row that opens */
+.faq {
+  max-width: 760px;
+}
+.faq h2 {
+  margin-bottom: 28px;
+}
+.faq details {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--highlight);
+  transition: border-color 0.15s;
+}
+.faq details:hover,
+.faq details[open] {
+  border-color: var(--line-strong);
+}
+.faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  color: var(--strong);
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+/* a plus that turns into a cross when the answer is open */
+.faq summary::after {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background:
+    linear-gradient(currentColor, currentColor) center / 12px 1.5px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 1.5px 12px no-repeat;
+  color: var(--muted);
+  transition: transform 0.2s var(--ease);
+}
+.faq details[open] summary::after {
+  transform: rotate(45deg);
+}
+.faq details > div {
+  padding: 0 18px 4px;
+  color: var(--label);
+}
+code,
+pre {
+  font-family: var(--mono);
+  font-size: 0.88em;
+}
+p code,
+li code,
+td code {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--segment);
+  color: var(--strong);
+  overflow-wrap: anywhere;
+}
+pre {
+  overflow-x: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Try Loka: a card with the glow inside */
+.cta {
+  padding-top: 40px;
+  text-align: center;
+}
+.cta .wrap {
+  max-width: calc(var(--page) - 32px);
+  padding: 56px 24px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background:
+    radial-gradient(40rem 18rem at 50% 0, var(--glow), transparent 70%) no-repeat,
+    var(--card);
+  box-shadow: var(--highlight), var(--shadow);
+}
+@media (max-width: 1152px) {
+  .cta .wrap {
+    margin: 0 16px;
+  }
+}
+.cta .logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  border-radius: 18px;
+}
+.cta .logo svg {
+  width: 34px;
+  height: 34px;
+}
+
+/* Footer */
+footer {
+  padding: 32px 0 48px;
+  font-size: 15px;
+  color: var(--muted);
+}
+footer .links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+footer a {
+  color: var(--muted);
+  text-decoration-color: transparent;
+}
+footer a:hover {
+  color: var(--strong);
+}
+footer p a {
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+/* Loka's page in the browser window: a live copy, with the same colours and shapes as
+   internal/server/index.html. It has its own light and dark colours, so the sun button
+   can switch them without changing the rest of the website. */
+.app {
+  --bg: #f8fafc;
+  --glow: #2563eb1f;
+  --dots: #0f172a14;
+  --ink: #1e293b;
+  --strong: #020617;
+  --muted: #64748b;
+  --label: #334155;
+  --line: #0f172a14;
+  --line-strong: #0f172a24;
+  --card: #ffffffcc;
+  --solid: #fff;
+  --highlight: inset 0 1px 0 #ffffffe6;
+  --shadow: 0 1px 2px #0f172a0a, 0 12px 32px -16px #0f172a29;
+  --field: #fff;
+  --field-line: #0f172a1f;
+  --placeholder: #94a3b8;
+  --accent: #2563eb;
+  --accent-top: #3b82f6;
+  --accent-glow: #2563eb73;
+  --ring: #2563eb40;
+  --secondary: #fff;
+  --secondary-hover: #f1f5f9;
+  --secondary-ink: #0f172a;
+  --segment: #0f172a0d;
+  --segment-on: #fff;
+  --soft: #2563eb14;
+  --soft-line: #2563eb2e;
+  --icon: #2563eb;
+  --item: #f8fafccc;
+  --notice: #b45309;
+  --link: #2563eb;
+  --dot: #2563eb;
+  --header: #f8fafcb3;
+  --title: linear-gradient(100deg, #020617 35%, #2563eb);
+}
+.app[data-theme="dark"] {
+  --bg: #020617;
+  --glow: #3b82f62e;
+  --dots: #94a3b81a;
+  --ink: #cbd5e1;
+  --strong: #f8fafc;
+  --muted: #94a3b8;
+  --label: #cbd5e1;
+  --line: #94a3b81f;
+  --line-strong: #94a3b838;
+  --card: #0f172a99;
+  --solid: #0f172a;
+  --highlight: inset 0 1px 0 #ffffff0a;
+  --shadow: 0 12px 40px -16px #000c;
+  --field: #02061799;
+  --field-line: #94a3b82e;
+  --placeholder: #64748b;
+  --accent-glow: #3b82f666;
+  --ring: #60a5fa59;
+  --secondary: #1e293b99;
+  --secondary-hover: #334155b3;
+  --secondary-ink: #f1f5f9;
+  --segment: #1e293b99;
+  --segment-on: #334155;
+  --soft: #3b82f61f;
+  --soft-line: #60a5fa40;
+  --icon: #93c5fd;
+  --item: #1e293b66;
+  --notice: #fbbf24;
+  --link: #93c5fd;
+  --dot: #60a5fa;
+  --header: #020617a6;
+  --title: linear-gradient(100deg, #f8fafc 35%, #93c5fd);
+}
+@media (prefers-color-scheme: dark) {
+  .app:not([data-theme="light"]) {
+    --bg: #020617;
+    --glow: #3b82f62e;
+    --dots: #94a3b81a;
+    --ink: #cbd5e1;
+    --strong: #f8fafc;
+    --muted: #94a3b8;
+    --label: #cbd5e1;
+    --line: #94a3b81f;
+    --line-strong: #94a3b838;
+    --card: #0f172a99;
+    --solid: #0f172a;
+    --highlight: inset 0 1px 0 #ffffff0a;
+    --shadow: 0 12px 40px -16px #000c;
+    --field: #02061799;
+    --field-line: #94a3b82e;
+    --placeholder: #64748b;
+    --accent-glow: #3b82f666;
+    --ring: #60a5fa59;
+    --secondary: #1e293b99;
+    --secondary-hover: #334155b3;
+    --secondary-ink: #f1f5f9;
+    --segment: #1e293b99;
+    --segment-on: #334155;
+    --soft: #3b82f61f;
+    --soft-line: #60a5fa40;
+    --icon: #93c5fd;
+    --item: #1e293b66;
+    --notice: #fbbf24;
+    --link: #93c5fd;
+    --dot: #60a5fa;
+    --header: #020617a6;
+    --title: linear-gradient(100deg, #f8fafc 35%, #93c5fd);
+  }
+}
+.app {
+  container-type: inline-size;
+  position: relative;
+  isolation: isolate;
+  padding: 0 28px 28px;
+  background:
+    radial-gradient(50rem 24rem at 50% -10rem, var(--glow), transparent 70%) no-repeat,
+    var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 var(--sans);
+  text-align: left;
+}
+/* the dot grid, inside the window this time */
+.app::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(var(--dots) 1px, transparent 1px) 0 0 / 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 50% at 50% 0, #000, transparent);
+  mask-image: radial-gradient(ellipse 80% 50% at 50% 0, #000, transparent);
+}
+.app svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.m-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin: 0 -28px;
+  padding: 12px 28px;
+  background: var(--header);
+  border-bottom: 1px solid var(--line);
+}
+.m-brand,
+.m-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.m-controls {
+  gap: 8px;
+}
+.m-name {
+  color: var(--strong);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+.m-version {
+  padding: 1px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  color: var(--muted);
+  font: 500 11px/1.6 var(--mono);
+}
+.m-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--card);
+  box-shadow: var(--highlight);
+  color: var(--label);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.m-badge::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dot);
+  animation: m-pulse 2.4s ease-out infinite;
+}
+@keyframes m-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+.m-langs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--segment);
+  font-size: 12px;
+  font-weight: 600;
+}
+.m-langs span {
+  padding: 4px 10px;
+  border-radius: 8px;
+  color: var(--muted);
+}
+.m-langs .on {
+  background: var(--segment-on);
+  color: var(--strong);
+  box-shadow: 0 1px 2px #0f172a1f, var(--highlight);
+}
+.m-round {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--card);
+  box-shadow: var(--highlight);
+  color: var(--label);
+  font: 650 14px/1 var(--sans);
+}
+button.m-round {
+  cursor: pointer;
+}
+button.m-round:hover {
+  background: var(--secondary-hover);
+  color: var(--strong);
+}
+.m-round svg {
+  width: 17px;
+  height: 17px;
+}
+/* the sun switches to light, the moon to dark */
+.app .moon,
+.app[data-theme="dark"] .sun {
+  display: none;
+}
+.app[data-theme="dark"] .moon {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  .app:not([data-theme="light"]) .moon {
+    display: block;
+  }
+  .app:not([data-theme="light"]) .sun {
+    display: none;
+  }
+}
+.m-intro {
+  padding: 44px 0 28px;
+}
+.m-title {
+  display: inline-block;
+  margin: 0;
+  padding-bottom: 0.08em;
+  background: var(--title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: clamp(28px, 4.4cqi, 48px);
+  font-weight: 750;
+  line-height: 1.04;
+  letter-spacing: -0.05em;
+}
+.m-note {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 18px 0 0;
+  padding: 6px 14px 6px 11px;
+  border: 1px solid var(--soft-line);
+  border-radius: 14px;
+  background: var(--soft);
+  color: var(--label);
+  font-size: 13px;
+}
+.m-note svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  color: var(--icon);
+  stroke-width: 2;
+}
+.m-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "choose device transfers"
+    "choose link transfers";
+  align-items: start;
+  gap: 16px;
+}
+.m-choose {
+  grid-area: choose;
+  align-self: stretch;
+}
+.m-device {
+  grid-area: device;
+}
+.m-link {
+  grid-area: link;
+}
+.m-transfers {
+  grid-area: transfers;
+  align-self: stretch;
+}
+.m-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: var(--highlight), var(--shadow);
+  transition: border-color 0.2s;
+}
+.m-card:hover {
+  border-color: var(--line-strong);
+}
+.m-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.m-head.start {
+  align-items: flex-start;
+}
+.m-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--icon);
+  box-shadow: inset 0 0 0 1px var(--soft-line);
+}
+.m-h {
+  margin: 0;
+  color: var(--strong);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+.m-sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.m-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.m-row > * {
+  min-width: 0;
+}
+.m-btn {
+  padding: 9px 15px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--accent-top), var(--accent));
+  box-shadow:
+    0 1px 2px #0f172a26,
+    0 4px 12px -4px var(--accent-glow),
+    inset 0 1px 0 #ffffff33;
+  color: #fff;
+  font: 600 13px/1.5 var(--sans);
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition:
+    filter 0.15s,
+    background 0.15s,
+    transform 0.05s;
+}
+.m-btn:hover {
+  filter: brightness(1.08);
+}
+.m-btn:active {
+  transform: translateY(1px);
+}
+.m-btn.sec {
+  border-color: var(--field-line);
+  background: var(--secondary);
+  box-shadow: 0 1px 2px #0f172a0d, var(--highlight);
+  color: var(--secondary-ink);
+}
+.m-btn.sec:hover {
+  background: var(--secondary-hover);
+  filter: none;
+}
+.m-btn.small {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.m-drop {
+  margin-bottom: 16px;
+  padding: 26px 16px 18px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 16px;
+  background: var(--item);
+  text-align: center;
+}
+.m-drop-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 10px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--solid);
+  box-shadow: 0 6px 16px -8px #0f172a40, var(--highlight);
+  color: var(--icon);
+}
+.m-drop-title {
+  margin: 0;
+  color: var(--strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+.m-drop .m-row {
+  justify-content: center;
+  margin-top: 12px;
+}
+.m-count {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.m-count.warn {
+  color: var(--notice);
+}
+.m-label {
+  display: block;
+  margin: 0 13px 7px;
+  color: var(--label);
+  font-size: 12px;
+  font-weight: 600;
+}
+.m-pad {
+  padding-inline: 13px;
+}
+.m-input {
+  flex: 1;
+  min-width: 8rem;
+  padding: 9px 12px;
+  border: 1px solid var(--field-line);
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--ink);
+  font: 13px/1.5 var(--sans);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.m-input::placeholder {
+  color: var(--placeholder);
+}
+.m-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+.m-port {
+  flex: 0 1 84px;
+  min-width: 68px;
+}
+.m-list {
+  margin: 12px 0 0;
+  padding: 0 13px;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+.m-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.m-list .m-btn {
+  flex: none;
+}
+.m-item {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--item);
+  overflow-wrap: anywhere;
+  transition: border-color 0.15s;
+}
+.m-item:first-child {
+  margin-top: 0;
+}
+.m-item:hover {
+  border-color: var(--line-strong);
+}
+.m-item strong {
+  color: var(--strong);
+  font-weight: 600;
+}
+.m-item .m-row {
+  justify-content: space-between;
+}
+.m-item small {
+  color: var(--muted);
+}
+.m-item p {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+.m-item > .m-btn {
+  margin-top: 8px;
+}
+.m-peer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.m-peer > div {
+  min-width: 0;
+}
+.m-peer .m-btn {
+  flex: none;
+  margin-inline-start: auto;
+}
+.m-manual {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.m-manual .m-row {
+  align-items: stretch;
+}
+.m-manual .m-btn {
+  margin-inline-start: auto;
+}
+.m-status {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.m-code {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.m-bar {
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden;
+}
+.m-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-top));
+  transition: width 0.4s;
+}
+.m-files {
+  color: var(--label);
+  font-size: 13px;
+}
+.m-files summary {
+  cursor: pointer;
+}
+.m-files ul {
+  margin: 6px 0;
+  padding-inline-start: 1.5rem;
+}
+.m-urls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 13px;
+}
+.m-urls .url {
+  color: var(--link);
+  overflow-wrap: anywhere;
+}
+.m-urls .hint {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.m-qr {
+  display: block;
+  width: 132px;
+  height: 132px;
+  margin-top: 10px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+.m-link-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.m-link .m-action {
+  display: flex;
+  justify-content: flex-end;
+  padding-inline: 13px;
+}
+.m-link .m-action + .m-item {
+  margin-top: 12px;
+}
+.m-foot {
+  margin: 24px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.m-item.enter {
+  animation: rise 0.35s var(--ease) both;
+}
+
+/* A narrower window: two columns, as Loka's page does */
+@container (max-width: 900px) {
+  .m-layout {
+    grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+    grid-template-areas:
+      "choose device"
+      "choose transfers"
+      "link transfers";
+  }
+  .m-badge {
+    display: none;
+  }
+}
+/* A phone: one column with the parts that matter, so the hero stays short */
+@container (max-width: 620px) {
+  .app {
+    padding: 0 16px 20px;
+  }
+  .m-header {
+    margin: 0 -16px;
+    padding: 10px 16px;
+  }
+  .m-langs,
+  .m-version,
+  .m-foot,
+  .m-choose,
+  .m-link {
+    display: none;
+  }
+  .m-intro {
+    padding: 26px 0 20px;
+  }
+  .m-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "device"
+      "transfers";
+    gap: 12px;
+  }
+  .m-card {
+    padding: 16px;
+    border-radius: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
