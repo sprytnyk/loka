@@ -17,7 +17,10 @@ finds computers running Loka on the same network. It encrypts transfers
 and sends them directly between devices, even when the internet is down.
 You don't need an account.
 
-![Loka showing selected files, devices on the network, transfers and a download link](docs/loka.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/loka.png">
+  <img src="docs/loka-light.png" alt="Loka showing selected files, nearby devices, file and text transfers, and a download link">
+</picture>
 
 ## Install
 
