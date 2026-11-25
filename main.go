@@ -1,5 +1,5 @@
-// Command loka shares files and directories with computers and phones on the
-// same local network.
+// Command loka shares files, directories and text with computers and phones
+// on the same local network.
 package main
 
 import (
@@ -20,6 +20,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/sprytnyk/loka/internal/desktop"
 	"github.com/sprytnyk/loka/internal/network"
@@ -46,6 +48,7 @@ type options struct {
 	port        int
 	peerPort    int
 	noBrowser   bool
+	fromStdin   bool
 }
 
 // run runs Loka with the given arguments and returns the exit code.
@@ -63,7 +66,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	case "serve":
 		err = serve(ctx, o, stdout)
 	case "send":
-		err = sendCommand(ctx, o, stdout)
+		err = sendCommand(ctx, o, stdin, stdout)
 	case "receive":
 		err = receiveCommand(ctx, o, stdin, stdout)
 	case "devices":
@@ -92,6 +95,7 @@ func parse(args []string, stdout, stderr io.Writer) (options, int) {
 	fs.IntVar(&o.port, "port", network.DefaultPort, "port to listen on, 0 for any free port")
 	fs.IntVar(&o.peerPort, "peer-port", network.DefaultPort, "receiver port for send")
 	fs.BoolVar(&o.noBrowser, "no-browser", false, "do not open the browser")
+	fs.BoolVar(&o.fromStdin, "stdin", false, "send text read from standard input")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 
 	var positional []string
@@ -133,8 +137,12 @@ func parse(args []string, stdout, stderr io.Writer) (options, int) {
 		return fail("--port must be between 0 and 65535")
 	case o.peerPort < 1 || o.peerPort > 65535:
 		return fail("--peer-port must be between 1 and 65535")
-	case o.command == "send" && (o.to == "" || len(o.paths) == 0):
-		return fail("send needs --to ADDRESS and one or more paths")
+	case o.fromStdin && o.command != "send":
+		return fail("--stdin is only for send")
+	case o.command == "send" && (o.to == "" || !o.fromStdin && len(o.paths) == 0):
+		return fail("send needs --to ADDRESS and either paths or --stdin")
+	case o.fromStdin && len(o.paths) > 0:
+		return fail("send takes either paths or --stdin")
 	case o.command == "share" && len(o.paths) == 0:
 		return fail("share needs one or more paths")
 	case o.command == "forget" && len(o.paths) != 1:
@@ -222,16 +230,27 @@ func serve(ctx context.Context, o options, stdout io.Writer) error {
 	return s.Serve(ctx, ln)
 }
 
-func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
-	entries, items, size, err := transfer.Collect(o.paths)
-	if err != nil {
-		return err
+func sendCommand(ctx context.Context, o options, stdin io.Reader, stdout io.Writer) error {
+	var t *transfer.Transfer
+	var entries []transfer.Entry
+	if o.fromStdin {
+		text, err := readTextInput(stdin)
+		if err != nil {
+			return err
+		}
+		t = transfer.NewText(transfer.Outgoing, o.to, text, transfer.Pairing)
+	} else {
+		files, items, size, err := transfer.Collect(o.paths)
+		if err != nil {
+			return err
+		}
+		entries = files
+		t = transfer.New(transfer.Outgoing, o.to, items, size, transfer.Pairing)
 	}
 	store, err := openTrust()
 	if err != nil {
 		return err
 	}
-	t := transfer.New(transfer.Outgoing, o.to, items, size, transfer.Pairing)
 	go func() { t.Finish(server.SendTo(t, entries, store, hostname(), o.to, o.peerPort, "")) }()
 	stop := context.AfterFunc(ctx, t.Stop)
 	defer stop()
@@ -240,6 +259,22 @@ func sendCommand(ctx context.Context, o options, stdout io.Writer) error {
 		return errors.New(cmp.Or(v.Error, string(v.Status)))
 	}
 	return nil
+}
+
+func readTextInput(stdin io.Reader) (string, error) {
+	data, err := io.ReadAll(io.LimitReader(stdin, transfer.MaxText+1))
+	if err != nil {
+		return "", fmt.Errorf("could not read standard input: %w", err)
+	}
+	switch {
+	case len(data) == 0:
+		return "", errors.New("standard input is empty")
+	case len(data) > transfer.MaxText:
+		return "", errors.New("the text is longer than 1 MB. Send it as a file instead")
+	case !utf8.Valid(data):
+		return "", errors.New("standard input must be UTF-8 text")
+	}
+	return string(data), nil
 }
 
 // follow prints a transfer's progress until it ends.
@@ -277,7 +312,6 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 		return err
 	}
 	defer s.Close()
-	s.NoText = true // the terminal doesn't show text yet
 	served := make(chan error, 1)
 	go func() { served <- s.Serve(ctx, ln) }()
 	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d (Ctrl+C to stop)\n", version, port)
@@ -310,9 +344,19 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 		case <-ticker.C:
 		}
 		for _, t := range s.Transfers.All() {
+			if t.Direction != transfer.Incoming {
+				continue
+			}
+			if t.Kind == transfer.Text {
+				if text := t.Text(); text != "" {
+					fmt.Fprintf(stdout, "\n%s sent text:\n%s\n", escapeTerminalControls(sender(t)), escapeTerminalControls(text))
+					t.Dismiss()
+					continue
+				}
+			}
 			// Offers from Lokas that failed before the person saw them: a
 			// refused device, or a pairing that didn't finish.
-			if t.Direction != transfer.Incoming || t.DeviceID == "" || t.Destination() != "" || told[t.ID] {
+			if t.DeviceID == "" || t.Destination() != "" || told[t.ID] {
 				continue
 			}
 			if v := t.View(); v.Status == transfer.Failed {
@@ -330,7 +374,11 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 		}
 		told[t.ID] = true // answerOffer says how it ends
 		skipStaleAnswer(stdin, answers)
-		fmt.Fprintf(stdout, "\n%s wants to send: %s\n", sender(t), strings.Join(t.Items, ", "))
+		if t.Kind == transfer.Text {
+			fmt.Fprintf(stdout, "\n%s wants to send text.\n", escapeTerminalControls(sender(t)))
+		} else {
+			fmt.Fprintf(stdout, "\n%s wants to send: %s\n", sender(t), strings.Join(t.Items, ", "))
+		}
 		if v := t.View(); v.Code != "" {
 			fmt.Fprintf(stdout, "Pairing code %s. Check that the sender shows the same.\n", v.Code)
 		}
@@ -338,6 +386,22 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 			return <-served
 		}
 	}
+}
+
+// escapeTerminalControls lets the terminal show incoming text without
+// interpreting it as commands. Keep tabs and line breaks for readability.
+func escapeTerminalControls(text string) string {
+	var display strings.Builder
+	display.Grow(len(text))
+	for _, r := range text {
+		if !unicode.IsControl(r) || r == '\n' || r == '\t' {
+			display.WriteRune(r)
+		} else {
+			quoted := strconv.QuoteRune(r)
+			display.WriteString(quoted[1 : len(quoted)-1])
+		}
+	}
+	return display.String()
 }
 
 // maxAnswer is how much of a line readLine keeps, well past the longest
@@ -361,14 +425,18 @@ func readLine(r *bufio.Reader) (string, error) {
 	}
 }
 
-// answerOffer asks for a destination until one exists or the person
-// declines, then follows the transfer. It returns false when ctx ends,
-// which also stops the transfer.
+// answerOffer asks whether to accept text or where to save files, then
+// follows the transfer. It returns false when ctx ends, which also stops
+// the transfer.
 func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, answers <-chan string, stdout io.Writer) bool {
+	textOffer := t.Kind == transfer.Text
+	prompt := "Destination directory (empty to decline): "
+	if textOffer {
+		prompt = "Accept text? [y/N] "
+	}
 	for {
-		fmt.Fprint(stdout, "Destination directory (empty to decline): ")
+		fmt.Fprint(stdout, prompt)
 		var answer string
-		var ok bool
 		select {
 		case <-ctx.Done():
 			t.Stop()
@@ -377,18 +445,32 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 			fmt.Fprintln(stdout)
 			fmt.Fprintln(stdout, offerEnded(t))
 			return true
-		case answer, ok = <-answers:
+		case answer = <-answers:
 		}
 		answer = strings.TrimSpace(answer)
-		if !ok || answer == "" {
+		if textOffer {
+			switch strings.ToLower(answer) {
+			case "n", "no":
+				answer = ""
+			case "", "y", "yes":
+			default:
+				fmt.Fprintln(stdout, "Answer yes or no.")
+				continue
+			}
+		}
+		if answer == "" {
 			t.Stop()
 			fmt.Fprintln(stdout, "Declined.")
 			return true
 		}
-		destination, err := server.ExistingDir(answer)
-		if err != nil {
-			fmt.Fprintln(stdout, err)
-			continue
+		var destination string
+		if !textOffer {
+			dir, err := server.ExistingDir(answer)
+			if err != nil {
+				fmt.Fprintln(stdout, err)
+				continue
+			}
+			destination = dir
 		}
 		if !s.Accept(t, destination) {
 			fmt.Fprintln(stdout, offerEnded(t))

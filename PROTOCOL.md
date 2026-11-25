@@ -214,12 +214,11 @@ Text goes the same way as files, with these differences:
   its nonce in `/peer/reveal`. The receiver skips the prompt only if it
   also remembers the sender. Otherwise, it shows the code and waits for
   the person's answer. Accepted text must arrive within a minute.
-- The receiver keeps the text in memory, never on disk, and drops it once
-  the person closes it. Until then it takes one of the 16 places for waiting
-  offers, so text that keeps coming can't fill the memory.
+- The receiver keeps text in memory until the person closes it in the browser
+  or `loka receive` prints it. Each unread message takes one of the 16 places
+  for waiting offers.
 
 A Loka from before text answers a text offer with `400` and `Invalid offer`.
-`loka receive` answers `400` too, since it can't show text yet.
 
 ## The pairing code
 

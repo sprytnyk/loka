@@ -13,7 +13,7 @@ type command struct{ name, help string }
 // commands are the commands loka knows, in the order help lists them.
 var commands = []command{
 	{"serve", "open the page in your browser (the default)"},
-	{"send", "send paths to another device: loka send --to ADDRESS PATH..."},
+	{"send", "send files, directories or text to another device"},
 	{"receive", "wait for transfers and answer them in the terminal"},
 	{"devices", "list devices running Loka on the same network"},
 	{"share", "print a download link for paths: loka share PATH..."},
@@ -58,7 +58,7 @@ func printHelp(w io.Writer, fs *flag.FlagSet) {
 	}
 
 	var b strings.Builder
-	b.WriteString(usageLine(p) + "\n\nShare files and directories with computers and phones on the same local network.\n")
+	b.WriteString(usageLine(p) + "\n\nShare files, directories and text with computers and phones on the same local network.\n")
 	for _, section := range []struct {
 		name string
 		rows []row

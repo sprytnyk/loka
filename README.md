@@ -8,9 +8,9 @@
 ![AI Generated](https://img.shields.io/badge/AI-generated-orange)
 
 Loka shares files, directories and text on your local network. Unpack one
-executable for Linux, Windows or macOS and run it. It opens in your browser
-and has terminal commands for file transfers. You don't need an installer
-or extra software.
+executable for Linux, Windows or macOS and run it. Loka opens in your browser.
+You can also use it from the terminal. You don't need an installer or extra
+software.
 
 Phones and other computers can send and receive in their browser. Loka
 finds computers running Loka on the same network. It encrypts transfers
@@ -142,7 +142,7 @@ device to send the text or select **Create link** for a phone.
 - A text link shows the text with a **Copy** button. It works until you stop
   sharing or quit Loka.
 
-Text can be up to 1 MB. `loka receive` can't show text yet, so it refuses it.
+Text can be up to 1 MB. Run `loka receive` to read it in the terminal.
 
 ## Command line
 
@@ -150,16 +150,19 @@ Text can be up to 1 MB. `loka receive` can't show text yet, so it refuses it.
 loka receive
 loka devices
 loka send --to 192.0.2.10 /path/to/file /path/to/directory
+printf '%s' 'Hello' | loka send --to 192.0.2.10 --stdin
 loka share /path/to/file
 loka forget my-laptop
 ```
 
-- `receive` asks where to put each file transfer. Leave the answer empty to
-  decline. It refuses text and prints the phone link, its QR code, its HTTPS
-  version and the certificate fingerprint.
+- `receive` asks where to save files. If either Loka is new to the other,
+  it asks whether to accept text. Press Enter with an empty answer to decline.
+  Text sent through the phone link appears right away.
+  `receive` prints the phone link, its QR code, the HTTPS link and Loka's
+  certificate fingerprint.
 - `devices` lists devices running Loka on the same network. It marks a device
   as remembered only when it shows the certificate Loka knows for it.
-- `send` takes the receiver's address.
+- `send` takes the receiver's address. Use `--stdin` to pipe in UTF-8 text.
 - `share` prints a link and its QR code for each local address, the same links
   over `https://`, the certificate's fingerprint and a `curl` command. The link
   works until you press Ctrl+C. `--address` limits it to one address.

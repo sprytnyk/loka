@@ -378,8 +378,14 @@
             </div>
             <ul>
               <li><code>loka devices</code> lists devices running Loka on the same network and marks the ones it remembers.</li>
-              <li><code>loka send</code> sends files and directories to an address.</li>
-              <li><code>loka receive</code> asks where to put each transfer.</li>
+              <li>
+                <code>loka send</code> sends files and directories to an address.
+                Pipe in text with <code>--stdin</code>.
+              </li>
+              <li>
+                <code>loka receive</code> asks where to save files and prints incoming text.
+                On your phone, scan the QR code from the terminal and choose <strong>Text</strong>.
+              </li>
               <li>
                 <code>loka share</code> prints a link and its QR code. It also prints a
                 <code>curl</code> command that stops if another device answers.

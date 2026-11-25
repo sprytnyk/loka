@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/sprytnyk/loka/internal/network"
 	"github.com/sprytnyk/loka/internal/server"
+	"github.com/sprytnyk/loka/internal/transfer"
 	"github.com/sprytnyk/loka/internal/treetest"
 	"github.com/sprytnyk/loka/internal/trust"
 )
@@ -103,6 +105,10 @@ func TestParse(t *testing.T) {
 		{nil, "serve", nil, "", -1},
 		{[]string{"send", "a", "--to", "h", "b"}, "send", []string{"a", "b"}, "h", -1},
 		{[]string{"--to=h", "send", "a"}, "send", []string{"a"}, "h", -1},
+		{[]string{"send", "--stdin", "--to", "h"}, "send", nil, "h", -1},
+		{[]string{"send", "--stdin"}, "", nil, "", 2},
+		{[]string{"send", "--stdin", "--to", "h", "a"}, "", nil, "", 2},
+		{[]string{"receive", "--stdin"}, "", nil, "", 2},
 		{[]string{"send", "--to", "h", "--", "-dash", "--to"}, "send", []string{"-dash", "--to"}, "h", -1},
 		{[]string{"share", "x", "--port", "0"}, "share", []string{"x"}, "", -1},
 		{[]string{"--version"}, "", nil, "", -1},
@@ -288,6 +294,61 @@ func TestPipedAnswerIsKept(t *testing.T) {
 	}
 }
 
+func TestSendTextFromStdin(t *testing.T) {
+	previousConfigDir := configDir
+	dir := t.TempDir()
+	configDir = func() (string, error) { return dir, nil }
+	t.Cleanup(func() { configDir = previousConfigDir })
+
+	stdin, answer := io.Pipe()
+	defer answer.Close()
+	received, stopReceiving, receiveCode := runLoka(t, stdin, "receive", "--port", "0")
+	port := received.wait(t, `on port (\d+)`)[1]
+	args := []string{"send", "--to", "127.0.0.1", "--peer-port", port, "--stdin"}
+	const text = " first line\nПривіт\t👩‍💻 \x1b[2J"
+	sent, _, sendCode := runLoka(t, strings.NewReader(text), args...)
+	pairingCode := received.wait(t, `wants to send text\.\nPairing code (\d{3} \d{3})\. Check that the sender shows the same\.\nAccept text\?`)[1]
+	sent.wait(t, `Pairing code `+regexp.QuoteMeta(pairingCode))
+	if _, err := io.WriteString(answer, "yes\n"); err != nil {
+		t.Fatal(err)
+	}
+	const shown = " first line\nПривіт\t👩‍💻 \\x1b[2J"
+	received.wait(t, regexp.QuoteMeta("sent text:\n"+shown+"\n"))
+	if c := <-sendCode; c != 0 || !strings.Contains(sent.String(), "complete: 100%") {
+		t.Fatalf("send exited %d, output %q", c, sent.String())
+	}
+
+	// A second message from the remembered sender needs no new answer.
+	sent, _, sendCode = runLoka(t, strings.NewReader("sent again"), args...)
+	received.wait(t, regexp.QuoteMeta("sent text:\nsent again\n"))
+	if c := <-sendCode; c != 0 {
+		t.Fatalf("send exited %d, output %q", c, sent.String())
+	}
+	stopReceiving()
+	if c := <-receiveCode; c != 0 {
+		t.Fatalf("receive exited %d, output %q", c, received.String())
+	}
+	if got := received.String(); strings.Count(got, "sent text:") != 2 || strings.Contains(got, "\x1b[2J") {
+		t.Fatalf("unexpected receiver output %q", got)
+	}
+}
+
+func TestSendRejectsInvalidStdin(t *testing.T) {
+	for _, c := range []struct{ name, input, want string }{
+		{"empty", "", "standard input is empty"},
+		{"invalid UTF-8", "\xff", "standard input must be UTF-8 text"},
+		{"too big", strings.Repeat("x", transfer.MaxText+1), "the text is longer than 1 MB"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := run(context.Background(), []string{"send", "--to", "127.0.0.1", "--stdin"}, strings.NewReader(c.input), &stdout, &stderr)
+			if code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), c.want) {
+				t.Fatalf("send exited %d, stdout %q, stderr %q", code, stdout.String(), stderr.String())
+			}
+		})
+	}
+}
+
 // browser is an HTTP client that trusts Loka's certificate authority, as a
 // phone that installed it does.
 func browser(t *testing.T) *http.Client {
@@ -302,6 +363,43 @@ func browser(t *testing.T) *http.Client {
 	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots}}}
 }
 
+func TestPhoneTextAppearsInTerminal(t *testing.T) {
+	received, stop, code := runLoka(t, strings.NewReader(""), "receive", "--port", "0")
+	port := received.wait(t, `on port (\d+)`)[1]
+	base := "https://127.0.0.1:" + port
+	client := browser(t)
+	const text = "text from a phone"
+	body := `{"kind":"text","size":` + strconv.Itoa(len(text)) + `,"token":"` + receiveToken(t, port) + `"}`
+	resp, err := client.Post(base+"/peer/offer", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offer struct{ ID, Secret string }
+	err = json.NewDecoder(resp.Body).Decode(&offer)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || err != nil || offer.ID == "" || offer.Secret == "" {
+		t.Fatalf("could not offer phone text: HTTP %d, %v", resp.StatusCode, err)
+	}
+	req, err := http.NewRequest(http.MethodPost, base+"/peer/upload/"+offer.ID, strings.NewReader(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Transfer-Secret", offer.Secret)
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("could not upload phone text: HTTP %d", resp.StatusCode)
+	}
+	received.wait(t, regexp.QuoteMeta("sent text:\n"+text+"\n"))
+	stop()
+	if c := <-code; c != 0 {
+		t.Fatalf("receive exited %d, output %q", c, received.String())
+	}
+}
+
 // TestReceiveStopsAfterAccepting stops loka receive after it accepted an
 // offer whose sender never starts uploading.
 func TestReceiveStopsAfterAccepting(t *testing.T) {
@@ -309,20 +407,7 @@ func TestReceiveStopsAfterAccepting(t *testing.T) {
 	defer answer.Close()
 	received, stopReceiving, receiveCode := runLoka(t, stdin, "receive", "--port", "0")
 	port := received.wait(t, `on port (\d+)`)[1]
-	// This device's own page holds the receive token, even on a machine
-	// with no network address to print a phone link for.
-	page, err := http.Get("http://127.0.0.1:" + port + "/")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ := io.ReadAll(page.Body)
-	page.Body.Close()
-	m := regexp.MustCompile(`const receiveToken = '([^']+)'`).FindSubmatch(body)
-	if m == nil {
-		t.Fatal("this device's page has no receive token")
-	}
-	token := string(m[1])
-
+	token := receiveToken(t, port)
 	offer := strings.NewReader(`{"name":"stalled","items":["x"],"size":1,"token":"` + token + `"}`)
 	resp, err := browser(t).Post("https://127.0.0.1:"+port+"/peer/offer", "application/json", offer)
 	if err != nil {
@@ -342,6 +427,22 @@ func TestReceiveStopsAfterAccepting(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("receive kept running after it was stopped, output %q", received.String())
 	}
+}
+
+// receiveToken reads the phone link token from the local page even on a
+// machine with no network address to print a phone link for.
+func receiveToken(t *testing.T, port string) string {
+	t.Helper()
+	page := get(t, "http://127.0.0.1:"+port+"/")
+	body, err := io.ReadAll(page.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`const receiveToken = '([^']+)'`).FindSubmatch(body)
+	if m == nil {
+		t.Fatal("this device's page has no receive token")
+	}
+	return string(m[1])
 }
 
 func TestForgetCommand(t *testing.T) {

@@ -330,17 +330,6 @@ func TestUnreadTextTakesAnOfferPlace(t *testing.T) {
 	}
 }
 
-// TestTerminalRefusesText checks loka receive, which can't show text,
-// says so to the sender.
-func TestTerminalRefusesText(t *testing.T) {
-	receiver, base := startServer(t)
-	receiver.NoText = true
-	out := sendText(t, openTrust(t), base, "hello")
-	if v := waitForEnd(t, out); v.Status != transfer.Failed || v.Error != errNoText.Error() {
-		t.Fatalf("sender ended %+v", v)
-	}
-}
-
 // TestOldReceiverRefusesText checks the sender explains what a Loka from
 // before text answers.
 func TestOldReceiverRefusesText(t *testing.T) {

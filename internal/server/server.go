@@ -44,7 +44,6 @@ type Server struct {
 	Transfers   transfer.Registry
 	Trust       *trust.Store           // this device's certificates
 	OnlyLinks   bool                   // serve only download links, as loka share does
-	NoText      bool                   // refuse text, which nothing here can show
 	Devices     *network.Discovery     // nil when not looking for devices
 	destination atomic.Pointer[string] // the last accepted destination
 
@@ -234,9 +233,6 @@ var errNeedsReceiveToken = errors.New("To send from a browser, open the link or 
 // errTextTooLong refuses text past transfer.MaxText.
 var errTextTooLong = errors.New("The text is longer than 1 MB. Send it as a file instead")
 
-// errNoText refuses text where nothing can show it.
-var errNoText = errors.New("The receiver runs loka receive, which can't show text. Run loka there instead")
-
 // errTextLate ends a text transfer whose sender didn't send the text after
 // it was accepted.
 var errTextLate = errors.New("The sender didn't send the text in time")
@@ -271,7 +267,7 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.checkOffer(o); err != nil {
+	if err := checkOffer(o); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -328,9 +324,7 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 // Loka before text answers it to an offer of text.
 var errInvalidOffer = errors.New("Invalid offer")
 
-// checkOffer refuses an offer that doesn't say what it carries, and text
-// this device can't take.
-func (s *Server) checkOffer(o offer) error {
+func checkOffer(o offer) error {
 	switch o.Kind {
 	case transfer.Files:
 		if o.Size < 0 || len(o.Items) == 0 {
@@ -342,8 +336,6 @@ func (s *Server) checkOffer(o offer) error {
 			return errInvalidOffer
 		case o.Size > transfer.MaxText:
 			return errTextTooLong
-		case s.NoText:
-			return errNoText
 		}
 	default:
 		return errInvalidOffer
