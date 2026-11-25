@@ -15,7 +15,7 @@ var commands = []command{
 	{"serve", "open the page in your browser (the default)"},
 	{"send", "send paths to another device: loka send --to ADDRESS PATH..."},
 	{"receive", "wait for transfers and answer them in the terminal"},
-	{"devices", "list devices running Loka nearby"},
+	{"devices", "list devices running Loka on the same network"},
 	{"share", "print a download link for paths: loka share PATH..."},
 	{"forget", "forget a remembered device: loka forget NAME|ID"},
 }

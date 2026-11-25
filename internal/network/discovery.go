@@ -1,5 +1,5 @@
-// Package network finds nearby Loka devices over multicast and lists this
-// device's addresses.
+// Package network finds Loka devices on the local network over multicast
+// and lists this device's addresses.
 package network
 
 import (
@@ -31,7 +31,7 @@ type Announcement struct {
 	Port    int    `json:"port"`
 }
 
-// Peer is a nearby device found by discovery.
+// Peer is a device found on the local network.
 type Peer struct {
 	ID   string    `json:"id"`
 	Name string    `json:"name"`
@@ -40,8 +40,8 @@ type Peer struct {
 	seen time.Time // when it last announced itself
 }
 
-// Discovery finds nearby devices. Only its listener writes peers and only
-// its announcer writes announceErr, each under the discovery's own lock.
+// Discovery finds devices on the local network. The listener writes peers
+// and the announcer writes announceErr. Both use the discovery's lock.
 type Discovery struct {
 	self Announcement
 	port int // the UDP port to listen and announce on

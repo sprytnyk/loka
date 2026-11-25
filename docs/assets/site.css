@@ -533,6 +533,9 @@ section {
   gap: 16px;
   counter-reset: step;
 }
+.steps-note {
+  margin: 18px 0 0;
+}
 .step::before {
   counter-increment: step;
   content: counter(step);
@@ -730,16 +733,13 @@ thead th {
   font-weight: 650;
 }
 tbody th {
-  color: var(--muted);
-  font-weight: 500;
-  white-space: nowrap;
+  color: var(--strong);
+  font-weight: 600;
 }
 td {
   color: var(--label);
 }
-/* Loka's own column stands out a little */
-th:nth-child(2),
-td:nth-child(2) {
+.compare tbody tr:first-child > * {
   background: var(--soft);
   color: var(--strong);
 }

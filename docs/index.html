@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Loka: share files on your local network</title>
-    <meta name="description" content="Share files and directories with computers and phones on your local network. Loka encrypts them and sends them straight from one device to the other, with no account, server or internet. It is free and open source, for Linux, Windows and macOS." />
+    <meta name="description" content="Share files offline with one executable for Linux, Windows and macOS. Phones can send and receive in their browser." />
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
     <link rel="canonical" href="https://sprytnyk.github.io/loka/" />
     <link rel="alternate" hreflang="en" href="https://sprytnyk.github.io/loka/" />
@@ -13,7 +13,7 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Loka" />
     <meta property="og:title" content="Loka: share files on your local network" />
-    <meta property="og:description" content="Share files and directories with computers and phones on your local network. Loka encrypts them and needs no account, server or internet." />
+    <meta property="og:description" content="Share files offline with one executable for Linux, Windows and macOS. Phones can send and receive in their browser." />
     <meta property="og:url" content="https://sprytnyk.github.io/loka/" />
     <meta property="og:image" content="https://sprytnyk.github.io/loka/loka.png" />
     <meta property="og:image:width" content="1280" />
@@ -26,7 +26,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Loka",
-        "description": "Share files and directories with computers and phones on your local network. Loka encrypts them and needs no account, server or internet.",
+        "description": "Share files offline with one executable for Linux, Windows and macOS. Phones can send and receive in their browser.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "Linux, Windows, macOS",
         "url": "https://sprytnyk.github.io/loka/",
@@ -72,11 +72,12 @@
 
     <main>
       <div class="hero wrap">
-        <h1>Share files on your own network</h1>
+        <h1>Share files on your local network</h1>
         <p class="lead">
-          Send files and directories between computers and phones nearby. They go straight
-          from one device to the other, encrypted, and never pass through a server or the
-          internet. Loka runs on Linux, Windows and macOS. Phones need only a browser.
+          Unpack and run one executable on Linux, Windows or macOS. Loka opens in your
+          browser and has terminal commands for file transfers. Phones use their own browser
+          to send and receive. Files go directly between devices, even when the internet is
+          down. You don't need an account.
         </p>
         <div data-downloads>
           <div class="downloads">
@@ -224,31 +225,28 @@
         <div class="wrap">
           <div class="section-head">
             <h2>How it works</h2>
-            <p class="muted">
-              Loka is one program with nothing else to install. Run it and it opens in your
-              browser.
-            </p>
           </div>
           <div class="steps">
             <div class="card step">
               <h3>Run Loka on both computers</h3>
-              <p>Each one finds the other on the network by itself. You don't need an account.</p>
+              <p>Loka finds the other computer on your local network.</p>
             </div>
             <div class="card step">
               <h3>Pick files and a device</h3>
               <p>
-                Choose files or a directory, or drop them on the page. Then select the device to
-                send to.
+                Choose files or a directory, or drop them on the page. Then select the device
+                you want to send them to.
               </p>
             </div>
             <div class="card step">
-              <h3>Accept on the other side</h3>
+              <h3>Accept the transfer</h3>
               <p>
-                The receiver chooses where to put the files. The first time, both show a pairing
-                code. Check it's the same on both.
+                Choose where to save the files on the receiving computer. The first time,
+                check that both computers show the same pairing code before you accept.
               </p>
             </div>
           </div>
+          <p class="muted steps-note">On a phone, open a link from Loka or scan its QR code.</p>
         </div>
       </section>
 
@@ -264,10 +262,11 @@
                   <rect x="5" y="11" width="14" height="10" rx="2" />
                   <path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg
               ></span>
-              <h3>Encrypted</h3>
+              <h3>Encrypted transfers</h3>
               <p>
-                Loka encrypts transfers between two computers running it. Each remembers the other after the
-                first transfer and refuses a device that only poses as it.
+                When both computers run Loka, each remembers the other's certificate after
+                the first transfer. Loka refuses a transfer if that certificate changes.
+                On a phone, install Loka's certificate to let the browser verify your computer.
               </p>
             </div>
             <div class="card">
@@ -276,10 +275,10 @@
                   <rect x="7" y="2" width="10" height="20" rx="2" />
                   <path d="M11 18h2" /></svg
               ></span>
-              <h3>Phones need only a browser</h3>
+              <h3>Send from a phone</h3>
               <p>
-                Scan the QR code from <strong>Receive from a phone</strong> and send files from
-                the phone's browser. The computer asks before it saves anything.
+                Select <strong>Receive from a phone</strong> and scan the QR code to send
+                files from the phone's browser. The computer asks you to accept the files.
               </p>
             </div>
             <div class="card">
@@ -291,8 +290,8 @@
               ></span>
               <h3>Download links</h3>
               <p>
-                For someone without Loka, create a link with a QR code. It works in any browser
-                while you share. Directories download as a ZIP.
+                Create a link or share its QR code. The recipient can download the files in a
+                browser while you're sharing. Directories download as a ZIP.
               </p>
             </div>
             <div class="card">
@@ -301,10 +300,10 @@
                   <path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0" />
                   <path d="M12 19.5h.01" /></svg
               ></span>
-              <h3>Finds devices by itself</h3>
+              <h3>Find devices on the same network</h3>
               <p>
-                Computers running Loka on the same network show up on their own. If one doesn't,
-                enter its address.
+                Loka lists other computers running Loka on your network. If a computer is
+                missing from the list, enter its address.
               </p>
             </div>
             <div class="card">
@@ -314,10 +313,10 @@
                     d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
                   /></svg
               ></span>
-              <h3>Files and whole directories</h3>
+              <h3>Files and directories</h3>
               <p>
-                Send files of any size and whole directories. Several transfers can run at once,
-                and each shows its speed.
+                Send files of any size or a whole directory. Run several transfers at once and
+                see the speed of each.
               </p>
             </div>
             <div class="card">
@@ -326,10 +325,10 @@
                   <path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z" />
                   <path d="M9 12l2 2 4-4" /></svg
               ></span>
-              <h3>Loka never overwrites files</h3>
+              <h3>Keep existing files</h3>
               <p>
-                Incoming files move into place only when the transfer finishes. A failed transfer
-                leaves nothing behind.
+                If <code>report.pdf</code> already exists, Loka saves the incoming file under
+                a name like <code>report (1).pdf</code>.
               </p>
             </div>
             <div class="card">
@@ -340,8 +339,8 @@
               ></span>
               <h3>Browser or terminal</h3>
               <p>
-                Use the page in your browser, or send, receive and share from the terminal. Both
-                are the same program.
+                The same executable opens the browser page and runs the terminal commands for
+                sending, receiving and sharing files.
               </p>
             </div>
             <div class="card">
@@ -349,10 +348,10 @@
                 ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3" /></svg
               ></span>
-              <h3>Nothing leaves your network</h3>
+              <h3>Works without internet access</h3>
               <p>
-                Files go straight between your devices. Loka has no account and no server, and
-                sends nothing outside your network.
+                Devices send files directly over your local network. Loka works even if your
+                internet connection drops.
               </p>
             </div>
             <div class="card">
@@ -361,10 +360,10 @@
                   <circle cx="12" cy="12" r="9" />
                   <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg
               ></span>
-              <h3>Light or dark, English or Ukrainian</h3>
+              <h3>Theme and language</h3>
               <p>
-                The page follows your system's light or dark setting and your browser's
-                language. Buttons in the header switch both.
+                Loka uses your system theme and browser language. Switch between light and
+                dark or English and Ukrainian in the header.
               </p>
             </div>
           </div>
@@ -375,15 +374,15 @@
         <div class="wrap cli">
           <div>
             <div class="section-head">
-              <h2>In the terminal too</h2>
-              <p class="muted">The same program works without a browser, over SSH or in scripts.</p>
+              <h2>Terminal commands</h2>
             </div>
             <ul>
-              <li><code>loka devices</code> lists nearby devices and marks the ones Loka remembers.</li>
+              <li><code>loka devices</code> lists devices running Loka on the same network and marks the ones it remembers.</li>
               <li><code>loka send</code> sends files and directories to an address.</li>
               <li><code>loka receive</code> asks where to put each transfer.</li>
               <li>
-                <code>loka share</code> prints a link and its QR code, and a <code>curl</code> command that stops if another device answers.
+                <code>loka share</code> prints a link and its QR code. It also prints a
+                <code>curl</code> command that stops if another device answers.
               </li>
             </ul>
           </div>
@@ -400,68 +399,75 @@
       <section id="compare">
         <div class="wrap">
           <div class="section-head">
-            <h2>Compared with LocalSend, st and Upgopher</h2>
+            <h2 id="compare-heading">How Loka compares</h2>
           </div>
-          <div class="compare">
+          <div class="compare" role="region" aria-labelledby="compare-heading" tabindex="0">
             <table>
               <thead>
                 <tr>
-                  <th></th>
-                  <th>Loka</th>
-                  <th><a href="https://localsend.org">LocalSend</a></th>
-                  <th><a href="https://github.com/chyok/st">st</a></th>
-                  <th><a href="https://github.com/wanetty/upgopher">Upgopher</a></th>
+                  <th scope="col">Tool</th>
+                  <th scope="col">What you run on a computer</th>
+                  <th scope="col">Browser on another device</th>
+                  <th scope="col">Where it works</th>
+                  <th scope="col">File encryption</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <th>On computers</th>
-                  <td>One program, used in the browser or the terminal</td>
-                  <td>An app, or a separate command-line tool</td>
-                  <td>One program, used in the terminal</td>
-                  <td>One program, used in the browser</td>
+                  <th scope="row"><a href="https://github.com/sprytnyk/loka/releases/latest">Loka</a></th>
+                  <td>One file with a built-in web page and terminal commands</td>
+                  <td>Send and receive in a browser on the same network. You accept each upload to the computer.</td>
+                  <td>Finds other Loka devices on the same network. Works without internet access.</td>
+                  <td>End-to-end encrypted</td>
                 </tr>
                 <tr>
-                  <th>On phones</th>
-                  <td>Nothing, the browser</td>
-                  <td>The app</td>
-                  <td>Nothing, the browser</td>
-                  <td>Nothing, the browser</td>
+                  <th scope="row"><a href="https://github.com/schollz/croc">croc</a></th>
+                  <td>One terminal program</td>
+                  <td>Use a code to send or receive on the <a href="https://getcroc.com/">croc website</a>.</td>
+                  <td>Local terminal transfers work without internet access. The website and some internet transfers use a remote server to forward files.</td>
+                  <td>End-to-end encrypted</td>
                 </tr>
                 <tr>
-                  <th>Between two installs</th>
-                  <td>Encrypted</td>
-                  <td>Encrypted by default</td>
-                  <td>Not encrypted</td>
-                  <td>Not offered</td>
+                  <th scope="row"><a href="https://github.com/chyok/st">st</a></th>
+                  <td>One terminal program</td>
+                  <td>Send and receive in a browser on the same network. st saves uploads automatically.</td>
+                  <td>Finds other st devices on the same network. Works without internet access.</td>
+                  <td>Plain HTTP</td>
                 </tr>
                 <tr>
-                  <th>From a phone's browser</th>
-                  <td>You accept each upload</td>
-                  <td>You accept each upload, unless you turn that off</td>
-                  <td>Saved without asking</td>
-                  <td>Saved without asking</td>
+                  <th scope="row"><a href="https://localsend.org/">LocalSend</a></th>
+                  <td>Desktop app or separate terminal tool</td>
+                  <td>Send and receive in a browser on the same network. LocalSend also has a separate <a href="https://github.com/localsend/web">web app</a>.</td>
+                  <td>Desktop and phone apps work on the same network without internet access. By default, the web app uses a remote server to connect devices.</td>
+                  <td>Encrypts app transfers by default</td>
                 </tr>
                 <tr>
-                  <th>Download link for a browser</th>
-                  <td>Yes</td>
-                  <td>Yes</td>
-                  <td>Yes</td>
-                  <td>Yes</td>
+                  <th scope="row"><a href="https://github.com/iamsami101/Flashbyte">Flashbyte</a></th>
+                  <td>Desktop app</td>
+                  <td>Flashbyte app on both devices</td>
+                  <td>Local network. Works offline.</td>
+                  <td>Supports TLS</td>
                 </tr>
                 <tr>
-                  <th>Finding devices</th>
-                  <td>Multicast</td>
-                  <td>Multicast, then scanning the network</td>
-                  <td>Multicast</td>
-                  <td>None, you type the address</td>
+                  <th scope="row"><a href="https://wanetty.github.io/upgopher/">Upgopher</a></th>
+                  <td>One file with a built-in web page</td>
+                  <td>Upload and download from the shared directory.</td>
+                  <td>Connect to the computer on your local network. You can also set up access over the internet.</td>
+                  <td>Optional HTTPS and browser file encryption</td>
                 </tr>
                 <tr>
-                  <th>Account, server or internet</th>
-                  <td>None</td>
-                  <td>None</td>
-                  <td>None</td>
-                  <td>None</td>
+                  <th scope="row"><a href="https://muhamadjawdatsalemalakoum.github.io/dropwire/">Dropwire</a></th>
+                  <td>Desktop app</td>
+                  <td>Dropwire app on both devices</td>
+                  <td>Finds devices on the same network and can send over the internet. A public server forwards files when a direct connection fails.</td>
+                  <td>End-to-end encrypted</td>
+                </tr>
+                <tr>
+                  <th scope="row"><a href="https://github.com/Aditya-Karn234/PeerPayload">PeerPayload Connect</a></th>
+                  <td>Windows or Linux app</td>
+                  <td>Connect app on both devices. It also has an Android app.</td>
+                  <td>Works on the same network or over the internet. A server helps devices connect. If they can't connect directly, a server forwards the files.</td>
+                  <td>End-to-end encrypted</td>
                 </tr>
               </tbody>
             </table>
@@ -476,27 +482,28 @@
             <summary>Is it free?</summary>
             <div>
               <p>
-                Loka is free. The MIT-licensed code is
+                Loka is free. You can find the code and its MIT licence
                 <a href="https://github.com/sprytnyk/loka">on GitHub</a>.
               </p>
             </div>
           </details>
           <details>
-            <summary>How do I install it?</summary>
+            <summary>How do I run Loka?</summary>
             <div>
               <p>
                 Download the archive for your computer from
-                <a href="https://github.com/sprytnyk/loka/releases/latest">Releases</a>, unpack
-                it, and put <code>loka</code> (<code>loka.exe</code> on Windows) in a directory
-                on your <code>PATH</code>. Then run <code>loka</code>.
+                <a href="https://github.com/sprytnyk/loka/releases/latest">Releases</a> and
+                unpack it. On Windows, double-click <code>loka.exe</code>. On Linux or macOS,
+                run <code>./loka</code> from the unpacked directory. To run Loka from any
+                directory in the terminal, put the executable on your <code>PATH</code>.
               </p>
               <p>
-                macOS refuses to open downloaded programs from unidentified developers. After
-                unpacking, run this once.
+                If macOS blocks Loka because it doesn't recognise the developer, run this
+                once from the unpacked directory.
               </p>
               <pre>xattr -d com.apple.quarantine loka</pre>
               <p>
-                With Go installed, you can instead run
+                If you have Go installed, you can also run
                 <code>go install github.com/sprytnyk/loka@latest</code>.
               </p>
             </div>
@@ -505,8 +512,8 @@
             <summary>How do I check a download?</summary>
             <div>
               <p>
-                Put <code>SHA256SUMS</code> and <code>SHA256SUMS.asc</code> from the release next
-                to the archive and run this.
+                Put <code>SHA256SUMS</code> and <code>SHA256SUMS.asc</code> from the release
+                alongside the archive. Run this command to check the download.
               </p>
               <pre>gpg --verify SHA256SUMS.asc SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS</pre>
             </div>
@@ -515,10 +522,10 @@
             <summary>How do I send from a phone?</summary>
             <div>
               <p>
-                On the computer, select <strong>Receive from a phone</strong> and scan the QR code
-                with the phone's camera. Choose files or a directory and send. The computer asks
-                you to accept, as with any transfer. iPhones and iPads can send files but not
-                directories, because their browsers can't choose a directory.
+                On the computer, select <strong>Receive from a phone</strong>. Scan the QR code
+                with the phone's camera. Choose files or a directory and send them. The computer
+                asks you to accept. On iPhone and iPad, choose files because their browsers
+                can't select directories.
               </p>
               <p>
                 A computer on several networks shows a QR code for each. Use the one on the same
@@ -530,14 +537,16 @@
             <summary>Why does the phone ask to install a certificate?</summary>
             <div>
               <p>
-                So the phone's browser can check that it reached your computer and not another device. Install
-                it once, and from then on the page opens over HTTPS without a warning. You can also skip it. Loka still encrypts the connection, but the browser warns that it can't check which device answered.
+                The certificate lets your phone's browser check which computer answered.
+                Install it once to open Loka over HTTPS without a warning. If you skip it,
+                Loka still encrypts the connection and the browser warns that it can't verify
+                which device answered.
               </p>
               <p>
-                The certificate can only vouch for addresses on local networks, so it can't be
-                used to pose as a web site. Loka never installs it on the computer itself. The
-                <a href="https://github.com/sprytnyk/loka#safety">README</a> shows how to check
-                its fingerprint before you trust it.
+                The certificate only covers local network addresses, so someone can't use it
+                to pose as a website. Loka leaves the computer's trusted certificates alone.
+                The <a href="https://github.com/sprytnyk/loka#safety">README</a> shows how to
+                check the certificate's fingerprint before you trust it.
               </p>
             </div>
           </details>
@@ -545,8 +554,11 @@
             <summary>What is the pairing code for?</summary>
             <div>
               <p>
-                The first time two devices talk, both show a six-digit code. If they match, no other device is passing the transfer on. If one is, the codes differ. After that first transfer, Loka remembers the other device and refuses
-                one that only poses as it.
+                Two computers running Loka show a six-digit code the first time they connect.
+                Compare the codes before accepting. A mismatch means another device could be
+                forwarding the connection. After the first transfer, each Loka remembers the
+                other's certificate and refuses a transfer if it changes. On a phone, the
+                browser verifies your computer using the certificate you install.
               </p>
             </div>
           </details>
@@ -554,10 +566,10 @@
             <summary>The computers can't see each other. What now?</summary>
             <div>
               <p>
-                Some Wi-Fi networks block connections between devices, often guest networks.
+                Some Wi-Fi networks, especially guest networks, block connections between devices.
                 Try another network, or enter the other computer's address and port by hand. On
-                Windows, allow Loka through the firewall when asked. If the port is busy, run
-                <code>loka --port 0</code> to use a free one.
+                Windows, allow Loka through the firewall when asked. If the default port is
+                busy, try <code>loka --port 45000</code>.
               </p>
             </div>
           </details>
@@ -565,9 +577,10 @@
             <summary>Where do received files go?</summary>
             <div>
               <p>
-                To the directory you choose when you accept. Files arrive in a hidden directory
-                inside it and move into place when the transfer finishes. Loka never overwrites a file, and a failed transfer leaves nothing behind. Loka remembers the last
-                destination until it stops.
+                Loka saves files in the directory you choose when you accept. Incoming files
+                stay in a hidden directory until the transfer finishes. If a name is already in
+                use, Loka adds a number to the incoming file's name. If the transfer fails,
+                Loka removes the temporary files. It remembers the last directory until you quit.
               </p>
             </div>
           </details>
@@ -575,11 +588,10 @@
             <summary>Does it send anything outside my network?</summary>
             <div>
               <p>
-                No. Loka has no account, no server and no tracking. Files go straight from one
-                device to the other. The page on your own computer opens at
-                <code>http://127.0.0.1</code>, which never leaves it.
-                <a href="https://github.com/sprytnyk/loka/blob/main/PROTOCOL.md">PROTOCOL.md</a>
-                describes how devices talk, step by step.
+                Files go directly between devices on your network. Loka doesn't track you.
+                It opens its page at <code>http://127.0.0.1</code>, an address that only works
+                on your computer. <a href="https://github.com/sprytnyk/loka/blob/main/PROTOCOL.md">PROTOCOL.md</a>
+                describes how devices connect and transfer files.
               </p>
             </div>
           </details>
@@ -611,7 +623,7 @@
           <a href="https://github.com/sprytnyk/loka/releases">Releases</a>
           <a href="https://github.com/sprytnyk/loka/blob/main/PROTOCOL.md">Protocol</a>
           <a href="https://github.com/sprytnyk/loka/blob/main/LICENSE">MIT licence</a>
-          <a href="uk/" data-lang="uk" hreflang="uk" lang="uk">🇺🇦 Українською</a>
+          <a href="uk/" data-lang="uk" hreflang="uk" lang="uk"><span aria-hidden="true">🇺🇦</span> Українською</a>
         </div>
         <p>Made in Ukraine by <a href="https://sprytnyk.dev">sprytnyk</a>.</p>
       </div>
