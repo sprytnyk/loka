@@ -112,11 +112,15 @@
     en: {
       selected: { one: "{n} item selected", other: "{n} items selected" },
       names: { one: "{n} name", other: "{n} names" },
+      characters: { one: "{n} character", other: "{n} characters" },
       nothing: "Nothing selected",
       first: "Choose files or directories first.",
+      enterText: "Type or paste some text first.",
+      textTooLong: "The text is longer than 1 MB. Send it as a file instead.",
+      pasteFailed: "Could not read the clipboard. Paste into the box instead.",
+      textPreview: "Text: {text}",
       remove: "Remove",
       to: "To {name}",
-      fromBrowser: "From a browser at {name}",
       statuses: { waiting: "waiting", sending: "sending", receiving: "receiving", complete: "complete", cancelled: "cancelled" },
       speed: "{speed} Mbps",
       cancel: "Cancel",
@@ -124,16 +128,26 @@
       secure: "Safer, once the phone has Loka's certificate:",
       qr: "QR code",
       qrFor: "QR code for {url}",
+      downloadQr: "Download on a phone",
+      textQr: "Open on a phone",
+      phoneQr: "Receive from a phone",
+      demoAddress: "This QR code uses an example address.",
+      help: "Loka encrypts transfers. Compare the pairing codes on both computers the first time you send. Phones can use Loka's certificate to check which computer answered.",
+      helpMore: "Read about certificates and pairing codes",
       stop: "Stop sharing",
     },
     uk: {
       selected: { one: "Вибрано {n} елемент", few: "Вибрано {n} елементи", many: "Вибрано {n} елементів", other: "Вибрано {n} елемента" },
       names: { one: "{n} назва", few: "{n} назви", many: "{n} назв", other: "{n} назви" },
+      characters: { one: "{n} символ", few: "{n} символи", many: "{n} символів", other: "{n} символу" },
       nothing: "Нічого не вибрано",
       first: "Спершу виберіть файли або теки.",
+      enterText: "Спершу введіть або вставте текст.",
+      textTooLong: "Текст довший за 1 МБ. Надішліть його файлом.",
+      pasteFailed: "Не вдалося прочитати буфер обміну. Вставте текст у поле вручну.",
+      textPreview: "Текст: {text}",
       remove: "Прибрати",
       to: "До {name}",
-      fromBrowser: "Від браузера за адресою {name}",
       statuses: { waiting: "очікує", sending: "надсилання", receiving: "отримання", complete: "завершено", cancelled: "скасовано" },
       speed: "{speed} Мбіт/с",
       cancel: "Скасувати",
@@ -141,6 +155,12 @@
       secure: "Безпечніше, коли на телефоні вже є сертифікат Loka:",
       qr: "QR-код",
       qrFor: "QR-код для {url}",
+      downloadQr: "Завантажити на телефон",
+      textQr: "Відкрити на телефоні",
+      phoneQr: "Отримати з телефона",
+      demoAddress: "У цьому QR-коді наведено адресу для прикладу.",
+      help: "Loka шифрує передавання. Першого разу звірте коди з’єднання на обох комп’ютерах. Сертифікат Loka дає телефону змогу перевірити, який комп’ютер відповів.",
+      helpMore: "Про сертифікати й коди з’єднання",
       stop: "Закрити доступ",
     },
   }[lang];
@@ -171,16 +191,61 @@
       root.dataset.theme = dark ? "light" : "dark";
     });
 
+    const dialog = $("[data-demo-dialog]");
+    const showDialog = (title, ...contents) => {
+      $("[data-dialog-title]").textContent = title;
+      $("[data-dialog-body]").replaceChildren(...contents);
+      dialog.showModal();
+    };
+    const help = $("[data-demo-help]");
+    help.addEventListener("click", () => {
+      const more = el("a", "", say("helpMore"));
+      more.href = "#faq";
+      more.addEventListener("click", () => dialog.close());
+      showDialog(help.getAttribute("aria-label"), el("p", "", say("help")), more);
+    });
+
     // Items to share
     const list = $("[data-selected]");
     const count = $("[data-count]");
-    const more = [
-      "/home/alex/Music/live-set.flac",
-      "/home/alex/Projects/website",
-      "/home/alex/Downloads/manual.pdf",
-      "/home/alex/Pictures/weekend-photos",
-      "/home/alex/Documents/itinerary.pdf",
-    ];
+    const editor = $("[data-text]");
+    const textCount = $("[data-text-count]");
+    const kinds = [...root.querySelectorAll("[data-kind]")];
+    let kind = "files";
+    const encode = new TextEncoder();
+    const maxText = 1 << 20;
+    const countText = () => {
+      textCount.classList.remove("warn");
+      textCount.textContent = editor.value ? say("characters", { n: [...editor.value].length }) : "";
+    };
+    for (const b of kinds) {
+      b.addEventListener("click", () => {
+        kind = b.dataset.kind;
+        for (const control of kinds) control.setAttribute("aria-pressed", control === b);
+        $("[data-files-panel]").hidden = kind === "text";
+        $("[data-text-panel]").hidden = kind === "files";
+        if (kind === "text") editor.focus({ preventScroll: true });
+      });
+    }
+    editor.addEventListener("input", countText);
+    const paste = $("[data-paste]");
+    paste.hidden = !navigator.clipboard?.readText;
+    paste.addEventListener("click", async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        editor.setRangeText(text, editor.selectionStart, editor.selectionEnd, "end");
+        countText();
+      } catch {
+        textCount.classList.add("warn");
+        textCount.textContent = say("pasteFailed");
+      }
+      editor.focus({ preventScroll: true });
+    });
+
+    const examples = {
+      files: ["/home/alex/Music/live-set.flac", "/home/alex/Downloads/manual.pdf", "/home/alex/Documents/itinerary.pdf"],
+      directory: ["/home/alex/Projects/website", "/home/alex/Documents/travel", "/home/alex/Pictures/weekend-photos"],
+    };
     const selected = () => [...list.querySelectorAll("li > span")].map((s) => s.textContent);
     const counted = () => {
       const n = selected().length;
@@ -202,22 +267,40 @@
       li.querySelector("button").addEventListener("click", () => remove(li));
     }
     for (const b of root.querySelectorAll("[data-choose]")) {
-      b.addEventListener("click", () => add(more.find((p) => !selected().includes(p))));
+      b.addEventListener("click", () => add(examples[b.dataset.choose].find((p) => !selected().includes(p))));
     }
+    const drop = $("[data-drop]");
+    drop.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      drop.classList.add("over");
+    });
+    drop.addEventListener("dragleave", (e) => {
+      if (!drop.contains(e.relatedTarget)) drop.classList.remove("over");
+    });
+    drop.addEventListener("drop", (e) => {
+      e.preventDefault();
+      drop.classList.remove("over");
+      for (const file of e.dataTransfer.files) add(file.name);
+    });
     $("[data-add]").addEventListener("submit", (e) => {
       e.preventDefault();
       const input = e.currentTarget.querySelector("input");
       add(input.value.trim());
       input.value = "";
     });
-    // like Loka, it asks for something to send first
-    const items = () => {
-      const paths = selected();
-      if (!paths.length) {
-        count.textContent = say("first");
-        count.classList.add("warn");
+    const payload = () => {
+      if (kind === "text") {
+        const text = editor.value;
+        if (text && encode.encode(text).length <= maxText) return { text };
+        textCount.classList.add("warn");
+        textCount.textContent = say(text ? "textTooLong" : "enterText");
+        return null;
       }
-      return paths.map(base);
+      const names = selected().map(base);
+      if (names.length) return { names };
+      count.textContent = say("first");
+      count.classList.add("warn");
+      return null;
     };
 
     // Transfers
@@ -230,19 +313,16 @@
         }),
       });
 
-    function transfer(title, names, card) {
-      const t = { status: "waiting", progress: 0, speed: null, stopped: false };
-      const item = card || el("div", "m-item enter");
-      item.textContent = "";
-      const row = el("div", "m-row");
-      const status = el("span", "m-status");
-      row.append(el("strong", "", title), status);
-      item.append(row);
-      if (names.length === 1) {
+    function showContents(item, { names, text }) {
+      if (text !== undefined) {
+        const chars = [...text];
+        const preview = chars.slice(0, 120).join("").replace(/\s+/g, " ").trim();
+        item.append(el("small", "m-preview", say("textPreview", { text: preview + (chars.length > 120 ? "…" : "") })));
+      } else if (names.length === 1) {
         const p = el("p");
         p.append(el("small", "", names[0]));
         item.append(p);
-      } else if (names.length) {
+      } else {
         const files = el("details", "m-files");
         files.append(el("summary", "", say("names", { n: names.length })));
         const ul = el("ul");
@@ -250,6 +330,17 @@
         files.append(ul);
         item.append(files);
       }
+    }
+
+    function transfer(title, contents, card) {
+      const t = { status: "waiting", progress: 0, speed: null, stopped: false };
+      const item = card || el("div", "m-item enter");
+      item.textContent = "";
+      const row = el("div", "m-row");
+      const status = el("span", "m-status");
+      row.append(el("strong", "", title), status);
+      item.append(row);
+      showContents(item, contents);
       const code = el("p", "m-code");
       const bar = el("div", "m-bar");
       const fill = el("i");
@@ -277,6 +368,12 @@
       // moves from where it is to 100%, around the given speed
       t.run = async (status, mbps) => {
         t.code = null;
+        if (contents.text !== undefined) {
+          t.status = "complete";
+          t.progress = 100;
+          draw();
+          return;
+        }
         t.status = status;
         while (!t.stopped && t.progress < 100) {
           t.speed = mbps * (0.94 + Math.random() * 0.08);
@@ -295,32 +392,35 @@
     }
 
     async function send(name, mbps) {
-      const names = items();
-      if (!names.length) return;
-      const t = transfer(say("to", { name }), names);
+      const contents = payload();
+      if (!contents) return;
+      const t = transfer(say("to", { name }), contents);
       t.code = String(100000 + Math.floor(Math.random() * 900000)).replace(/(\d{3})(\d{3})/, "$1 $2");
       t.draw();
       await sleep(calm ? 0 : 1800);
-      if (!t.stopped) t.run("sending", mbps);
+      if (t.stopped) return;
+      await t.run("sending", mbps);
+      if (t.status === "complete" && editor.value === contents.text) {
+        editor.value = "";
+        countText();
+      }
     }
     for (const b of root.querySelectorAll("[data-send]")) {
       b.addEventListener("click", () => send(b.dataset.send, Number(b.dataset.speed)));
     }
     $("[data-manual]").addEventListener("submit", (e) => {
       e.preventDefault();
-      const address = e.currentTarget.querySelector("input").value.trim() || "192.0.2.30";
-      send(address, 94);
-    });
-    // a photo from a phone's browser, which Loka would ask to accept first
-    $("[data-phone]").addEventListener("click", () => {
-      const t = transfer(say("fromBrowser", { name: "192.0.2.40" }), ["IMG_2041.HEIC"]);
-      sleep(calm ? 0 : 700).then(() => t.run("receiving", 64));
+      const { address, port } = e.currentTarget.elements;
+      const host = address.value.trim();
+      if (!host) return address.focus();
+      const name = port.value === "45873" ? host : `${host}:${port.value}`;
+      send(name, 94);
     });
 
     // the incoming transfer that is already on the page carries on once it's seen
     const incoming = box.children[1];
     if (incoming) {
-      const t = transfer(incoming.querySelector("strong").textContent, ["holiday-video.mp4"], incoming);
+      const t = transfer(incoming.querySelector("strong").textContent, { names: ["holiday-video.mp4"] }, incoming);
       t.status = "receiving";
       t.progress = 62;
       t.speed = 87.4;
@@ -329,40 +429,52 @@
       else whenSeen(root, () => sleep(900).then(() => t.run("receiving", 87)));
     }
 
-    // Download links
+    // Links use example addresses, so the demo never connects to a local device.
     const links = $("[data-links]");
-    const URL_TAIL = `192.0.2.20:45873/#d=${LINK}`;
-    function link(names, card) {
-      const item = card || el("div", "m-item enter");
-      if (!card) {
-        item.append(el("small", "", names.join(", ")));
-        const urls = el("div", "m-urls");
-        urls.append(
-          el("span", "url", `http://${URL_TAIL}`),
-          el("span", "hint", say("secure")),
-          el("span", "url", `https://${URL_TAIL}`),
-        );
-        const buttons = el("div", "m-link-buttons");
-        buttons.append(el("button", "m-btn sec", say("qr")), el("button", "m-btn sec", say("stop")));
-        for (const b of buttons.children) b.type = "button";
-        item.append(urls, buttons);
-        links.prepend(item);
-      }
+    const demoUrl = (fragment, scheme = "http") => `${scheme}://192.0.2.20:45873/#${fragment}=${LINK}`;
+    const qrExamples = {
+      d: { image: "qr-demo.svg", title: "downloadQr" },
+      t: { image: "qr-text-demo.svg", title: "textQr" },
+      r: { image: "qr-phone-demo.svg", title: "phoneQr" },
+    };
+    function showQr(fragment) {
+      const { image, title } = qrExamples[fragment];
+      const url = demoUrl(fragment);
+      const img = el("img", "m-qr");
+      img.src = new URL(image, ASSETS);
+      img.alt = say("qrFor", { url });
+      showDialog(say(title), el("p", "", say("demoAddress")), img, el("p", "m-qr-url", url));
+    }
+    $("[data-phone]").addEventListener("click", () => showQr("r"));
+
+    function bindLink(item, fragment) {
       const [qrButton, stopButton] = item.querySelectorAll(".m-link-buttons button");
-      qrButton.addEventListener("click", () => {
-        const shown = item.querySelector(".m-qr");
-        if (shown) return shown.remove();
-        const img = el("img", "m-qr");
-        img.src = new URL("qr-demo.svg", ASSETS);
-        img.alt = say("qrFor", { url: `http://${URL_TAIL}` });
-        item.querySelector(".m-urls").after(img);
-      });
+      qrButton.setAttribute("aria-haspopup", "dialog");
+      qrButton.addEventListener("click", () => showQr(fragment));
       stopButton.addEventListener("click", () => item.remove());
     }
-    for (const card of links.children) link([], card);
+    for (const card of links.children) bindLink(card, "d");
     $("[data-create]").addEventListener("click", () => {
-      const names = items();
-      if (names.length) link(names);
+      const contents = payload();
+      if (!contents) return;
+      const fragment = contents.text === undefined ? "d" : "t";
+      const item = el("div", "m-item enter");
+      showContents(item, contents);
+      const urls = el("div", "m-urls");
+      urls.append(
+        el("span", "url", demoUrl(fragment)),
+        el("span", "hint", say("secure")),
+        el("span", "url", demoUrl(fragment, "https")),
+      );
+      const buttons = el("div", "m-link-buttons");
+      for (const label of ["qr", "stop"]) {
+        const b = el("button", "m-btn sec", say(label));
+        b.type = "button";
+        buttons.append(b);
+      }
+      item.append(urls, buttons);
+      bindLink(item, fragment);
+      links.prepend(item);
     });
   }
 

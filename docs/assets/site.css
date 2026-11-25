@@ -988,16 +988,23 @@ footer p a {
   }
 }
 .app {
+  --demo-gutter: 28px;
   container-type: inline-size;
   position: relative;
   isolation: isolate;
-  padding: 0 28px 28px;
+  padding: 0 var(--demo-gutter) 24px;
   background:
     radial-gradient(50rem 24rem at 50% -10rem, var(--glow), transparent 70%) no-repeat,
     var(--bg);
   color: var(--ink);
   font: 15px/1.5 var(--sans);
   text-align: left;
+}
+#demo {
+  scroll-margin-top: 5rem;
+}
+.app [hidden] {
+  display: none !important;
 }
 /* the dot grid, inside the window this time */
 .app::before {
@@ -1024,8 +1031,8 @@ footer p a {
   align-items: center;
   justify-content: space-between;
   gap: 12px 20px;
-  margin: 0 -28px;
-  padding: 12px 28px;
+  margin: 0 calc(-1 * var(--demo-gutter));
+  padding: 12px var(--demo-gutter);
   background: var(--header);
   border-bottom: 1px solid var(--line);
 }
@@ -1084,7 +1091,7 @@ footer p a {
     box-shadow: 0 0 0 7px transparent;
   }
 }
-.m-langs {
+.m-segment {
   display: flex;
   flex: none;
   gap: 2px;
@@ -1095,12 +1102,23 @@ footer p a {
   font-size: 12px;
   font-weight: 600;
 }
-.m-langs span {
+.m-segment :is(span, a, button) {
   padding: 4px 10px;
+  border: 0;
   border-radius: 8px;
+  background: transparent;
   color: var(--muted);
+  font: inherit;
+  text-decoration: none;
+  white-space: nowrap;
 }
-.m-langs .on {
+.m-segment :is(a, button) {
+  cursor: pointer;
+}
+.m-segment :is(a, button):hover {
+  color: var(--strong);
+}
+.m-segment :is([aria-current], [aria-pressed="true"]) {
   background: var(--segment-on);
   color: var(--strong);
   box-shadow: 0 1px 2px #0f172a1f, var(--highlight);
@@ -1131,18 +1149,18 @@ button.m-round:hover {
   height: 17px;
 }
 /* the sun switches to light, the moon to dark */
-.app .moon,
-.app[data-theme="dark"] .sun {
+.app .sun,
+.app[data-theme="dark"] .moon {
   display: none;
 }
-.app[data-theme="dark"] .moon {
+.app[data-theme="dark"] .sun {
   display: block;
 }
 @media (prefers-color-scheme: dark) {
-  .app:not([data-theme="light"]) .moon {
+  .app:not([data-theme="light"]) .sun {
     display: block;
   }
-  .app:not([data-theme="light"]) .sun {
+  .app:not([data-theme="light"]) .moon {
     display: none;
   }
 }
@@ -1199,6 +1217,7 @@ button.m-round:hover {
 }
 .m-device {
   grid-area: device;
+  container: demo-device / inline-size;
 }
 .m-link {
   grid-area: link;
@@ -1227,6 +1246,20 @@ button.m-round:hover {
 }
 .m-head.start {
   align-items: flex-start;
+}
+.m-choose .m-head,
+.m-transfers .m-head {
+  flex-wrap: wrap;
+}
+.m-kind,
+.m-btn.m-phone {
+  margin-inline-start: auto;
+}
+.m-btn.m-phone {
+  flex: none;
+  max-width: 100%;
+  padding: 6px 11px;
+  font-size: 12px;
 }
 .m-icon {
   display: grid;
@@ -1307,6 +1340,11 @@ button.m-round:hover {
   background: var(--item);
   text-align: center;
 }
+.m-drop.over {
+  border-color: var(--accent);
+  background: var(--soft);
+  box-shadow: 0 0 0 4px var(--ring);
+}
 .m-drop-icon {
   display: grid;
   place-items: center;
@@ -1347,9 +1385,11 @@ button.m-round:hover {
 .m-pad {
   padding-inline: 13px;
 }
-.m-input {
-  flex: 1;
-  min-width: 8rem;
+.m-pad > .m-btn {
+  margin-inline-start: auto;
+}
+.m-input,
+.m-text {
   padding: 9px 12px;
   border: 1px solid var(--field-line);
   border-radius: 10px;
@@ -1360,17 +1400,29 @@ button.m-round:hover {
     border-color 0.15s,
     box-shadow 0.15s;
 }
-.m-input::placeholder {
+.m-input {
+  flex: 1;
+  min-width: 8rem;
+}
+.m-text {
+  display: block;
+  width: 100%;
+  min-height: 14rem;
+  resize: vertical;
+}
+.m-text-actions {
+  margin-top: 10px;
+}
+.m-text-actions .m-count {
+  margin: 0 0 0 auto;
+}
+:is(.m-input, .m-text)::placeholder {
   color: var(--placeholder);
 }
-.m-input:focus-visible {
+:is(.m-input, .m-text):focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--ring);
-}
-.m-port {
-  flex: 0 1 84px;
-  min-width: 68px;
 }
 .m-list {
   margin: 12px 0 0;
@@ -1440,10 +1492,24 @@ button.m-round:hover {
   border-top: 1px solid var(--line);
 }
 .m-manual .m-row {
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.5rem auto;
 }
-.m-manual .m-btn {
-  margin-inline-start: auto;
+.m-manual .m-input {
+  width: 100%;
+  min-width: 0;
+}
+.m-manual .m-port {
+  padding-inline: 8px;
+}
+@container demo-device (max-width: 290px) {
+  .m-manual .m-row {
+    grid-template-columns: minmax(0, 1fr) 4.5rem;
+  }
+  .m-manual .m-btn {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
 }
 .m-status {
   color: var(--muted);
@@ -1479,6 +1545,10 @@ button.m-round:hover {
   margin: 6px 0;
   padding-inline-start: 1.5rem;
 }
+.m-preview {
+  display: block;
+  margin-top: 4px;
+}
 .m-urls {
   display: flex;
   flex-direction: column;
@@ -1495,10 +1565,42 @@ button.m-round:hover {
   color: var(--muted);
   font-size: 12px;
 }
+.m-dialog {
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--solid);
+  box-shadow: var(--highlight), 0 22px 60px #0004;
+  color: var(--ink);
+}
+.m-dialog::backdrop {
+  background: #02061780;
+  backdrop-filter: blur(4px);
+}
+.m-dialog h2 {
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+.m-dialog p {
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.m-dialog .m-row {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.m-dialog .m-qr-url {
+  color: var(--link);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
 .m-qr {
   display: block;
-  width: 132px;
-  height: 132px;
+  width: 150px;
+  height: 150px;
   margin-top: 10px;
   padding: 7px;
   border: 1px solid var(--line);
@@ -1516,7 +1618,7 @@ button.m-round:hover {
   justify-content: flex-end;
   padding-inline: 13px;
 }
-.m-link .m-action + .m-item {
+[data-links]:not(:empty) {
   margin-top: 12px;
 }
 .m-foot {
@@ -1542,21 +1644,16 @@ button.m-round:hover {
     display: none;
   }
 }
-/* A phone: one column with the parts that matter, so the hero stays short */
-@container (max-width: 620px) {
+@media (max-width: 700px) {
   .app {
-    padding: 0 16px 20px;
+    --demo-gutter: 16px;
   }
+}
+/* A phone shows the same cards in one column. */
+@container (max-width: 620px) {
   .m-header {
-    margin: 0 -16px;
-    padding: 10px 16px;
-  }
-  .m-langs,
-  .m-version,
-  .m-foot,
-  .m-choose,
-  .m-link {
-    display: none;
+    flex-wrap: wrap;
+    padding-block: 10px;
   }
   .m-intro {
     padding: 26px 0 20px;
@@ -1564,8 +1661,10 @@ button.m-round:hover {
   .m-layout {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
+      "choose"
       "device"
-      "transfers";
+      "transfers"
+      "link";
     gap: 12px;
   }
   .m-card {
