@@ -133,15 +133,15 @@ address.
 
 ## Sending
 
-The sender sends four requests, plus one to cancel. A phone's browser
-sends the same ones, except the reveal.
+The sender offers the files. After pairing, it waits for the receiver to
+accept.
 
 ```mermaid
 sequenceDiagram
     participant S as Sender
     participant R as Receiver
-    S->>R: POST /peer/offer {name, items, size, commitment}
-    R-->>S: {id, secret, name, nonce}
+    S->>R: POST /peer/offer {name, items, size, commitment, resume: true}
+    R-->>S: {id, secret, name, nonce, chunk_bytes}
     S->>R: POST /peer/reveal/{id} {nonce}
     Note over S,R: Both show the pairing code
     Note over R: The person accepts or declines
@@ -149,8 +149,14 @@ sequenceDiagram
         S->>R: GET /peer/status/{id}
         R-->>S: {status: waiting / accepted / ..., error}
     end
-    S->>R: POST /peer/upload/{id} (tar stream)
-    R-->>S: {status: complete, speed_mbps}
+    S->>R: GET /peer/upload/{id}
+    R-->>S: {offset, status, prefix_sha256, ready_to_save}
+    loop until the archive has arrived
+        S->>R: PATCH /peer/upload/{id} (archive chunk)
+        R-->>S: {offset, status}
+    end
+    S->>R: PATCH /peer/upload/{id} (empty)
+    R-->>S: {offset, status: complete, speed_mbps}
 ```
 
 - The offer lists up to 100 top-level names and the total size of the
@@ -160,19 +166,37 @@ sequenceDiagram
   fails, and `/peer/status` then gives the reason in `error`.
 - Every later request carries the `secret` in an `X-Transfer-Secret`
   header.
-- The upload is a tar stream: a header per directory or file, then its
-  bytes. The receiver unpacks it as it arrives, refuses paths that leave
-  the destination, and stops if more arrives than was offered.
+- If the offer has `resume: true` and the receiver supports it, the reply
+  gives the largest chunk size in `chunk_bytes`. Each `PATCH` carries the
+  chunk's starting offset in `X-Upload-Offset` and its size in
+  `Content-Length`. The receiver writes the chunk to disk, then replies
+  with the next offset. If the sender retries bytes the receiver already
+  saved, the receiver replies with its current offset.
+- A chunk times out after 15 seconds without progress. The sender can
+  retry the same offset with a smaller chunk.
+- An empty `PATCH` tells the receiver to check and unpack the tar archive.
+  If a temporary write error stops the save, the receiver keeps the archive
+  and replies with `507` so the sender can retry. It records where each
+  top-level file or directory will go before moving it. On restart, it
+  picks up with the remaining moves.
+- The receiver keeps the offset and the final reply for 24 hours after the
+  last update. When Loka resumes an upload that still needs bytes, it asks
+  for the saved offset and checks the SHA-256 of the bytes up to that point.
+  If the receiver has accepted the empty `PATCH`, its progress reply has
+  `ready_to_save: true`. The sender repeats only the empty `PATCH` at the
+  saved offset and waits for completion.
+- If the offer reply omits `chunk_bytes`, the sender streams the archive in
+  one `POST /peer/upload/{id}` request. It stops after a minute without
+  progress.
+- The receiver refuses paths that leave the destination and checks the
+  extracted size against the offer before saving any files.
 - When the upload completes, the receiver's answer includes the average
   speed in `speed_mbps`, in megabits a second. The receiver measures it
   from when the upload starts until it completes. A Loka that sends
   ignores it. The phone page shows it.
-- Either side can cancel. The sender cancels with
-  `POST /peer/cancel/{id}`. When the receiver cancels, the sender's next
-  request fails.
-- If no bytes move for a minute, each side ends the transfer as
-  interrupted. A device that goes to sleep or loses its network can't
-  say so, and without this limit the sender would wait up to 15 minutes.
+- The sender cancels with `POST /peer/cancel/{id}`. If the receiver cancels,
+  the sender's next request fails. Once the receiver starts moving files
+  into place, it finishes those moves.
 - A Loka that sends checks the receiver's certificate on every
   connection of the transfer, and stops if it changes. When the device
   was picked from the list, the receiver's certificate must also have

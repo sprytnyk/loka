@@ -73,12 +73,25 @@ macOS, and the Windows file dialog. If the picker is unavailable, drop files
 or enter their paths.
 
 Loka copies dropped files because the browser keeps their paths private. It
-deletes those copies when you quit. Files you pick or add by path stay where they are.
+removes the copies when you quit if no unfinished send needs them. Files you
+pick or add by path stay where they are. Loka skips symbolic links inside
+the directories you choose.
 
 Loka puts incoming files in a hidden directory until the transfer finishes.
 If `report.pdf` already exists in the destination, Loka saves the incoming
 file under a name like `report (1).pdf`. If the transfer fails, Loka removes
 the temporary files.
+
+If the connection drops, Loka picks up from the last chunk the receiver
+saved. You can close and reopen either copy of Loka during a transfer. Start
+the receiver on the same address and port. If you sent from the terminal,
+run the same `loka send` command again. The receiver keeps partial uploads
+for 24 hours after the last saved chunk.
+
+The receiver needs room for both the archive and the files while it unpacks
+them. If a temporary write error stops the save, Loka keeps the archive and
+tries again. If you close the receiver while it's moving files into place,
+it finishes the remaining moves when you reopen it.
 
 > [!TIP]
 > If the computers can't see each other, the Wi-Fi network may block
@@ -92,6 +105,7 @@ phone's camera or open the full link in its browser. Keep the part after `#r=`.
 It lets the phone send and changes each time Loka starts.
 
 Choose files or a directory and send them. The computer asks you to accept.
+If the connection drops, the upload resumes while the sending tab stays open.
 On iPhone and iPad, choose files because their browsers can't select directories.
 To send text, switch to **Text** and paste it. See [Text](#text).
 
@@ -239,10 +253,6 @@ certificate, use `https://` links, which skip the first page.
 > to people you mean to. When you're done, select **Stop sharing**, or press
 > Ctrl+C after `loka share`.
 
-An interrupted transfer starts over. If no bytes move for a minute, for
-example because a laptop went to sleep, the transfer stops. Loka skips
-symbolic links inside the directories you choose.
-
 ## How Loka compares
 
 | Tool | What you run on a computer | Browser on another device | Where it works | File encryption |
@@ -255,10 +265,6 @@ symbolic links inside the directories you choose.
 | [Upgopher](https://wanetty.github.io/upgopher/) | One file with a built-in web page | Upload and download from the shared directory. | Connect to the computer on your local network. You can also set up access over the internet. | Optional HTTPS and browser file encryption |
 | [Dropwire](https://muhamadjawdatsalemalakoum.github.io/dropwire/) | Desktop app | Dropwire app on both devices | Finds devices on the same network and can send over the internet. A public server forwards files when a direct connection fails. | End-to-end encrypted |
 | [PeerPayload Connect](https://github.com/Aditya-Karn234/PeerPayload) | Windows or Linux app | Connect app on both devices. It also has an Android app. | Works on the same network or over the internet. A server helps devices connect. If they can't connect directly, a server forwards the files. | End-to-end encrypted |
-
-## Planned
-
-- Resume interrupted transfers between devices.
 
 ## Development
 

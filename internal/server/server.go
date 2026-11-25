@@ -46,6 +46,7 @@ type Server struct {
 	OnlyLinks   bool                   // serve only download links, as loka share does
 	Devices     *network.Discovery     // nil when not looking for devices
 	destination atomic.Pointer[string] // the last accepted destination
+	resume      *resumeStore
 
 	offerMu  sync.Mutex // makes counting and adding an offer one step
 	pairings pairingLimits
@@ -64,8 +65,12 @@ func New(name, version string) *Server {
 	}
 }
 
-// Close removes the files dropped on the page.
+// Close pauses saved transfers and removes unneeded files dropped on the page.
 func (s *Server) Close() {
+	if s.resume != nil {
+		s.closeResume()
+		return
+	}
 	os.RemoveAll(s.temp)
 }
 
@@ -147,6 +152,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /peer/status/{id}", s.peer(s.peerStatus))
 	mux.HandleFunc("POST /peer/cancel/{id}", s.peer(s.peerCancel))
 	mux.HandleFunc("POST /peer/upload/{id}", s.peer(s.peerUpload))
+	mux.HandleFunc("GET /peer/upload/{id}", s.peer(s.resumeUpload))
+	mux.HandleFunc("PATCH /peer/upload/{id}", s.peer(s.resumeUpload))
 
 	mux.HandleFunc("GET /api/state", s.local(s.state))
 	mux.HandleFunc("POST /api/pick", s.local(s.pickPaths))
@@ -190,7 +197,15 @@ func (s *Server) local(h http.HandlerFunc) http.HandlerFunc {
 // the device that offered it.
 func (s *Server) peer(h func(http.ResponseWriter, *http.Request, *transfer.Transfer)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		t := s.Transfers.Get(r.PathValue("id"))
+		id := r.PathValue("id")
+		t := s.Transfers.Get(id)
+		if t == nil && s.resume != nil {
+			// Keep the completion reply available even after the transfer
+			// drops off the list shown on the page.
+			if saved, ok := s.resume.incoming.Load(id); ok {
+				t = saved.(*savedUpload).t
+			}
+		}
 		secret := r.Header.Get("X-Transfer-Secret")
 		if t == nil || t.Direction != transfer.Incoming || subtle.ConstantTimeCompare([]byte(secret), []byte(t.Secret)) != 1 {
 			writeError(w, http.StatusNotFound, errors.New("Not found"))
@@ -208,13 +223,15 @@ type offer struct {
 	Size       int64         `json:"size"`
 	Commitment string        `json:"commitment,omitempty"` // to the sender's nonce, from a Loka
 	Token      string        `json:"token,omitempty"`      // the receive token, from a browser
+	Resume     bool          `json:"resume,omitempty"`
 }
 
 type offerReply struct {
-	ID     string `json:"id"`
-	Secret string `json:"secret"`
-	Name   string `json:"name"`            // the receiver's, so the sender can remember it
-	Nonce  string `json:"nonce,omitempty"` // the receiver's, to a Loka
+	ID         string `json:"id"`
+	Secret     string `json:"secret"`
+	Name       string `json:"name"`            // the receiver's, so the sender can remember it
+	Nonce      string `json:"nonce,omitempty"` // the receiver's, to a Loka
+	ChunkBytes int    `json:"chunk_bytes,omitempty"`
 }
 
 // errNeedsHTTPS refuses an offer over plain HTTP, which nothing would
@@ -290,6 +307,7 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		}
 		t := transfer.New(transfer.Incoming, host, items, o.Size, status)
 		t.Kind, t.Browser = o.Kind, true
+		t.Resumable = s.resume != nil && o.Kind == transfer.Files && o.Resume
 		s.addOffer(w, t)
 		return
 	}
@@ -299,6 +317,7 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 	}
 	t := transfer.New(transfer.Incoming, cmp.Or(truncate(o.Name, 255), host), items, o.Size, transfer.Pairing)
 	t.Kind = o.Kind
+	t.Resumable = s.resume != nil && o.Kind == transfer.Files && o.Resume
 	t.DeviceID, t.Fingerprint = trust.Identify(r.TLS.PeerCertificates[0])
 	t.Commitment, t.Nonce = o.Commitment, trust.Nonce()
 	standing, known, err := s.Trust.Check(t.DeviceID, t.Fingerprint)
@@ -446,7 +465,11 @@ func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
 	}
 	t.Secret = transfer.RandomToken(24)
 	s.Transfers.Add(t)
-	writeJSON(w, http.StatusOK, offerReply{t.ID, t.Secret, s.name, t.Nonce})
+	reply := offerReply{ID: t.ID, Secret: t.Secret, Name: s.name, Nonce: t.Nonce}
+	if t.Resumable {
+		reply.ChunkBytes = chunkBytes
+	}
+	writeJSON(w, http.StatusOK, reply)
 }
 
 // Pairing limits. A device in the middle can work out the receiver's
@@ -605,8 +628,12 @@ func (s *Server) peerStatus(w http.ResponseWriter, _ *http.Request, t *transfer.
 	writeJSON(w, http.StatusOK, statusReply{v.Status, v.Error})
 }
 
-func (s *Server) peerCancel(w http.ResponseWriter, _ *http.Request, t *transfer.Transfer) {
-	t.Stop()
+func (s *Server) peerCancel(w http.ResponseWriter, r *http.Request, t *transfer.Transfer) {
+	if t.Resumable && !sameUploadSender(r, t) {
+		writeError(w, http.StatusNotFound, errors.New("Not found"))
+		return
+	}
+	s.stopTransfer(t)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -614,7 +641,7 @@ func (s *Server) peerUpload(w http.ResponseWriter, r *http.Request, t *transfer.
 	// When the upload stops early, answer at once and drop the connection,
 	// rather than first reading the rest of the stream.
 	w.Header().Set("Connection", "close")
-	if !t.Move(transfer.Receiving, transfer.Accepted) {
+	if t.Resumable || !t.Move(transfer.Receiving, transfer.Accepted) {
 		writeError(w, http.StatusConflict, errors.New("The transfer is not accepted"))
 		return
 	}
@@ -749,10 +776,7 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	s.Transfers.Add(t)
-	go func() {
-		t.Finish(SendTo(t, entries, s.Trust, s.name, req.Host, cmp.Or(req.Port, network.DefaultPort), req.ID))
-	}()
+	s.Send(t, entries, req.Host, cmp.Or(req.Port, network.DefaultPort), req.ID)
 	writeJSON(w, http.StatusOK, map[string]string{"id": t.ID})
 }
 
@@ -794,7 +818,12 @@ func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if !s.Accept(t, destination) {
+	ok, err := s.acceptTransfer(t, destination)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if !ok {
 		writeError(w, http.StatusConflict, errors.New("The transfer is no longer waiting"))
 		return
 	}
@@ -807,8 +836,21 @@ func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
 // of its certificate is caught. It reports false when the transfer was no
 // longer waiting.
 func (s *Server) Accept(t *transfer.Transfer, destination string) bool {
-	if !t.Accept(destination) {
-		return false
+	ok, err := s.acceptTransfer(t, destination)
+	if err != nil {
+		t.Expire(transfer.Waiting, err)
+	}
+	return ok
+}
+
+func (s *Server) acceptTransfer(t *transfer.Transfer, destination string) (bool, error) {
+	var save func() error
+	if t.Resumable {
+		save = func() error { return s.resume.acceptUpload(t, destination) }
+	}
+	ok, err := t.AcceptAndSave(destination, save)
+	if !ok {
+		return false, err
 	}
 	if t.Kind == transfer.Text {
 		waitForText(t)
@@ -820,7 +862,7 @@ func (s *Server) Accept(t *transfer.Transfer, destination string) bool {
 		// A failure only means the sender counts as new next time.
 		s.Trust.Remember(trust.Device{ID: t.DeviceID, Name: t.Peer, Fingerprint: t.Fingerprint})
 	}
-	return true
+	return true, nil
 }
 
 func (s *Server) cancel(w http.ResponseWriter, r *http.Request) {
@@ -836,7 +878,7 @@ func (s *Server) cancel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, errors.New("Not found"))
 		return
 	}
-	t.Stop()
+	s.stopTransfer(t)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

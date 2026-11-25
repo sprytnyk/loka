@@ -34,17 +34,23 @@ var pollEvery = time.Second
 // address typed in. Another device answering there is refused. A receiver
 // never remembered before marks the transfer as to a new device.
 func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, from, host string, port int, id string) error {
+	return sendTo(context.Background(), t, entries, store, from, host, port, id, nil)
+}
+
+func sendTo(pause context.Context, t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, from, host string, port int, id string, save func(resumeTarget) error) error {
 	base := "https://" + net.JoinHostPort(host, strconv.Itoa(port))
 	receiver := &pinned{store: store, want: id}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = store.ClientConfig(receiver.check)
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport}
+	client := transferClient(store, receiver)
+	defer client.CloseIdleConnections()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	stopNegotiation := context.AfterFunc(pause, cancel)
+	defer stopNegotiation()
 
 	var reply offerReply
 	nonce := trust.Nonce()
-	o := offer{Name: from, Kind: t.Kind, Items: t.Items[:min(len(t.Items), transfer.MaxOfferItems)], Size: t.Size, Commitment: trust.Commit(nonce)}
-	if err := call(t.Context(), client, http.MethodPost, base+"/peer/offer", "", o, &reply); err != nil {
+	o := offer{Name: from, Kind: t.Kind, Items: t.Items[:min(len(t.Items), transfer.MaxOfferItems)], Size: t.Size, Commitment: trust.Commit(nonce), Resume: t.Kind == transfer.Files}
+	if err := call(ctx, client, http.MethodPost, base+"/peer/offer", "", o, &reply); err != nil {
 		if t.Kind == transfer.Text && err.Error() == errInvalidOffer.Error() {
 			return errOldReceiver
 		}
@@ -62,7 +68,7 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 	})
 	// Tell the receiver when this side cancels, before dropping the stream,
 	// so it shows the transfer as cancelled rather than failed.
-	uploadCtx, stopUpload := context.WithCancel(context.Background())
+	uploadCtx, stopUpload := context.WithCancel(pause)
 	defer stopUpload()
 	stop := context.AfterFunc(t.Context(), func() {
 		tellReceiver()
@@ -74,11 +80,11 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 		return context.Canceled
 	}
 	reveal := revealRequest{Nonce: nonce, ReceiverKnown: t.Kind == transfer.Text && !newReceiver}
-	if err := call(t.Context(), client, http.MethodPost, base+"/peer/reveal/"+reply.ID, reply.Secret, reveal, nil); err != nil {
+	if err := call(ctx, client, http.MethodPost, base+"/peer/reveal/"+reply.ID, reply.Secret, reveal, nil); err != nil {
 		tellReceiver()
 		return err
 	}
-	if err := waitForAnswer(t.Context(), client, base+"/peer/status/"+reply.ID, reply.Secret); err != nil {
+	if err := waitForAnswer(ctx, client, base+"/peer/status/"+reply.ID, reply.Secret); err != nil {
 		// Otherwise the receiver would show the offer as waiting forever.
 		tellReceiver()
 		return err
@@ -88,6 +94,22 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 	store.Remember(device)
 	if !t.Move(transfer.Sending, transfer.Waiting) {
 		return context.Canceled
+	}
+	if t.Kind == transfer.Files && reply.ChunkBytes > 0 {
+		target := resumeTarget{ID: reply.ID, Secret: reply.Secret, Device: device, ChunkBytes: min(reply.ChunkBytes, chunkBytes)}
+		if save != nil {
+			if err := save(target); err != nil {
+				tellReceiver()
+				return err
+			}
+		}
+		err := sendArchive(uploadCtx, t, client, base, target, func() ([]transfer.Entry, error) {
+			return entries, nil
+		})
+		if err != nil && uploadCtx.Err() == nil {
+			tellReceiver()
+		}
+		return err
 	}
 	// Nothing tells the sender when the receiver went away without a
 	// word, such as when its lid closed, so a transfer that stops moving
@@ -111,6 +133,14 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 		return transfer.ErrInterrupted
 	}
 	return err
+}
+
+func transferClient(store *trust.Store, receiver *pinned) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = store.ClientConfig(receiver.check)
+	return &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
 }
 
 // errOldReceiver is what a Loka from before text answers to text.

@@ -74,9 +74,11 @@ type Transfer struct {
 	Commitment string
 	Nonce      string
 	Token      string       // the download link token, only for links
+	Resumable  bool         // this incoming file offer uses saved chunks
 	shared     []sharedItem // what a link serves, only for links
 
-	Done atomic.Int64 // bytes of file content moved so far
+	Done         atomic.Int64 // bytes of file content moved so far
+	Reconnecting atomic.Bool  // the sender is waiting to retry a file chunk
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -87,6 +89,7 @@ type Transfer struct {
 	newDevice   bool   // the other Loka has not been remembered yet
 	code        string // the pairing code, once both nonces are known
 	destination string
+	saving      bool // the receiver has committed to publishing its staged files
 	// The text of a text transfer: to send, to serve as a link, or
 	// received and not yet read. It is dropped once it is no longer needed.
 	text    string
@@ -208,14 +211,25 @@ func (t *Transfer) Move(to Status, from ...Status) bool {
 
 // Accept records the destination of a waiting incoming transfer.
 func (t *Transfer) Accept(destination string) bool {
+	ok, _ := t.AcceptAndSave(destination, nil)
+	return ok
+}
+
+// AcceptAndSave records a resumable offer before exposing the acceptance.
+func (t *Transfer) AcceptAndSave(destination string, save func() error) (bool, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.status != Waiting {
-		return false
+		return false, nil
+	}
+	if save != nil {
+		if err := save(); err != nil {
+			return false, err
+		}
 	}
 	t.status = Accepted
 	t.destination = destination
-	return true
+	return true, nil
 }
 
 // Stop cancels the transfer. A transfer that is not moving bytes stops at
@@ -223,6 +237,9 @@ func (t *Transfer) Accept(destination string) bool {
 func (t *Transfer) Stop() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.saving {
+		return
+	}
 	t.cancel()
 	switch t.status {
 	case Pairing, Waiting, Accepted:
@@ -233,6 +250,35 @@ func (t *Transfer) Stop() {
 	t.dropSentText()
 }
 
+// BeginPublication makes the receiver finish publishing once it has saved
+// its plan. A cancellation and the decision to publish cannot both win.
+func (t *Transfer) BeginPublication(save func() error) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if err := t.ctx.Err(); err != nil {
+		return err
+	}
+	if save != nil {
+		if err := save(); err != nil {
+			return err
+		}
+	}
+	t.saving = true
+	return nil
+}
+
+// SetPendingError explains a retry while the transfer is still active.
+func (t *Transfer) SetPendingError(err error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.status.Final() {
+		t.err = ""
+		if err != nil {
+			t.err = err.Error()
+		}
+	}
+}
+
 // Finish records how a transfer that was moving bytes ended. It does nothing
 // when the transfer has already ended.
 func (t *Transfer) Finish(err error) {
@@ -241,6 +287,8 @@ func (t *Transfer) Finish(err error) {
 	if t.status.Final() {
 		return
 	}
+	t.saving = false
+	t.err = ""
 	switch {
 	case err == nil:
 		t.status = Complete
@@ -305,22 +353,24 @@ func (t *Transfer) Pair(code string) bool {
 
 // View is what the page sees of a transfer.
 type View struct {
-	ID        string    `json:"id"`
-	Direction Direction `json:"direction"`
-	Kind      Kind      `json:"kind,omitempty"`
-	Name      string    `json:"name"`
-	Items     []string  `json:"items"`
-	Size      int64     `json:"size"`
-	Status    Status    `json:"status"`
-	Progress  int       `json:"progress"`
-	Error     string    `json:"error,omitempty"`
-	Token     string    `json:"token,omitempty"`
-	SpeedMbps *float64  `json:"speed_mbps,omitempty"` // while bytes move, then the average once complete
-	Browser   bool      `json:"browser,omitempty"`
-	NewDevice bool      `json:"new_device,omitempty"`
-	Code      string    `json:"code,omitempty"`    // the pairing code, between Lokas
-	Unread    bool      `json:"unread,omitempty"`  // received text waits to be read
-	Preview   string    `json:"preview,omitempty"` // the start of text this device sends or serves
+	ID           string    `json:"id"`
+	Direction    Direction `json:"direction"`
+	Kind         Kind      `json:"kind,omitempty"`
+	Name         string    `json:"name"`
+	Items        []string  `json:"items"`
+	Size         int64     `json:"size"`
+	Status       Status    `json:"status"`
+	Progress     int       `json:"progress"`
+	Reconnecting bool      `json:"reconnecting,omitempty"`
+	Saving       bool      `json:"saving,omitempty"`
+	Error        string    `json:"error,omitempty"`
+	Token        string    `json:"token,omitempty"`
+	SpeedMbps    *float64  `json:"speed_mbps,omitempty"` // while bytes move, then the average once complete
+	Browser      bool      `json:"browser,omitempty"`
+	NewDevice    bool      `json:"new_device,omitempty"`
+	Code         string    `json:"code,omitempty"`    // the pairing code, between Lokas
+	Unread       bool      `json:"unread,omitempty"`  // received text waits to be read
+	Preview      string    `json:"preview,omitempty"` // the start of text this device sends or serves
 }
 
 // previewSize is how many bytes of outgoing text a view shows.
@@ -331,7 +381,7 @@ const previewSize = 120
 // completes, it includes the average speed. Text has neither.
 func (t *Transfer) View() View {
 	t.mu.Lock()
-	status, err, newDevice, code, unread := t.status, t.err, t.newDevice, t.code, t.unread
+	status, err, newDevice, code, unread, saving := t.status, t.err, t.newDevice, t.code, t.unread, t.saving
 	var preview string
 	if t.Direction == Outgoing {
 		preview = cutToBytes(t.text, previewSize)
@@ -348,22 +398,24 @@ func (t *Transfer) View() View {
 	}
 	t.mu.Unlock()
 	return View{
-		ID:        t.ID,
-		Direction: t.Direction,
-		Kind:      t.Kind,
-		Name:      t.Peer,
-		Items:     t.Items,
-		Size:      t.Size,
-		Status:    status,
-		Progress:  progress(t.Done.Load(), t.Size, status),
-		Error:     err,
-		Token:     t.Token,
-		SpeedMbps: speed,
-		Browser:   t.Browser,
-		NewDevice: newDevice,
-		Code:      code,
-		Unread:    unread,
-		Preview:   preview,
+		ID:           t.ID,
+		Direction:    t.Direction,
+		Kind:         t.Kind,
+		Name:         t.Peer,
+		Items:        t.Items,
+		Size:         t.Size,
+		Status:       status,
+		Progress:     progress(t.Done.Load(), t.Size, status),
+		Reconnecting: status == Sending && t.Reconnecting.Load(),
+		Saving:       saving,
+		Error:        err,
+		Token:        t.Token,
+		SpeedMbps:    speed,
+		Browser:      t.Browser,
+		NewDevice:    newDevice,
+		Code:         code,
+		Unread:       unread,
+		Preview:      preview,
 	}
 }
 

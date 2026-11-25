@@ -310,6 +310,8 @@ const messages = {
     openPhoneLink: 'To send, open the link or QR code that {name} shows.',
     waitingForAccept: 'Waiting for {name} to accept…',
     sendingTo: 'Sending to {name}…',
+    reconnecting: 'Reconnecting…',
+    waitingToSave: 'The receiver couldn’t save the files. It will retry.',
     sentTo: 'Sent to {name}.',
     sentToAt: 'Sent to {name} at {speed}.',
     declined: '{name} declined or cancelled.',
@@ -448,6 +450,8 @@ const messages = {
     openPhoneLink: 'Щоб надіслати, відкрийте посилання або QR-код, які показує {name}.',
     waitingForAccept: 'Чекаю, поки {name} прийме…',
     sendingTo: 'Надсилаю на {name}…',
+    reconnecting: 'Відновлюю з’єднання…',
+    waitingToSave: 'Отримувач не зміг зберегти файли. Він спробує ще раз.',
     sentTo: 'Надіслано на {name}.',
     sentToAt: 'Надіслано на {name} зі швидкістю {speed}.',
     declined: '{name} відхилив або скасував.',
@@ -547,6 +551,9 @@ const serverMessages = {
     [/^(.*): only files and directories can be received$/s, '$1: отримувати можна лише файли й теки'],
     [/^The transfer ended early$/, 'Передавання обірвалося'],
     [/^The connection was interrupted$/, 'З’єднання перервано'],
+    [/^The receiver couldn't save the files\. It will retry$/, 'Отримувач не зміг зберегти файли. Він спробує ще раз.'],
+    [/^The receiver's saved progress doesn't match this transfer$/, 'Збережений поступ отримувача не відповідає цьому передаванню'],
+    [/^Loka closed while saving the files\. Check the destination$/, 'Loka закрилася під час збереження файлів. Перевірте теку призначення'],
     [/^Invalid path in transfer: (.*)$/s, 'Неправильний шлях у передаванні: $1'],
     [/^Invalid offer$/, 'Неправильна пропозиція'],
     [/^The text is longer than 1 MB\. Send it as a file instead$/, 'Текст довший за 1 МБ. Надішліть його файлом'],
@@ -1122,8 +1129,9 @@ function renderTransfers(transfers) {
     cards.delete(transfer.id);
     const waiting = transfer.direction === 'incoming' && transfer.status === 'waiting';
     const active = activeTransferStatuses.includes(transfer.status);
-    const speed = typeof transfer.speed_mbps === 'number' ? ' · ' + t('speed', {speed: formatSpeed(transfer.speed_mbps)}) : '';
-    card.querySelector('.transfer-status').textContent = `${statusText(transfer.status)} · ${transfer.progress}%${speed}`;
+    const speed = !transfer.reconnecting && typeof transfer.speed_mbps === 'number' ? ' · ' + t('speed', {speed: formatSpeed(transfer.speed_mbps)}) : '';
+    const status = transfer.reconnecting ? t('reconnecting') : statusText(transfer.status);
+    card.querySelector('.transfer-status').textContent = `${status} · ${transfer.progress}%${speed}`;
     const error = card.querySelector('.notice');
     const newReceiver = transfer.direction !== 'incoming' && transfer.new_device && !transfer.error;
     error.textContent = transfer.error ? fromServer(transfer.error) : newReceiver ? t('newReceiver') : '';
@@ -1134,7 +1142,7 @@ function renderTransfers(transfers) {
     const progress = card.querySelector('progress');
     progress.value = transfer.progress;
     progress.hidden = !active;
-    card.querySelector('button[data-cancel]').hidden = waiting || !active;
+    card.querySelector('button[data-cancel]').hidden = waiting || !active || transfer.saving;
   }
   for (const card of cards.values()) card.remove();
 }
@@ -1479,19 +1487,96 @@ function parseReply(text) {
     return {};
   }
 }
-function phoneUpload(current, body) {
+class PhoneUploadInterrupted extends Error {
+  constructor(message, status = t('reconnecting'), idle = false) {
+    super(message);
+    this.status = status;
+    this.idle = idle;
+  }
+}
+
+function phoneUpload(current, body, offset) {
   return new Promise((resolve, reject) => {
+    const chunked = offset !== undefined;
     const xhr = current.xhr = new XMLHttpRequest();
-    xhr.open('POST', `/peer/upload/${encodeURIComponent(current.id)}`);
+    xhr.open(chunked ? 'PATCH' : 'POST', `/peer/upload/${encodeURIComponent(current.id)}`);
     xhr.setRequestHeader('X-Transfer-Secret', current.secret);
-    xhr.upload.onprogress = e => {
-      if (e.lengthComputable) $('phone-progress').value = Math.floor(e.loaded * 100 / e.total);
+    let idleTimer;
+    const interrupted = (idle = false) => {
+      clearTimeout(idleTimer);
+      reject(new PhoneUploadInterrupted(t('unreachable'), t('reconnecting'), idle));
     };
-    xhr.onload = () => xhr.status < 300 ? resolve(parseReply(xhr.responseText)) : reject(Error(serverError(xhr.responseText)));
-    xhr.onerror = () => reject(Error(t('unreachable')));
-    xhr.onabort = () => reject(Error(t('cancelled')));
+    if (chunked) {
+      xhr.setRequestHeader('X-Upload-Offset', String(offset));
+      const active = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          interrupted(true);
+          xhr.abort();
+        }, 15000);
+      };
+      xhr.upload.onprogress = active;
+      xhr.upload.onload = active;
+      active();
+    } else {
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) $('phone-progress').value = Math.floor(e.loaded * 100 / e.total);
+      };
+    }
+    xhr.onload = () => {
+      clearTimeout(idleTimer);
+      if (xhr.status >= 200 && xhr.status < 300) resolve(parseReply(xhr.responseText));
+      else if ([408, 502, 503, 504].includes(xhr.status)) interrupted(xhr.status === 408);
+      else if (xhr.status === 507) reject(new PhoneUploadInterrupted(t('waitingToSave'), t('waitingToSave')));
+      else reject(Error(serverError(xhr.responseText)));
+    };
+    xhr.onerror = () => interrupted();
+    xhr.onabort = () => {
+      clearTimeout(idleTimer);
+      reject(Error(t('cancelled')));
+    };
     xhr.send(body);
   });
+}
+
+async function phoneChunks(current, body, chunkSize) {
+  const sendChunk = async offset => {
+    const expires = Date.now() + 24 * 60 * 60 * 1000;
+    const furthest = Math.min(offset + chunkSize, body.size);
+    let delay = 1000;
+    for (;;) {
+      if (current.cancelled) throw Error(t('cancelled'));
+      const end = Math.min(offset + chunkSize, body.size);
+      try {
+        const reply = await phoneUpload(current, body.slice(offset, end), offset);
+        if (!Number.isSafeInteger(reply.offset) || reply.offset < end || reply.offset > furthest) throw Error(t('requestFailed'));
+        phoneStatus(t('sendingTo', {name: hostName}));
+        return reply;
+      } catch (error) {
+        if (!(error instanceof PhoneUploadInterrupted) || Date.now() >= expires) throw error;
+        if (error.idle && end - offset > 16 * 1024) chunkSize = Math.max(16 * 1024, Math.floor((end - offset) / 2));
+        phoneStatus(error.status);
+        await new Promise(resolve => {
+          const timer = setTimeout(resolve, delay);
+          current.wake = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+        });
+        current.wake = null;
+        delay = Math.min(delay * 2, 5000);
+      }
+    }
+  };
+  for (let offset = 0; offset < body.size;) {
+    const reply = await sendChunk(offset);
+    offset = reply.offset;
+    $('phone-progress').value = Math.min(99, Math.floor(offset * 100 / body.size));
+  }
+  const reply = await sendChunk(body.size);
+  if (reply.status !== 'complete') throw Error(t('requestFailed'));
+  $('phone-progress').value = 100;
+  return reply;
 }
 $('phone-send').onclick = e => run(e.target, async () => {
   if (!phoneFiles.length) throw Error(t('chooseFirst'));
@@ -1502,7 +1587,7 @@ $('phone-send').onclick = e => run(e.target, async () => {
   const reply = await request('/peer/offer', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name: '', items, size, token: phoneToken}),
+    body: JSON.stringify({name: '', items, size, token: phoneToken, resume: true}),
   });
   const current = phoneTransfer = {id: reply.id, secret: reply.secret};
   phoneBusy(true);
@@ -1517,7 +1602,11 @@ $('phone-send').onclick = e => run(e.target, async () => {
     }
     if (current.cancelled) throw Error(t('cancelled'));
     phoneStatus(t('sendingTo', {name: hostName}));
-    const sent = await phoneUpload(current, tarStream(files));
+    const body = tarStream(files);
+    const chunkSize = Math.min(reply.chunk_bytes, 1024 * 1024);
+    const sent = Number.isSafeInteger(chunkSize) && chunkSize > 0
+      ? await phoneChunks(current, body, chunkSize)
+      : await phoneUpload(current, body);
     phoneStatus(typeof sent.speed_mbps === 'number'
       ? t('sentToAt', {name: hostName, speed: t('speed', {speed: formatSpeed(sent.speed_mbps)})})
       : t('sentTo', {name: hostName}));
@@ -1537,6 +1626,7 @@ function phoneCancel() {
   const current = phoneTransfer;
   if (!current) return;
   current.cancelled = true;
+  current.wake?.();
   current.xhr?.abort();
   fetch(`/peer/cancel/${encodeURIComponent(current.id)}`, {method: 'POST', headers: {'X-Transfer-Secret': current.secret}, keepalive: true}).catch(() => {});
 }

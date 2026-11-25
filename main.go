@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"cmp"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"errors"
 	"flag"
@@ -197,7 +198,11 @@ func openTrust() (*trust.Store, error) {
 
 // startDevice runs the server with discovery, as serve and receive do.
 func startDevice(ctx context.Context, port int) (*server.Server, net.Listener, int, error) {
-	store, err := openTrust()
+	dir, err := configDir()
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	store, err := trust.Open(dir)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -208,6 +213,10 @@ func startDevice(ctx context.Context, port int) (*server.Server, net.Listener, i
 	name := hostname()
 	s := server.New(name, version)
 	s.Trust = store
+	if err := s.Resume(ctx, filepath.Join(dir, "transfers", "port-"+strconv.Itoa(port))); err != nil {
+		ln.Close()
+		return nil, nil, 0, err
+	}
 	s.Devices = network.New(network.Announcement{ID: store.ID, Name: name, Port: port})
 	go s.Devices.Listen(ctx)
 	go s.Devices.Announce(ctx)
@@ -231,34 +240,72 @@ func serve(ctx context.Context, o options, stdout io.Writer) error {
 }
 
 func sendCommand(ctx context.Context, o options, stdin io.Reader, stdout io.Writer) error {
-	var t *transfer.Transfer
-	var entries []transfer.Entry
-	if o.fromStdin {
-		text, err := readTextInput(stdin)
-		if err != nil {
-			return err
-		}
-		t = transfer.NewText(transfer.Outgoing, o.to, text, transfer.Pairing)
-	} else {
-		files, items, size, err := transfer.Collect(o.paths)
-		if err != nil {
-			return err
-		}
-		entries = files
-		t = transfer.New(transfer.Outgoing, o.to, items, size, transfer.Pairing)
+	if !o.fromStdin {
+		return sendFiles(ctx, o, stdout)
 	}
+	text, err := readTextInput(stdin)
+	if err != nil {
+		return err
+	}
+	t := transfer.NewText(transfer.Outgoing, o.to, text, transfer.Pairing)
 	store, err := openTrust()
 	if err != nil {
 		return err
 	}
-	go func() { t.Finish(server.SendTo(t, entries, store, hostname(), o.to, o.peerPort, "")) }()
+	go func() { t.Finish(server.SendTo(t, nil, store, hostname(), o.to, o.peerPort, "")) }()
 	stop := context.AfterFunc(ctx, t.Stop)
 	defer stop()
-	v := follow(t, stdout)
+	v := follow(context.Background(), t, stdout)
 	if v.Status != transfer.Complete {
 		return errors.New(cmp.Or(v.Error, string(v.Status)))
 	}
 	return nil
+}
+
+// Running the same file send again finds its saved job, if it has one.
+func sendFiles(ctx context.Context, o options, stdout io.Writer) error {
+	dir, err := configDir()
+	if err != nil {
+		return err
+	}
+	store, err := trust.Open(dir)
+	if err != nil {
+		return err
+	}
+	paths := make([]string, 0, len(o.paths))
+	for _, path := range o.paths {
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return err
+		}
+		paths = append(paths, absolute)
+	}
+	key := sha256.Sum256([]byte(strings.Join(append([]string{o.to, strconv.Itoa(o.peerPort)}, paths...), "\x00")))
+	s := server.New(hostname(), version)
+	s.Trust = store
+	if err := s.Resume(ctx, filepath.Join(dir, "transfers", fmt.Sprintf("send-%x", key))); err != nil {
+		return err
+	}
+	defer s.Close()
+	var t *transfer.Transfer
+	if saved := s.Transfers.All(); len(saved) > 0 {
+		t = saved[0]
+	} else {
+		entries, items, size, err := transfer.Collect(paths)
+		if err != nil {
+			return err
+		}
+		t = transfer.New(transfer.Outgoing, o.to, items, size, transfer.Pairing)
+		s.Send(t, entries, o.to, o.peerPort, "")
+	}
+	v := follow(ctx, t, stdout)
+	if v.Status == transfer.Complete {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return errors.New(cmp.Or(v.Error, string(v.Status)))
 }
 
 func readTextInput(stdin io.Reader) (string, error) {
@@ -278,7 +325,7 @@ func readTextInput(stdin io.Reader) (string, error) {
 }
 
 // follow prints a transfer's progress until it ends.
-func follow(t *transfer.Transfer, stdout io.Writer) transfer.View {
+func follow(ctx context.Context, t *transfer.Transfer, stdout io.Writer) transfer.View {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	warned, coded := false, false
@@ -294,7 +341,11 @@ func follow(t *transfer.Transfer, stdout io.Writer) transfer.View {
 			fmt.Fprintf(stdout, "\rPairing code %s. Check that the receiver shows the same.\n", v.Code)
 		}
 		label := fmt.Sprintf("%s: %d%%", v.Status, v.Progress)
-		if v.SpeedMbps != nil {
+		if v.Error != "" && !v.Status.Final() {
+			label = escapeTerminalControls(v.Error)
+		} else if v.Reconnecting {
+			label = fmt.Sprintf("reconnecting: %d%%", v.Progress)
+		} else if v.SpeedMbps != nil {
 			label += fmt.Sprintf(" at %.1f Mbps", *v.SpeedMbps)
 		}
 		fmt.Fprintf(stdout, "\r%-40s", label) // pads over a longer earlier line
@@ -302,7 +353,12 @@ func follow(t *transfer.Transfer, stdout io.Writer) transfer.View {
 			fmt.Fprintln(stdout)
 			return v
 		}
-		<-ticker.C
+		select {
+		case <-ctx.Done():
+			fmt.Fprintln(stdout)
+			return t.View()
+		case <-ticker.C:
+		}
 	}
 }
 
@@ -478,9 +534,11 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 			fmt.Fprintln(stdout, offerEnded(t))
 			return true
 		}
-		stop := context.AfterFunc(ctx, t.Stop)
-		defer stop()
-		follow(t, stdout)
+		if !t.Resumable {
+			stop := context.AfterFunc(ctx, t.Stop)
+			defer stop()
+		}
+		follow(ctx, t, stdout)
 		return ctx.Err() == nil
 	}
 }

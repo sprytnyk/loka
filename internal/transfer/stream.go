@@ -111,7 +111,16 @@ func Receive(ctx context.Context, r io.Reader, destination string, size int64, d
 		return err
 	}
 	defer os.RemoveAll(staging)
+	staged, roots, err := Stage(ctx, r, staging, size, done, nameFor)
+	if err != nil {
+		return err
+	}
+	return publish(staged, roots, destination)
+}
 
+// Stage extracts into an empty directory and returns the staged paths and
+// top-level names in the order in which they arrived.
+func Stage(ctx context.Context, r io.Reader, staging string, size int64, done *atomic.Int64, nameFor func(string) string) (map[string]string, []string, error) {
 	u := unpacker{root: staging, localName: nameFor, staged: map[string]string{}}
 	tr := tar.NewReader(r)
 	var roots []string
@@ -122,43 +131,43 @@ func Receive(ctx context.Context, r io.Reader, destination string, size int64, d
 			break
 		}
 		if err != nil {
-			return transferError(ctx, err)
+			return nil, nil, transferError(ctx, err)
 		}
 		parts, err := SplitName(hdr.Name)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		if _, seen := u.staged[parts[0]]; !seen {
 			roots = append(roots, parts[0])
 		}
 		target, err := u.path(parts)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0o755); err != nil {
-				return err
+				return nil, nil, err
 			}
 		case tar.TypeReg:
 			if received += hdr.Size; hdr.Size < 0 || received > size {
-				return errors.New("The sender sent more than it offered")
+				return nil, nil, errors.New("The sender sent more than it offered")
 			}
 			if err := writeFile(ctx, target, tr, done); err != nil {
-				return transferError(ctx, err)
+				return nil, nil, transferError(ctx, err)
 			}
 		default:
-			return fmt.Errorf("%s: only files and directories can be received", hdr.Name)
+			return nil, nil, fmt.Errorf("%s: only files and directories can be received", hdr.Name)
 		}
 	}
 	if received != size {
-		return errors.New("The transfer ended early")
+		return nil, nil, errors.New("The transfer ended early")
 	}
 	// A cancel that arrives with the last bytes still wins.
 	if err := ctx.Err(); err != nil {
-		return err
+		return nil, nil, err
 	}
-	return publish(u.staged, roots, destination)
+	return u.staged, roots, nil
 }
 
 // publish moves each staged top-level item into destination. When one
@@ -310,14 +319,19 @@ func freePath(dir, name string) (string, error) {
 func moveNoReplace(from, dir, name string) (string, error) {
 	for i := 0; ; i++ {
 		to := filepath.Join(dir, numbered(name, i))
-		err := filemove.NoReplace(from, to)
-		if errors.Is(err, filemove.ErrUnsupported) {
-			err = renameIfFree(from, to)
-		}
+		err := renameNoReplace(from, to)
 		if !errors.Is(err, fs.ErrExist) {
 			return to, err
 		}
 	}
+}
+
+func renameNoReplace(from, to string) error {
+	err := filemove.NoReplace(from, to)
+	if errors.Is(err, filemove.ErrUnsupported) {
+		return renameIfFree(from, to)
+	}
+	return err
 }
 
 // renameIfFree is the fallback for file systems that cannot refuse to
