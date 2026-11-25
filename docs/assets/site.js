@@ -15,6 +15,8 @@
       linux_short: "Linux",
       windows_short: "Windows",
       all: "All downloads",
+      toLight: "Switch to the light theme",
+      toDark: "Switch to the dark theme",
       version: (v, d) => `Version ${v} came out on ${d}. Loka is free and open source under the MIT licence.`,
     },
     uk: {
@@ -25,6 +27,8 @@
       linux_short: "Linux",
       windows_short: "Windows",
       all: "Усі завантаження",
+      toLight: "Увімкнути світлу тему",
+      toDark: "Увімкнути темну тему",
       version: (v, d) => `Версія ${v} вийшла ${d}. Loka безкоштовна й має відкритий код за ліцензією MIT.`,
     },
   }[lang];
@@ -44,31 +48,57 @@
     }
   };
 
+  function themes() {
+    const site = document.documentElement;
+    const toggle = document.querySelector('[data-theme-toggle="site"]');
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+
+    function render() {
+      const theme = site.dataset.theme || (systemTheme.matches ? "dark" : "light");
+      const dark = theme === "dark";
+      const label = dark ? TEXT.toLight : TEXT.toDark;
+      toggle.dataset.nextTheme = dark ? "light" : "dark";
+      toggle.setAttribute("aria-label", label);
+      toggle.title = label;
+      toggle.hidden = false;
+    }
+
+    toggle.addEventListener("click", () => {
+      const theme = toggle.dataset.nextTheme;
+      site.dataset.theme = theme;
+      remember("loka-site-theme", theme);
+      render();
+    });
+    systemTheme.addEventListener("change", render);
+    render();
+  }
+
   // What the terminal shows. The output is what Loka prints, with documentation
   // addresses (192.0.2.x) and a made-up link. The QR code is a real one for that link,
   // drawn by Loka's own encoder.
   const LINK = "Xq7mR2vLpT9cWb4nHs6kJd1fGz8yAe3u";
-  const QR = `█████████████████████████████████████████
-█████████████████████████████████████████
-████ ▄▄▄▄▄ █▄▄▄▄█ ▀▄▀ ▀▀ ▀▄▄ █ ▄▄▄▄▄ ████
-████ █   █ █▀ █▄▄█▄  ▄█▀▀▄▀█ █ █   █ ████
-████ █▄▄▄█ █  ██ ▄█▀▄▀█▀█▀▄▄▀█ █▄▄▄█ ████
-████▄▄▄▄▄▄▄█ ▀▄█ █ █▄▀ ▀ ▀ ▀▄█▄▄▄▄▄▄▄████
-████▄█▀█ █▄  ▄   █▀   ▄▄▀▄█  ▄▄▄▄ ▀█▄████
-████▀ ▄ █▀▄▄▀█▀   ▄   ██ ▀▀ █▀▀██▄█▄▀████
-████▀▀▄ █ ▄▀███▄█ ▀▄█▄█ ▄ ▄█▄█ ▀▄ ▀▄▄████
-██████▄ ▀ ▄▀▄ █▀    █▀▀▀▀▀▀▄▀▀█▀▄▄▄▄█████
-████ ▄▄ █▀▄██   ▄ ▄█   ▄▀ ▀ ▀▄▄█▄▀ ▄█████
-████▄█▀▀▄▀▄▀ █▄▄█▀  █ ▀█▀▀▄▄▀ ▀██▄██▀████
-████▀█▄▄██▄█▀ █▀▀▀▄  ▀▀▄▄█▄ ▄▀▄▄▄ █ ▄████
-███████ █▀▄▀█▀▄▄█▀█▄▀▀ █▄▀  ▀▀▄▄ ▄█ ▀████
-████▄▄█▄██▄█ ▄█  ▄█▀▄▄ ▄▀ ▀█ ▄▄▄ ▄▀▄▀████
-████ ▄▄▄▄▄ █▄▀ ▀ ▀█ ▄ ▀▀█▀ ▀ █▄█  █ █████
-████ █   █ █▄▀███▄█▀▄▄▀█▀▄▄█▄  ▄ ▄▀██████
-████ █▄▄▄█ ██  ▀██▄ █▀▀█▀  ▄▀▄▄ ▄▄███████
-████▄▄▄▄▄▄▄█▄█▄▄█▄▄██▄█▄█▄██▄▄██▄▄▄█▄████
-█████████████████████████████████████████
-▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀`;
+  // Dark half-blocks on white. Dots stand for spaces, including the QR code's margin.
+  const QR = `·········································
+·········································
+····█▀▀▀▀▀█·▀▀▀▀·█▄▀▄█▄▄█▄▀▀█·█▀▀▀▀▀█····
+····█·███·█·▄█·▀▀·▀██▀·▄▄▀▄·█·█·███·█····
+····█·▀▀▀·█·██··█▀·▄▀▄·▄·▄▀▀▄·█·▀▀▀·█····
+····▀▀▀▀▀▀▀·█▄▀·█·█·▀▄█▄█▄█▄▀·▀▀▀▀▀▀▀····
+····▀·▄·█·▀██▀███·▄███▀▀▄▀·██▀▀▀▀█▄·▀····
+····▄█▀█·▄▀▀▄·▄███▀███··█▄▄█·▄▄··▀·▀▄····
+····▄▄▀█·█▀▄···▀·█▄▀·▀·█▀█▀·▀·█▄▀█▄▀▀····
+······▀█▄█▀▄▀█·▄████·▄▄▄▄▄▄▀▄▄·▄▀▀▀▀·····
+····█▀▀█·▄▀··███▀█▀·███▀▄█▄█▄▀▀·▀▄█▀·····
+····▀·▄▄▀▄▀▄█·▀▀·▄██·█▄·▄▄▀▀▄█▄··▀··▄····
+····▄·▀▀··▀·▄█·▄▄▄▀██▄▄▀▀·▀█▀▄▀▀▀█·█▀····
+·······█·▄▀▄·▄▀▀·▄·▀▄▄█·▀▄██▄▄▀▀█▀·█▄····
+····▀▀·▀··▀·█▀·██▀·▄▀▀█▀▄█▄·█▀▀▀█▀▄▀▄····
+····█▀▀▀▀▀█·▀▄█▄█▄·█▀█▄▄·▄█▄█·▀·██·█·····
+····█·███·█·▀▄···▀·▄▀▀▄·▄▀▀·▀██▀█▀▄······
+····█·▀▀▀·█··██▄··▀█·▄▄·▄██▀▄▀▀█▀▀·······
+····▀▀▀▀▀▀▀·▀·▀▀·▀▀··▀·▀·▀··▀▀··▀▀▀·▀····
+·········································
+·········································`.replaceAll("·", " ");
   const SCRIPT = [
     { cmd: "loka devices" },
     { out: "Studio Laptop  192.0.2.21:45873  (remembered)" },
@@ -182,14 +212,6 @@
       return b;
     };
     const base = (path) => path.split("/").filter(Boolean).pop();
-
-    // the sun and moon switch only this window, as they switch only Loka's page
-    $("[data-theme-toggle]").addEventListener("click", () => {
-      const dark =
-        root.dataset.theme === "dark" ||
-        (!root.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
-      root.dataset.theme = dark ? "light" : "dark";
-    });
 
     const dialog = $("[data-demo-dialog]");
     const showDialog = (title, ...contents) => {
@@ -654,6 +676,7 @@
     link.addEventListener("click", () => remember("lang", link.dataset.lang));
   }
 
+  themes();
   app();
   terminal();
   downloads();
