@@ -11,7 +11,13 @@
   try {
     theme = localStorage.getItem('loka-theme');
   } catch {}
-  if (theme !== 'light' && theme !== 'dark') theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  if (theme !== 'light' && theme !== 'dark') {
+    try {
+      theme = window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
+    } catch {
+      theme = 'light';
+    }
+  }
   document.documentElement.dataset.theme = theme;
   // A download link opened over HTTPS shows the download, and a text link
   // the text. The server sends the phone page there, as the link's token
@@ -629,26 +635,35 @@ document.querySelector('.languages').onclick = e => {
 
 // Themes
 
-const darkScheme = matchMedia('(prefers-color-scheme: dark)');
+const themeButton = $('theme');
 const theme = () => document.documentElement.dataset.theme;
 function renderTheme() {
+  if (!themeButton) return;
   const label = t(theme() === 'dark' ? 'toLight' : 'toDark');
-  $('theme').title = label;
-  $('theme').setAttribute('aria-label', label);
+  themeButton.title = label;
+  themeButton.setAttribute('aria-label', label);
 }
 function setTheme(value) {
   document.documentElement.dataset.theme = value;
   renderTheme();
 }
-$('theme').onclick = () => {
-  const value = theme() === 'dark' ? 'light' : 'dark';
-  remember('loka-theme', value);
-  setTheme(value);
-};
-// Follow the system until the person picks a theme.
-darkScheme.addEventListener('change', e => {
-  if (!remembered('loka-theme')) setTheme(e.matches ? 'dark' : 'light');
-});
+function initTheme() {
+  if (!themeButton) return;
+  themeButton.onclick = () => {
+    const value = theme() === 'dark' ? 'light' : 'dark';
+    remember('loka-theme', value);
+    setTheme(value);
+  };
+  const darkScheme = window.matchMedia?.('(prefers-color-scheme: dark)');
+  const followSystem = e => {
+    if (!remembered('loka-theme')) setTheme(e.matches ? 'dark' : 'light');
+  };
+  if (typeof darkScheme?.addEventListener === 'function') {
+    darkScheme.addEventListener('change', followSystem);
+  } else if (typeof darkScheme?.addListener === 'function') {
+    darkScheme.addListener(followSystem);
+  }
+}
 
 // Talking to the server
 
@@ -1649,5 +1664,10 @@ if (linkToken && location.protocol === 'https:') {
   pollPeriodically();
 } else if (mode === 'phone' && !phoneToken) {
   phoneStatus(t('openPhoneLink', {name: hostName}));
+}
+try {
+  initTheme();
+} catch (error) {
+  console.warn('Could not watch for system theme changes', error);
 }
 </script></body></html>

@@ -2,7 +2,10 @@
    at the top, a see-through header, see-through cards and a title that fades into blue. */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  /* An empty variable skips its color. The initial value uses the fallback color. */
+  --light-palette: initial;
+  --dark-palette: ;
   --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Fira Code", Menlo, Consolas,
     monospace;
   /* Inter only when the visitor has it installed */
@@ -12,52 +15,58 @@
   --page: 1120px;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
-  --bg: light-dark(#f8fafc, #020617);
-  --text: light-dark(#1e293b, #cbd5e1);
-  --strong: light-dark(#020617, #f8fafc);
-  --muted: light-dark(#64748b, #94a3b8);
-  --label: light-dark(#334155, #cbd5e1);
-  --glow: light-dark(#2563eb1f, #3b82f62e);
-  --dots: light-dark(#0f172a14, #94a3b81a);
-  --line: light-dark(#0f172a14, #94a3b81f);
-  --line-strong: light-dark(#0f172a24, #94a3b838);
-  --card: light-dark(#ffffffcc, #0f172a99);
-  --solid: light-dark(#fff, #0f172a);
-  --highlight: inset 0 1px 0 light-dark(#ffffffe6, #ffffff0a);
-  --header: light-dark(#f8fafcb3, #020617a6);
-  --segment: light-dark(#0f172a0d, #1e293b99);
-  --segment-on: light-dark(#fff, #334155);
-  --secondary-hover: light-dark(#f1f5f9, #334155b3);
-  --soft: light-dark(#2563eb14, #3b82f61f);
-  --soft-line: light-dark(#2563eb2e, #60a5fa40);
+  --bg: var(--light-palette, #f8fafc) var(--dark-palette, #020617);
+  --text: var(--light-palette, #1e293b) var(--dark-palette, #cbd5e1);
+  --strong: var(--light-palette, #020617) var(--dark-palette, #f8fafc);
+  --muted: var(--light-palette, #64748b) var(--dark-palette, #94a3b8);
+  --label: var(--light-palette, #334155) var(--dark-palette, #cbd5e1);
+  --glow: var(--light-palette, #2563eb1f) var(--dark-palette, #3b82f62e);
+  --dots: var(--light-palette, #0f172a14) var(--dark-palette, #94a3b81a);
+  --line: var(--light-palette, #0f172a14) var(--dark-palette, #94a3b81f);
+  --line-strong: var(--light-palette, #0f172a24) var(--dark-palette, #94a3b838);
+  --card: var(--light-palette, #ffffffcc) var(--dark-palette, #0f172a99);
+  --solid: var(--light-palette, #fff) var(--dark-palette, #0f172a);
+  --highlight: inset 0 1px 0 var(--light-palette, #ffffffe6) var(--dark-palette, #ffffff0a);
+  --header: var(--light-palette, #f8fafcb3) var(--dark-palette, #020617a6);
+  --segment: var(--light-palette, #0f172a0d) var(--dark-palette, #1e293b99);
+  --segment-on: var(--light-palette, #fff) var(--dark-palette, #334155);
+  --secondary-hover: var(--light-palette, #f1f5f9) var(--dark-palette, #334155b3);
+  --soft: var(--light-palette, #2563eb14) var(--dark-palette, #3b82f61f);
+  --soft-line: var(--light-palette, #2563eb2e) var(--dark-palette, #60a5fa40);
   --accent: #2563eb;
   --accent-top: #3b82f6;
-  --accent-glow: light-dark(#2563eb73, #3b82f666);
-  --link: light-dark(#2563eb, #93c5fd);
+  --accent-glow: var(--light-palette, #2563eb73) var(--dark-palette, #3b82f666);
+  --link: var(--light-palette, #2563eb) var(--dark-palette, #93c5fd);
   --title: linear-gradient(100deg, var(--strong) 35%, var(--link));
-  --chrome: light-dark(#f1f5f9, #0f172a);
-  --icon-blue: light-dark(#2563eb, #60a5fa);
-  --icon-violet: light-dark(#7c3aed, #a78bfa);
-  --icon-green: light-dark(#059669, #34d399);
-  --icon-amber: light-dark(#d97706, #fbbf24);
-  --icon-teal: light-dark(#0d9488, #2dd4bf);
-  --icon-rose: light-dark(#e11d48, #fb7185);
+  --chrome: var(--light-palette, #f1f5f9) var(--dark-palette, #0f172a);
+  --icon-blue: var(--light-palette, #2563eb) var(--dark-palette, #60a5fa);
+  --icon-violet: var(--light-palette, #7c3aed) var(--dark-palette, #a78bfa);
+  --icon-green: var(--light-palette, #059669) var(--dark-palette, #34d399);
+  --icon-amber: var(--light-palette, #d97706) var(--dark-palette, #fbbf24);
+  --icon-teal: var(--light-palette, #0d9488) var(--dark-palette, #2dd4bf);
+  --icon-rose: var(--light-palette, #e11d48) var(--dark-palette, #fb7185);
 
   --shadow:
-    0 1px 2px light-dark(#0f172a0a, transparent),
-    0 12px 32px -16px light-dark(#0f172a29, transparent),
-    0 12px 40px -16px light-dark(transparent, #000c);
+    0 1px 2px var(--light-palette, #0f172a0a) var(--dark-palette, transparent),
+    0 12px 32px -16px var(--light-palette, #0f172a29) var(--dark-palette, transparent),
+    0 12px 40px -16px var(--light-palette, transparent) var(--dark-palette, #000c);
   --window-shadow:
-    0 2px 4px light-dark(#0f172a0a, transparent),
-    0 32px 64px -24px light-dark(#0f172a40, transparent),
-    0 40px 80px -24px light-dark(transparent, #000),
-    0 0 0 1px light-dark(transparent, #94a3b80f);
-}
-:root[data-theme="light"] {
-  color-scheme: light;
+    0 2px 4px var(--light-palette, #0f172a0a) var(--dark-palette, transparent),
+    0 32px 64px -24px var(--light-palette, #0f172a40) var(--dark-palette, transparent),
+    0 40px 80px -24px var(--light-palette, transparent) var(--dark-palette, #000),
+    0 0 0 1px var(--light-palette, transparent) var(--dark-palette, #94a3b80f);
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --light-palette: ;
+  --dark-palette: initial;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --light-palette: ;
+    --dark-palette: initial;
+  }
 }
 
 * {
@@ -310,12 +319,16 @@ button:is(.theme-toggle, .m-round):hover {
 @media (max-width: 400px) {
   .top .wrap {
     gap: 6px;
+    padding-inline: 10px;
   }
   .brand {
     gap: 8px;
   }
   .top nav a {
     padding: 5px 6px;
+  }
+  .langs > * {
+    padding-inline: 8px;
   }
 }
 
@@ -646,15 +659,15 @@ section {
   margin: 0;
   padding: 14px 16px;
   overflow: auto;
-  scrollbar-color: light-dark(#64748b, #334155) transparent;
-  background: light-dark(#fff, #020617);
+  scrollbar-color: var(--light-palette, #64748b) var(--dark-palette, #334155) transparent;
+  background: var(--light-palette, #fff) var(--dark-palette, #020617);
   color: var(--text);
   font: 13.5px/1.55 var(--mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .screen .prompt {
-  color: light-dark(#047857, #34d399);
+  color: var(--light-palette, #047857) var(--dark-palette, #34d399);
   user-select: none;
 }
 .screen .cmd {
@@ -667,7 +680,7 @@ section {
   color: var(--link);
 }
 .screen .ok {
-  color: light-dark(#047857, #7dd3ae);
+  color: var(--light-palette, #047857) var(--dark-palette, #7dd3ae);
 }
 .screen .qr {
   display: block;
@@ -869,14 +882,14 @@ footer p a {
 
 /* The demo shares the page palette. */
 .app {
-  --field: light-dark(#fff, #02061799);
-  --field-line: light-dark(#0f172a1f, #94a3b82e);
-  --placeholder: light-dark(#94a3b8, #64748b);
-  --ring: light-dark(#2563eb40, #60a5fa59);
-  --secondary: light-dark(#fff, #1e293b99);
-  --secondary-ink: light-dark(#0f172a, #f1f5f9);
-  --item: light-dark(#f8fafccc, #1e293b66);
-  --notice: light-dark(#b45309, #fbbf24);
+  --field: var(--light-palette, #fff) var(--dark-palette, #02061799);
+  --field-line: var(--light-palette, #0f172a1f) var(--dark-palette, #94a3b82e);
+  --placeholder: var(--light-palette, #94a3b8) var(--dark-palette, #64748b);
+  --ring: var(--light-palette, #2563eb40) var(--dark-palette, #60a5fa59);
+  --secondary: var(--light-palette, #fff) var(--dark-palette, #1e293b99);
+  --secondary-ink: var(--light-palette, #0f172a) var(--dark-palette, #f1f5f9);
+  --item: var(--light-palette, #f8fafccc) var(--dark-palette, #1e293b66);
+  --notice: var(--light-palette, #b45309) var(--dark-palette, #fbbf24);
   --demo-gutter: 28px;
   container-type: inline-size;
   position: relative;

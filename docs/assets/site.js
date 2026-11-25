@@ -4,7 +4,7 @@
 
   const lang = document.documentElement.lang === "uk" ? "uk" : "en";
   const REPO = "sprytnyk/loka";
-  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
   const TEXT = {
     en: {
@@ -51,26 +51,36 @@
   function themes() {
     const site = document.documentElement;
     const toggle = document.querySelector('[data-theme-toggle="site"]');
-    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    if (!toggle) return;
+    const systemTheme = window.matchMedia?.("(prefers-color-scheme: dark)");
+
+    function nextTheme() {
+      const systemDark = systemTheme?.matches ?? (getComputedStyle(site).colorScheme === "dark");
+      const theme = site.dataset.theme || (systemDark ? "dark" : "light");
+      return theme === "dark" ? "light" : "dark";
+    }
 
     function render() {
-      const theme = site.dataset.theme || (systemTheme.matches ? "dark" : "light");
-      const dark = theme === "dark";
-      const label = dark ? TEXT.toLight : TEXT.toDark;
-      toggle.dataset.nextTheme = dark ? "light" : "dark";
+      const theme = nextTheme();
+      const label = theme === "light" ? TEXT.toLight : TEXT.toDark;
+      toggle.dataset.nextTheme = theme;
       toggle.setAttribute("aria-label", label);
       toggle.title = label;
-      toggle.hidden = false;
     }
 
     toggle.addEventListener("click", () => {
-      const theme = toggle.dataset.nextTheme;
+      const theme = nextTheme();
       site.dataset.theme = theme;
       remember("loka-site-theme", theme);
       render();
     });
-    systemTheme.addEventListener("change", render);
+    if (typeof systemTheme?.addEventListener === "function") {
+      systemTheme.addEventListener("change", render);
+    } else if (typeof systemTheme?.addListener === "function") {
+      systemTheme.addListener(render);
+    }
     render();
+    toggle.hidden = false;
   }
 
   // What the terminal shows. The output is what Loka prints, with documentation
@@ -676,8 +686,12 @@
     link.addEventListener("click", () => remember("lang", link.dataset.lang));
   }
 
-  themes();
   app();
   terminal();
   downloads();
+  try {
+    themes();
+  } catch (error) {
+    console.warn("Could not start the theme switch", error);
+  }
 })();
