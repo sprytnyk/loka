@@ -312,6 +312,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 		return err
 	}
 	defer s.Close()
+	p := colorFor(stdout)
 	served := make(chan error, 1)
 	go func() { served <- s.Serve(ctx, ln) }()
 	fmt.Fprintf(stdout, "Loka %s is waiting for transfers on port %d (Ctrl+C to stop)\n", version, port)
@@ -349,7 +350,8 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 			}
 			if t.Kind == transfer.Text {
 				if text := t.Text(); text != "" {
-					fmt.Fprintf(stdout, "\n%s sent text:\n%s\n", escapeTerminalControls(sender(t)), escapeTerminalControls(text))
+					heading := escapeTerminalControls(sender(t)) + " sent text:"
+					fmt.Fprintf(stdout, "\n%s\n%s\n", p.paint("1", heading), escapeTerminalControls(text))
 					t.Dismiss()
 					continue
 				}

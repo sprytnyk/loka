@@ -295,6 +295,7 @@ func TestPipedAnswerIsKept(t *testing.T) {
 }
 
 func TestSendTextFromStdin(t *testing.T) {
+	t.Setenv("FORCE_COLOR", "")
 	previousConfigDir := configDir
 	dir := t.TempDir()
 	configDir = func() (string, error) { return dir, nil }
@@ -364,6 +365,8 @@ func browser(t *testing.T) *http.Client {
 }
 
 func TestPhoneTextAppearsInTerminal(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
 	received, stop, code := runLoka(t, strings.NewReader(""), "receive", "--port", "0")
 	port := received.wait(t, `on port (\d+)`)[1]
 	base := "https://127.0.0.1:" + port
@@ -393,7 +396,7 @@ func TestPhoneTextAppearsInTerminal(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("could not upload phone text: HTTP %d", resp.StatusCode)
 	}
-	received.wait(t, regexp.QuoteMeta("sent text:\n"+text+"\n"))
+	received.wait(t, regexp.QuoteMeta("\n\x1b[1mA browser at 127.0.0.1 sent text:\x1b[0m\n"+text+"\n"))
 	stop()
 	if c := <-code; c != 0 {
 		t.Fatalf("receive exited %d, output %q", c, received.String())
