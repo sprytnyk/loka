@@ -298,7 +298,7 @@ func (s *Server) offer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(o.Commitment) != trust.CommitmentSize {
-		writeError(w, http.StatusBadRequest, errors.New("Invalid offer"))
+		writeError(w, http.StatusBadRequest, errInvalidOffer)
 		return
 	}
 	t := transfer.New(transfer.Incoming, cmp.Or(truncate(o.Name, 255), host), items, o.Size, transfer.Pairing)
@@ -436,7 +436,8 @@ func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
 		writeError(w, http.StatusServiceUnavailable, errTooManyOffers)
 		return
 	}
-	if t.Status() == transfer.Pairing {
+	switch t.Status() {
+	case transfer.Pairing:
 		if !s.pairings.take(t, time.Now()) {
 			err := errPairingLimitKnown
 			if t.NewDevice() {
@@ -446,9 +447,9 @@ func (s *Server) addOffer(w http.ResponseWriter, t *transfer.Transfer) {
 			return
 		}
 		time.AfterFunc(pairingTimeout, func() { t.Expire(transfer.Pairing, errPairingTimeout) })
-	} else if t.Status() == transfer.Accepted {
+	case transfer.Accepted:
 		waitForText(t)
-	} else {
+	default:
 		waitForPerson(t)
 	}
 	t.Secret = transfer.RandomToken(24)
@@ -712,8 +713,8 @@ type state struct {
 
 func (s *Server) state(w http.ResponseWriter, _ *http.Request) {
 	st := state{Name: s.name, Peers: []network.Peer{}, Transfers: []transfer.View{}, Addresses: network.LocalAddresses()}
-	if w := s.Warning(); w != "" {
-		st.Warnings = append(st.Warnings, w)
+	if warning := s.Warning(); warning != "" {
+		st.Warnings = append(st.Warnings, warning)
 	}
 	st.Warnings = append(st.Warnings, s.Trust.AddressProblems(st.Addresses)...)
 	if s.Devices != nil {

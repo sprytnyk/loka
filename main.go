@@ -312,11 +312,12 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 		for _, t := range s.Transfers.All() {
 			// Offers from Lokas that failed before the person saw them: a
 			// refused device, or a pairing that didn't finish.
-			if t.Direction == transfer.Incoming && t.DeviceID != "" && t.Destination() == "" && !told[t.ID] {
-				if v := t.View(); v.Status == transfer.Failed {
-					told[t.ID] = true
-					fmt.Fprintf(stdout, "\nRefused a transfer from %s: %s\n", v.Name, v.Error)
-				}
+			if t.Direction != transfer.Incoming || t.DeviceID == "" || t.Destination() != "" || told[t.ID] {
+				continue
+			}
+			if v := t.View(); v.Status == transfer.Failed {
+				told[t.ID] = true
+				fmt.Fprintf(stdout, "\nRefused a transfer from %s: %s\n", v.Name, v.Error)
 			}
 		}
 		if w := s.Warning(); w != "" && !told[w] {

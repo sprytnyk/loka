@@ -135,10 +135,11 @@ func WriteZip(ctx context.Context, w io.Writer, entries []Entry) error {
 		if err != nil {
 			return err
 		}
-		if !e.dir {
-			if err := copyFile(ctx, fw, e, &done); err != nil {
-				return err
-			}
+		if e.dir {
+			continue
+		}
+		if err := copyFile(ctx, fw, e, &done); err != nil {
+			return err
 		}
 	}
 	return zw.Close()

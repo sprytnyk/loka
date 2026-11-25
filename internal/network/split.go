@@ -117,25 +117,27 @@ func (s *splitter) accept(plain, secure *half, config *tls.Config) {
 		wait = 0
 		conn := &tracked{Conn: raw, s: s, local: fromThisDevice(raw)}
 		s.track(conn)
-		go func() {
-			conn.SetReadDeadline(time.Now().Add(firstByteTimeout))
-			r := bufio.NewReader(conn)
-			first, err := r.Peek(1)
-			conn.SetReadDeadline(time.Time{})
-			if err != nil {
-				conn.Close()
-				return
-			}
-			to, c := plain, net.Conn(peekedConn{conn, r})
-			if first[0] == tlsHandshake {
-				to, c = secure, tls.Server(c, config)
-			}
-			select {
-			case to.conns <- c:
-			case <-s.closed:
-				conn.Close()
-			}
-		}()
+		go s.route(conn, plain, secure, config)
+	}
+}
+
+func (s *splitter) route(conn *tracked, plain, secure *half, config *tls.Config) {
+	conn.SetReadDeadline(time.Now().Add(firstByteTimeout))
+	r := bufio.NewReader(conn)
+	first, err := r.Peek(1)
+	conn.SetReadDeadline(time.Time{})
+	if err != nil {
+		conn.Close()
+		return
+	}
+	listener, stream := plain, net.Conn(peekedConn{conn, r})
+	if first[0] == tlsHandshake {
+		listener, stream = secure, tls.Server(stream, config)
+	}
+	select {
+	case listener.conns <- stream:
+	case <-s.closed:
+		conn.Close()
 	}
 }
 

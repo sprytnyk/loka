@@ -37,10 +37,11 @@ func WriteTar(ctx context.Context, w io.Writer, entries []Entry, done *atomic.In
 		if err := tw.WriteHeader(hdr); err != nil {
 			return err
 		}
-		if !e.dir {
-			if err := copyFile(ctx, tw, e, done); err != nil {
-				return err
-			}
+		if e.dir {
+			continue
+		}
+		if err := copyFile(ctx, tw, e, done); err != nil {
+			return err
 		}
 	}
 	return tw.Close()
@@ -164,17 +165,18 @@ func Receive(ctx context.Context, r io.Reader, destination string, size int64, d
 // cannot move, it moves back the ones already moved, so a failed transfer
 // still leaves nothing behind.
 func publish(staged map[string]string, roots []string, destination string) error {
-	var moved [][2]string
+	type move struct{ from, to string }
+	var moved []move
 	for _, root := range roots {
 		from := staged[root]
 		to, err := moveNoReplace(from, destination, filepath.Base(from))
 		if err != nil {
 			for _, m := range slices.Backward(moved) {
-				os.Rename(m[1], m[0])
+				os.Rename(m.to, m.from)
 			}
 			return err
 		}
-		moved = append(moved, [2]string{from, to})
+		moved = append(moved, move{from: from, to: to})
 	}
 	return nil
 }

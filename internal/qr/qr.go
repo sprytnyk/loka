@@ -304,13 +304,14 @@ func (c *Code) drawCodewords(data []byte) {
 		}
 		upward := (right+1)&2 == 0
 		for vert := range c.Size {
+			y := vert
+			if upward {
+				y = c.Size - 1 - vert
+			}
 			for j := range 2 {
-				x, y := right-j, vert
-				if upward {
-					y = c.Size - 1 - vert
-				}
-				if !c.function[y*c.Size+x] && i < len(data)*8 {
-					c.modules[y*c.Size+x] = data[i/8]>>(7-i%8)&1 == 1
+				module := y*c.Size + right - j
+				if !c.function[module] && i < len(data)*8 {
+					c.modules[module] = data[i/8]>>(7-i%8)&1 == 1
 					i++
 				}
 			}
@@ -390,12 +391,12 @@ func (c *Code) penalty() int {
 	dark := 0
 	for y := range c.Size {
 		for x := range c.Size {
-			if c.Dark(x, y) {
+			isDark := c.Dark(x, y)
+			if isDark {
 				dark++
 			}
 			if x+1 < c.Size && y+1 < c.Size {
-				d := c.Dark(x, y)
-				if c.Dark(x+1, y) == d && c.Dark(x, y+1) == d && c.Dark(x+1, y+1) == d {
+				if c.Dark(x+1, y) == isDark && c.Dark(x, y+1) == isDark && c.Dark(x+1, y+1) == isDark {
 					score += 3
 				}
 			}

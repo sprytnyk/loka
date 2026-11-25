@@ -104,7 +104,8 @@ func (s *Store) BrowserCertificate(addr netip.Addr) (*tls.Certificate, error) {
 // Vouches reports whether this device's authority may vouch for addr, so
 // that a phone which installed it trusts this device there.
 func (s *Store) Vouches(addr netip.Addr) bool {
-	return slices.ContainsFunc(s.ca.Leaf.PermittedIPRanges, func(n *net.IPNet) bool { return n.Contains(addr.Unmap().AsSlice()) })
+	ip := addr.Unmap().AsSlice()
+	return slices.ContainsFunc(s.ca.Leaf.PermittedIPRanges, func(n *net.IPNet) bool { return n.Contains(ip) })
 }
 
 // AddressProblem says why a phone can't trust this device at addr, or
@@ -124,10 +125,12 @@ func (s *Store) AddressProblem(addr netip.Addr) error {
 func (s *Store) AddressProblems(addresses []string) []string {
 	var problems []string
 	for _, a := range addresses {
-		if addr, err := netip.ParseAddr(a); err == nil {
-			if err := s.AddressProblem(addr); err != nil {
-				problems = append(problems, err.Error())
-			}
+		addr, err := netip.ParseAddr(a)
+		if err != nil {
+			continue
+		}
+		if err := s.AddressProblem(addr); err != nil {
+			problems = append(problems, err.Error())
 		}
 	}
 	return problems

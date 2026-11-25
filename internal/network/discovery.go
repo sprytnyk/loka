@@ -126,17 +126,16 @@ func (d *Discovery) joinGroup() (net.PacketConn, error) {
 		return nil, err
 	}
 	group := ipv4(net.ParseIP(discoveryAddr))
-	addrs := multicastAddresses()
 	var joinErr error
-	joined := 0
-	for _, addr := range addrs {
+	joined := false
+	for _, addr := range multicastAddresses() {
 		err := control(raw, func(fd uintptr) error { return joinGroup(fd, group, addr) })
 		if err == nil {
-			joined++
+			joined = true
 		}
 		joinErr = cmp.Or(joinErr, err)
 	}
-	if joined == 0 {
+	if !joined {
 		conn.Close()
 		return nil, fmt.Errorf("could not join on any network interface: %w", joinErr)
 	}

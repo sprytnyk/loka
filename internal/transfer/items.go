@@ -82,11 +82,11 @@ func walk(root, name string) (entries []Entry, size int64, err error) {
 		// The entry may have changed since the directory was listed, to
 		// a named pipe for one, so the fresh info must agree with d.
 		info, err := lstat(path)
-		if err == nil && info.Mode().Type() != d.Type() {
-			err = fmt.Errorf("%s %w", path, errReplaced)
-		}
 		if err != nil {
 			return err
+		}
+		if info.Mode().Type() != d.Type() {
+			return fmt.Errorf("%s %w", path, errReplaced)
 		}
 		rel, err := filepath.Rel(root, path)
 		if err != nil {

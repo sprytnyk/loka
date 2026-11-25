@@ -99,14 +99,12 @@ func SendTo(t *transfer.Transfer, entries []transfer.Entry, store *trust.Store, 
 	})
 	defer stopWatch()
 	write := func(ctx context.Context, w io.Writer) error {
-		return transfer.WriteTar(ctx, w, entries, &t.Done)
-	}
-	if t.Kind == transfer.Text {
-		write = func(_ context.Context, w io.Writer) error {
-			n, err := io.WriteString(w, t.Text())
-			t.Done.Add(int64(n))
-			return err
+		if t.Kind != transfer.Text {
+			return transfer.WriteTar(ctx, w, entries, &t.Done)
 		}
+		n, err := io.WriteString(w, t.Text())
+		t.Done.Add(int64(n))
+		return err
 	}
 	err := upload(uploadCtx, client, base+"/peer/upload/"+reply.ID, reply.Secret, write)
 	if err != nil && stalled.Load() {
@@ -200,10 +198,10 @@ func waitForAnswer(ctx context.Context, client *http.Client, url, secret string)
 func upload(ctx context.Context, client *http.Client, url, secret string, write func(context.Context, io.Writer) error) error {
 	pr, pw := io.Pipe()
 	defer pr.Close()
-	writeErr := make(chan error, 1)
+	writeResult := make(chan error, 1)
 	go func() {
 		err := write(ctx, pw)
-		writeErr <- err
+		writeResult <- err
 		pw.CloseWithError(err)
 	}()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
@@ -214,8 +212,8 @@ func upload(ctx context.Context, client *http.Client, url, secret string, write 
 	resp, err := client.Do(req)
 	if err != nil {
 		pr.CloseWithError(err)
-		if werr := <-writeErr; werr != nil && !errors.Is(werr, io.ErrClosedPipe) {
-			return werr // a local problem explains the failure better
+		if writeErr := <-writeResult; writeErr != nil && !errors.Is(writeErr, io.ErrClosedPipe) {
+			return writeErr // a local problem explains the failure better
 		}
 		// The receiver was reached for the offer, so a broken connection
 		// now means it dropped, unless it can't be reached again.
@@ -228,7 +226,7 @@ func upload(ctx context.Context, client *http.Client, url, secret string, write 
 	if err := replyError(resp); err != nil {
 		return err
 	}
-	return <-writeErr
+	return <-writeResult
 }
 
 // call makes a small JSON request to another device.

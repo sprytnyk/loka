@@ -11,7 +11,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unicode/utf8"
 )
 
 // Status is a step in a transfer's life.
@@ -335,7 +334,7 @@ func (t *Transfer) View() View {
 	status, err, newDevice, code, unread := t.status, t.err, t.newDevice, t.code, t.unread
 	var preview string
 	if t.Direction == Outgoing {
-		preview = t.text[:previewEnd(t.text)]
+		preview = cutToBytes(t.text, previewSize)
 	}
 	var speed *float64
 	switch {
@@ -366,19 +365,6 @@ func (t *Transfer) View() View {
 		Unread:    unread,
 		Preview:   preview,
 	}
-}
-
-// previewEnd is where the preview of text ends, without splitting a
-// character.
-func previewEnd(text string) int {
-	if len(text) <= previewSize {
-		return len(text)
-	}
-	end := previewSize
-	for end > 0 && !utf8.RuneStart(text[end]) {
-		end--
-	}
-	return end
 }
 
 // speedEvery is the shortest time a speed is measured over.
