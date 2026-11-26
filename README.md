@@ -65,8 +65,10 @@ Run `loka` on both computers. It opens in your browser.
    pairing code before you accept.
 
 Loka can receive several transfers at once. The browser and terminal show
-the current speed during a transfer and the average speed when it finishes.
-Loka remembers the last destination until you quit.
+elapsed time, current speed during a transfer, and average speed when it
+finishes. The browser lists active transfers first. **Clear finished**
+clears the history and keeps unread text. Loka remembers the last
+destination until you quit.
 
 Loka uses your system theme and browser language by default. Use the header
 to switch between light and dark or between English and Ukrainian. The
@@ -170,7 +172,8 @@ loka forget my-laptop
   whether to accept text. Press Enter to decline the text. Text sent through
   the phone link appears right away.
   `receive` prints the phone link, its QR code, the HTTPS link and Loka's
-  certificate fingerprint.
+  certificate fingerprint. After receiving files, it prints their saved
+  names, including any names changed to avoid overwriting an existing file.
 - `devices` lists devices running Loka on the same network. It marks a device
   as remembered only when it shows the certificate Loka knows for it.
 - `send` takes the receiver's address. Use `--stdin` to pipe in UTF-8 text.
