@@ -679,7 +679,13 @@ section {
 .screen .url {
   color: var(--link);
 }
-.screen .ok {
+.screen .pairing, .screen .waiting {
+  color: var(--light-palette, #b45309) var(--dark-palette, #fbbf24);
+}
+.screen .sending {
+  color: var(--light-palette, #0e7490) var(--dark-palette, #67e8f9);
+}
+.screen .complete {
   color: var(--light-palette, #047857) var(--dark-palette, #7dd3ae);
 }
 .screen .qr {
@@ -1109,7 +1115,11 @@ footer p a {
 .m-transfers {
   grid-area: transfers;
   align-self: stretch;
+  position: relative;
 }
+.m-transfers:has(.m-clear:not([hidden])) { padding-bottom: 72px; }
+.m-clear { position: absolute; right: 20px; bottom: 20px; }
+.m-no-transfers { margin: 0; color: var(--muted); font-size: 13px; }
 .m-card {
   min-width: 0;
   padding: 20px;
@@ -1555,6 +1565,8 @@ footer p a {
     padding: 16px;
     border-radius: 18px;
   }
+  .m-transfers:has(.m-clear:not([hidden])) { padding-bottom: 68px; }
+  .m-clear { right: 16px; bottom: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -113,16 +113,18 @@
     { cmd: "loka devices" },
     { out: "Studio Laptop  192.0.2.21:45873  (remembered)" },
     { out: "Living Room PC  192.0.2.22:45873" },
-    { cmd: "loka send --to 192.0.2.21 ~/Videos/holiday.mp4" },
-    { out: "Pairing code 482 913. Check that the receiver shows the same." },
+    { cmd: "loka send --to 192.0.2.22 ~/Videos/holiday.mp4" },
+    { progress: ["pairing: 0%"] },
+    { out: "192.0.2.22 is a new device, not seen before. Make sure it's the one you meant." },
+    { pairingCode: "482 913" },
     {
       progress: [
         "waiting: 0%",
-        "sending: 18% at 296.4 Mbps",
-        "sending: 41% at 308.9 Mbps",
-        "sending: 67% at 311.2 Mbps",
-        "sending: 89% at 312.0 Mbps",
-        "complete: 100% at 312.4 Mbps",
+        "sending: 18% at 296.4 Mbps in 1s",
+        "sending: 41% at 308.9 Mbps in 2s",
+        "sending: 67% at 311.2 Mbps in 4s",
+        "sending: 89% at 312.0 Mbps in 5s",
+        "complete: 100% at 312.4 Mbps in 6s",
       ],
     },
     { cmd: "loka share ~/Documents/itinerary.pdf" },
@@ -131,11 +133,9 @@
     { url: `http://192.0.2.20:45873/#d=${LINK}` },
     { out: "Safer, once the phone has Loka's certificate:" },
     { url: `https://192.0.2.20:45873/#d=${LINK}` },
-    {
-      out:
-        "Loka's certificate fingerprint (SHA-256): 3F 9A 1C 72 E4 0B 5D 88 A1 6E 2F 93 C7 D0 4B 19 " +
-        "7E 55 A8 0C 31 F6 9D 2B E8 47 C3 6A 10 BD 92 5F",
-    },
+    { out: "Loka's certificate fingerprint (SHA-256):" },
+    { out: "3F 9A 1C 72 E4 0B 5D 88 A1 6E 2F 93 C7 D0 4B 19" },
+    { out: "7E 55 A8 0C 31 F6 9D 2B E8 47 C3 6A 10 BD 92 5F" },
     { out: "With curl:" },
     {
       out:
@@ -154,6 +154,7 @@
       names: { one: "{n} name", other: "{n} names" },
       characters: { one: "{n} character", other: "{n} characters" },
       nothing: "Nothing selected",
+      noTransfers: "No transfers yet.",
       first: "Choose files or directories first.",
       enterText: "Type or paste some text first.",
       textTooLong: "The text is longer than 1 MB. Send it as a file instead.",
@@ -181,6 +182,7 @@
       names: { one: "{n} назва", few: "{n} назви", many: "{n} назв", other: "{n} назви" },
       characters: { one: "{n} символ", few: "{n} символи", many: "{n} символів", other: "{n} символу" },
       nothing: "Нічого не вибрано",
+      noTransfers: "Передавань ще немає.",
       first: "Спершу виберіть файли або теки.",
       enterText: "Спершу введіть або вставте текст.",
       textTooLong: "Текст довший за 1 МБ. Надішліть його файлом.",
@@ -337,6 +339,20 @@
 
     // Transfers
     const box = $("[data-transfers]");
+    const clearTransfers = $("[data-clear-transfers]");
+    const updateClear = () => {
+      clearTransfers.hidden = !box.querySelector('[data-transfer-finished="true"]');
+      if (!box.querySelector(".m-item") && !box.querySelector("[data-no-transfers]")) {
+        const empty = el("p", "m-no-transfers", say("noTransfers"));
+        empty.dataset.noTransfers = "";
+        box.append(empty);
+      }
+    };
+    clearTransfers.addEventListener("click", () => {
+      for (const item of box.querySelectorAll('[data-transfer-finished="true"]')) item.remove();
+      updateClear();
+    });
+    updateClear();
     const speedText = (mbps) =>
       say("speed", {
         speed: mbps.toLocaleString(lang === "uk" ? "uk-UA" : "en-GB", {
@@ -384,10 +400,15 @@
         draw();
       });
       item.append(code, bar, cancel);
-      if (!card) box.prepend(item);
+      if (!card) {
+        box.querySelector("[data-no-transfers]")?.remove();
+        box.prepend(item);
+      }
 
       function draw() {
         const active = t.status === "sending" || t.status === "receiving";
+        item.dataset.transferFinished = String(t.status === "complete" || t.status === "cancelled");
+        updateClear();
         const speed = t.speed === null ? "" : ` · ${speedText(t.speed)}`;
         status.textContent = `${APP.statuses[t.status]} · ${Math.round(t.progress)}%${speed}`;
         code.textContent = t.code ? say("code", { code: t.code }) : "";
@@ -519,11 +540,22 @@
       screen.append(line);
       return line;
     };
+    const showProgress = (line, step) => {
+      line.className = step.split(":", 1)[0];
+      line.textContent = step;
+    };
     const print = (item) => {
       if (item.qr) return screen.append(el("span", "qr", item.qr));
       if (item.url) return screen.append(el("div", "url", item.url));
-      const last = item.progress && item.progress[item.progress.length - 1];
-      screen.append(el("div", last ? "ok" : "out", last || item.out));
+      const line = el("div", "out");
+      if (item.progress) {
+        showProgress(line, item.progress[item.progress.length - 1]);
+      } else if (item.pairingCode) {
+        line.append("Pairing code ", el("strong", "", item.pairingCode), ". Check that the receiver shows the same.");
+      } else {
+        line.textContent = item.out;
+      }
+      screen.append(line);
     };
     const bottom = () => {
       screen.scrollTop = screen.scrollHeight;
@@ -534,7 +566,6 @@
         if (item.cmd) prompt().append(el("span", "cmd", item.cmd));
         else print(item);
       }
-      prompt().append(el("span", "caret"));
       return bottom();
     }
 
@@ -558,8 +589,7 @@
           const line = el("div", "out");
           screen.append(line);
           for (const [i, step] of item.progress.entries()) {
-            line.textContent = step;
-            if (i === item.progress.length - 1) line.className = "ok";
+            showProgress(line, step);
             bottom();
             await sleep(i === 0 ? 700 : 450);
           }
@@ -569,8 +599,6 @@
           await sleep(item.qr ? 250 : 120);
         }
       }
-      prompt().append(caret);
-      bottom();
     }
 
     whenSeen(screen, run);

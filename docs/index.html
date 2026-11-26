@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Loka: share files on your local network</title>
-    <meta name="description" content="Share files offline with one executable for Linux, Windows and macOS. Phones can send and receive in their browser." />
+    <title>Loka: share files and text on your local network</title>
+    <meta name="description" content="Share files, directories and text on your local network. Use a browser or terminal. Loka runs on Linux, Windows and macOS." />
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
     <link rel="canonical" href="https://sprytnyk.github.io/loka/" />
     <link rel="alternate" hreflang="en" href="https://sprytnyk.github.io/loka/" />
@@ -12,12 +12,12 @@
     <link rel="alternate" hreflang="x-default" href="https://sprytnyk.github.io/loka/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Loka" />
-    <meta property="og:title" content="Loka: share files on your local network" />
-    <meta property="og:description" content="Share files offline with one executable for Linux, Windows and macOS. Phones can send and receive in their browser." />
+    <meta property="og:title" content="Loka: share files and text on your local network" />
+    <meta property="og:description" content="Share files, directories and text on your local network. Use a browser or terminal. Loka runs on Linux, Windows and macOS." />
     <meta property="og:url" content="https://sprytnyk.github.io/loka/" />
     <meta property="og:image" content="https://sprytnyk.github.io/loka/loka.png" />
-    <meta property="og:image:width" content="1280" />
-    <meta property="og:image:height" content="1051" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:locale" content="en_GB" />
     <meta property="og:locale:alternate" content="uk_UA" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -26,7 +26,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Loka",
-        "description": "Share files offline with one executable for Linux, Windows and macOS. Phones can send and receive in their browser.",
+        "description": "Share files, directories and text on your local network. Use a browser or terminal. Loka runs on Linux, Windows and macOS.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "Linux, Windows, macOS",
         "url": "https://sprytnyk.github.io/loka/",
@@ -54,7 +54,7 @@
         // no storage: stay on English
       }
     </script>
-    <link rel="stylesheet" href="assets/site.css" />
+    <link rel="stylesheet" href="assets/site.css?v=terminal-progress-1" />
   </head>
   <body>
     <header class="top">
@@ -71,8 +71,8 @@
           <a href="https://github.com/sprytnyk/loka">GitHub</a>
         </nav>
         <div class="langs" aria-label="Language">
-          <span aria-current="page">EN</span>
-          <a href="uk/" data-lang="uk" hreflang="uk" lang="uk" title="Українською">УК</a>
+          <span aria-current="page">ENG</span>
+          <a href="uk/" data-lang="uk" hreflang="uk" lang="uk" title="Українською">UKR</a>
         </div>
         <button type="button" class="theme-toggle" data-theme-toggle="site" hidden>
           <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg><svg class="icon moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
@@ -82,12 +82,12 @@
 
     <main>
       <div class="hero wrap">
-        <h1>Share files on your local network</h1>
+        <h1>Share files and text on your local network</h1>
         <p class="lead">
-          Unpack and run one executable on Linux, Windows or macOS. Loka opens in your
-          browser and has terminal commands for file transfers. Phones use their own browser
-          to send and receive. Files go directly between devices, even when the internet is
-          down. You don't need an account.
+          Run one executable on Linux, Windows or macOS. Loka finds other computers on your
+          network and sends files, directories and text directly over an encrypted connection.
+          Send and receive in your phone's browser. On a computer, use the browser or
+          terminal. Transfers work without internet access or an account.
         </p>
         <div data-downloads>
           <div class="downloads">
@@ -112,7 +112,7 @@
               <div class="m-controls">
                 <span class="m-badge">This device: Studio Desktop</span>
                 <div class="m-segment m-langs" role="group" aria-label="Language">
-                  <span aria-current="page">EN</span><a href="uk/#demo" data-lang="uk" hreflang="uk" lang="uk">УКР</a>
+                  <span aria-current="page">ENG</span><a href="uk/#demo" data-lang="uk" hreflang="uk" lang="uk">UKR</a>
                 </div>
                 <span class="m-theme-icon" aria-hidden="true">
                   <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg><svg class="icon moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
@@ -208,7 +208,7 @@
                   <button type="button" class="m-btn sec m-phone" data-phone aria-haspopup="dialog">Receive from a phone</button>
                 </div>
                 <div data-transfers>
-                  <div class="m-item">
+                  <div class="m-item" data-transfer-finished="true">
                     <div class="m-row"><strong>To Studio Laptop</strong><span class="m-status">complete · 100% · 312.4 Mbps</span></div>
                     <p><small>meeting-notes.pdf</small></p>
                   </div>
@@ -219,6 +219,7 @@
                     <button type="button" class="m-btn sec">Cancel</button>
                   </div>
                 </div>
+                <button type="button" class="m-btn sec m-clear" data-clear-transfers>Clear finished</button>
               </div>
             </div>
             <p class="m-foot"><a href="https://github.com/sprytnyk/loka">Source on GitHub</a></p>
@@ -288,7 +289,7 @@
               <h3>Send from a phone</h3>
               <p>
                 Select <strong>Receive from a phone</strong> and scan the QR code to send
-                files from the phone's browser. The computer asks you to accept the files.
+                files or text from the phone's browser. Accept file offers on the computer.
               </p>
             </div>
             <div class="card">
@@ -349,19 +350,8 @@
               ></span>
               <h3>Browser or terminal</h3>
               <p>
-                The same executable opens the browser page and runs the terminal commands for
-                sending, receiving and sharing files.
-              </p>
-            </div>
-            <div class="card">
-              <span class="tile" style="--tint: var(--icon-green)"
-                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3" /></svg
-              ></span>
-              <h3>Works without internet access</h3>
-              <p>
-                Devices send files directly over your local network. Loka works even if your
-                internet connection drops.
+                Use the same executable to open the browser page or run terminal commands.
+                Send, receive and share files, or send and receive text.
               </p>
             </div>
             <div class="card">
@@ -375,6 +365,11 @@
                 Loka uses your system theme and browser language. Switch between light and
                 dark or English and Ukrainian in the header.
               </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-green)"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3" /></svg></span>
+              <h3>Works without internet access</h3>
+              <p>Devices send files directly over your local network. Loka works even if your internet connection drops.</p>
             </div>
           </div>
         </div>
@@ -394,11 +389,14 @@
               </li>
               <li>
                 <code>loka receive</code> asks where to save files and prints incoming text.
+                Press Enter to use the current directory the first time or the last destination after that.
+                Enter <code>n</code> to decline a file.
                 On your phone, scan the QR code from the terminal and choose <strong>Text</strong>.
               </li>
               <li>
                 <code>loka share</code> prints a link and its QR code. It also prints a
                 <code>curl</code> command that stops if another device answers.
+                The link works until you press Ctrl+C.
               </li>
             </ul>
           </div>
@@ -544,8 +542,8 @@
                 can't select directories.
               </p>
               <p>
-                A computer on several networks shows a QR code for each. Use the one on the same
-                network as the phone.
+                To send text, select <strong>Text</strong> and paste your message. If Loka
+                shows several QR codes, use the one on the phone's network.
               </p>
             </div>
           </details>
@@ -585,7 +583,8 @@
                 Some Wi-Fi networks, especially guest networks, block connections between devices.
                 Try another network, or enter the other computer's address and port by hand. On
                 Windows, allow Loka through the firewall when asked. If the default port is
-                busy, try <code>loka --port 45000</code>.
+                busy, <code>loka --port 0</code> picks a free port automatically. You can also
+                choose a port, for example with <code>loka --port 45000</code>.
               </p>
             </div>
           </details>
@@ -645,6 +644,6 @@
       </div>
     </footer>
 
-    <script src="assets/site.js"></script>
+    <script src="assets/site.js?v=terminal-progress-1"></script>
   </body>
 </html>

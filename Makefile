@@ -1,6 +1,7 @@
-.PHONY: all run build check lint test test-large format release docs
+.PHONY: all run build check lint test test-large format release docs screens gif
 
 VERSION ?= $(patsubst v%,%,$(shell git describe --tags --always --dirty))
+CAPTURE_VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || git describe --always)
 
 all: check
 
@@ -33,3 +34,11 @@ release:
 # Serves the website in docs/ at http://127.0.0.1:8000
 docs:
 	python3 -m http.server -b 127.0.0.1 -d docs 8000
+
+# Screenshot and demo assets for the README and website (needs Node.js and Chromium).
+screens:
+	node scripts/capture.mjs "$(CAPTURE_VERSION)"
+
+# Regenerate the screenshots and the animated demos (also needs ffmpeg).
+gif:
+	node scripts/capture.mjs "$(CAPTURE_VERSION)" --gif

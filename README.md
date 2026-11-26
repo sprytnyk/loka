@@ -5,21 +5,23 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Made in Ukraine](https://img.shields.io/badge/made_in-Ukraine-ffd700.svg?labelColor=0057b7)
 [![Linux test coverage](https://codecov.io/gh/sprytnyk/loka/branch/main/graph/badge.svg)](https://codecov.io/gh/sprytnyk/loka)
-![AI Generated](https://img.shields.io/badge/AI-generated-orange)
+![AI-assisted](https://img.shields.io/badge/AI-assisted-orange)
 
-Loka shares files, directories and text on your local network. Unpack one
-executable for Linux, Windows or macOS and run it. Loka opens in your browser.
-You can also use it from the terminal. You don't need an installer or extra
-software.
+Loka shares files, directories and text on your local network. Unpack and
+run the executable for Linux, Windows or macOS. Loka opens in your browser.
+You can also use it from the terminal. It works without an installer or
+extra software.
 
-Phones and other computers can send and receive in their browser. Loka
-finds computers running Loka on the same network. It encrypts transfers
-and sends them directly between devices, even when the internet is down.
-You don't need an account.
+You can send and receive from a browser on a phone or another computer.
+Loka finds other computers running Loka on the same network. It encrypts
+transfers and sends them directly between devices. It works without
+internet access or an account.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/loka.png">
-  <img src="docs/loka-light.png" alt="Loka showing selected files, nearby devices, file and text transfers, and a download link">
+  <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="docs/loka.png">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/loka-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/demo.gif">
+  <img src="docs/demo-light.gif" alt="Sending files to a nearby device in Loka">
 </picture>
 
 ## Install
@@ -27,13 +29,13 @@ You don't need an account.
 Download the archive for your computer from
 [Releases](https://github.com/sprytnyk/loka/releases) and unpack it.
 On Windows, double-click `loka.exe`. On Linux or macOS, run `./loka` from
-the unpacked directory. To run Loka from any directory in the terminal,
-put the executable on your `PATH`.
+the unpacked directory. To run `loka` from any directory, put the
+executable in a directory on your `PATH`.
 
 | Computer | Archive |
 | --- | --- |
 | Mac with Apple silicon | `loka_X.Y.Z_darwin_arm64.tar.gz` |
-| Mac with Intel | `loka_X.Y.Z_darwin_amd64.tar.gz` |
+| Intel Mac | `loka_X.Y.Z_darwin_amd64.tar.gz` |
 | Linux | `loka_X.Y.Z_linux_amd64.tar.gz` |
 | Windows | `loka_X.Y.Z_windows_amd64.zip` |
 
@@ -48,7 +50,7 @@ Run this command to check the download.
 gpg --verify SHA256SUMS.asc SHA256SUMS && sha256sum --ignore-missing -c SHA256SUMS
 ```
 
-With Go installed, you can instead run
+If you have Go, you can install Loka with
 `go install github.com/sprytnyk/loka@latest`.
 
 ## Send and receive
@@ -58,40 +60,33 @@ Run `loka` on both computers. It opens in your browser.
 1. Choose files or a directory, drop them on the page, or enter a path.
 2. Select the receiving device. If it doesn't show up, enter its address and
    port.
-3. On the receiving computer, pick an existing directory and accept within a
-   minute. The first time, check that both computers show the same pairing code.
+3. On the receiving computer, choose an existing directory and accept within
+   a minute. On the first transfer, check that both computers show the same
+   pairing code before you accept.
 
-Loka can receive several transfers at once. It shows the current speed and
-the average when a transfer finishes, in the browser and terminal. It
-remembers the last destination until you quit.
+Loka can receive several transfers at once. The browser and terminal show
+the current speed during a transfer and the average speed when it finishes.
+Loka remembers the last destination until you quit.
 
-Loka uses your system theme and your browser language. Switch between light
-and dark or English and Ukrainian in the header. The browser remembers your choices.
+Loka uses your system theme and browser language by default. Use the header
+to switch between light and dark or between English and Ukrainian. The
+browser remembers your choices.
 
 To choose files or directories, Loka uses zenity or kdialog on Linux, Finder on
 macOS, and the Windows file dialog. If the picker is unavailable, drop files
 or enter their paths.
 
-Loka copies dropped files because the browser keeps their paths private. It
-removes the copies when you quit if no unfinished send needs them. Files you
-pick or add by path stay where they are. Loka skips symbolic links inside
-the directories you choose.
+Loka copies files you drop on the page because the browser keeps their
+paths private. Loka removes those copies when you quit. Files you pick or
+add by path stay in place. Loka skips symbolic links inside selected directories.
 
-Loka puts incoming files in a hidden directory until the transfer finishes.
-If `report.pdf` already exists in the destination, Loka saves the incoming
-file under a name like `report (1).pdf`. If the transfer fails, Loka removes
-the temporary files.
-
-If the connection drops, Loka picks up from the last chunk the receiver
-saved. You can close and reopen either copy of Loka during a transfer. Start
-the receiver on the same address and port. If you sent from the terminal,
-run the same `loka send` command again. The receiver keeps partial uploads
-for 24 hours after the last saved chunk.
-
-The receiver needs room for both the archive and the files while it unpacks
-them. If a temporary write error stops the save, Loka keeps the archive and
-tries again. If you close the receiver while it's moving files into place,
-it finishes the remaining moves when you reopen it.
+Loka writes incoming files to a hidden directory as they arrive, so the
+receiver needs space for one copy. Once all the files arrive, Loka moves
+them into place. If `report.pdf` already exists in the destination, Loka
+saves the incoming file as `report (1).pdf` or uses the next free number.
+Loka removes temporary files when a transfer fails. It sends files in one
+stream for speed and doesn't resume interrupted transfers. If the connection
+drops, send the files again.
 
 > [!TIP]
 > If the computers can't see each other, the Wi-Fi network may block
@@ -100,12 +95,11 @@ it finishes the remaining moves when you reopen it.
 
 ## From a phone
 
-On the computer, select **Receive from a phone**. Scan the QR code with the
-phone's camera or open the full link in its browser. Keep the part after `#r=`.
-It lets the phone send and changes each time Loka starts.
+On the computer, select **Receive from a phone**. Scan the QR code or open
+the full link in the phone's browser. The part after `#r=` lets the phone
+send. Loka changes it each time it starts.
 
 Choose files or a directory and send them. The computer asks you to accept.
-If the connection drops, the upload resumes while the sending tab stays open.
 On iPhone and iPad, choose files because their browsers can't select directories.
 To send text, switch to **Text** and paste it. See [Text](#text).
 
@@ -114,9 +108,9 @@ Install it once to open the page over HTTPS without a warning. If you skip it,
 Loka still encrypts the connection and the browser warns that it can't verify
 which computer answered.
 
-Loka can show several addresses and QR codes, including one for Tailscale.
-Use the code on the same network as the phone. Loka shows other VPN addresses
-only when there is no local network.
+If Loka shows several QR codes, use the one for the phone's network.
+Loka can show a Tailscale address alongside a local address. It shows
+other VPN addresses only when there is no local network.
 
 ## Download links
 
@@ -135,10 +129,10 @@ code window, check **The phone has Loka's certificate** to show HTTPS codes.
 > a phone has Loka's certificate, use the `https://` link instead. The same
 > goes for the address in **Receive from a phone**.
 
-Loka sends a single file in its original format. The browser can resume that
-download if it stops. For a directory or several files, Loka builds a ZIP during
-the download. Each download gets the current contents. Deleting or replacing a
-shared file or directory stops the link.
+Loka sends a single file in its original format, and the browser can
+resume that download. For a directory or several files, Loka builds a ZIP
+as the browser downloads it. Each download uses the current contents.
+Deleting or replacing a shared file or directory stops the link.
 
 ## Text
 
@@ -148,15 +142,16 @@ device to send the text or select **Create link** for a phone.
 
 - The receiving computer shows the text in a window with a **Copy** button.
   Loka keeps the text in memory until you close the window.
-- If either device is new to the other, check the pairing code and
-  accept on the receiving computer. Once both remember each other, text
-  shows at once.
+- If either device is new to the other, compare the pairing codes and
+  accept on the receiving computer. Once both devices remember each
+  other, the receiver shows the text as it arrives.
 - On a phone, open the link from **Receive from a phone** and select **Text**.
   The text appears on the computer at once.
 - A text link shows the text with a **Copy** button. It works until you stop
   sharing or quit Loka.
 
-Text can be up to 1 MB. Run `loka receive` to read it in the terminal.
+Loka accepts up to 1,048,576 bytes of text. Run `loka receive` to read it
+in the terminal.
 
 ## Command line
 
@@ -169,26 +164,30 @@ loka share /path/to/file
 loka forget my-laptop
 ```
 
-- `receive` asks where to save files. If either Loka is new to the other,
-  it asks whether to accept text. Press Enter with an empty answer to decline.
-  Text sent through the phone link appears right away.
+- `receive` asks where to save files. Press Enter to use the current directory
+  on the first transfer or the last destination on later transfers. Enter `n`
+  to decline a file. When either device is new to the other, `receive` asks
+  whether to accept text. Press Enter to decline the text. Text sent through
+  the phone link appears right away.
   `receive` prints the phone link, its QR code, the HTTPS link and Loka's
   certificate fingerprint.
 - `devices` lists devices running Loka on the same network. It marks a device
   as remembered only when it shows the certificate Loka knows for it.
 - `send` takes the receiver's address. Use `--stdin` to pipe in UTF-8 text.
-- `share` prints a link and its QR code for each local address, the same links
-  over `https://`, the certificate's fingerprint and a `curl` command. The link
-  works until you press Ctrl+C. `--address` limits it to one address.
-- `forget` forgets a device.
+- `share` prints HTTP and HTTPS links and a QR code for each local address.
+  It also prints the certificate's fingerprint and a `curl` command. The
+  links work until you press Ctrl+C. Use `--address` to print links for just
+  one address.
+- `forget` removes a device from the remembered list.
 
-The command uses `-k` because curl doesn't trust Loka's certificate by
-default. The `--pinnedpubkey` option checks the key for this run. If another
-device answers, curl stops before it sends the link.
+The `curl` command uses `-k` because curl doesn't trust Loka's certificate by
+default. The `--pinnedpubkey` option checks that the server presents the
+expected public key before curl sends the link.
 
-Run `loka -h` for all options and `loka --version` for the version. If the
-default port is busy, try `loka --port 45000`. Help and errors are in colour
-in a terminal. Set `NO_COLOR=1` to turn that off.
+Run `loka -h` for all options and `loka --version` for the version.
+If the default port is busy, `loka --port 0` picks a free port automatically.
+You can also choose a port, for example with `loka --port 45000`.
+Transfer status, help and errors are in colour in a terminal. Set `NO_COLOR=1` to turn that off.
 
 ## Safety
 
@@ -198,9 +197,9 @@ in a terminal. Set `NO_COLOR=1` to turn that off.
 | A phone's browser and Loka | Yes |
 | Download links | Yes |
 
-Loka opens its page at `http://127.0.0.1`, an address that only works on your
-computer. The **?** button explains how Loka protects transfers.
-[PROTOCOL.md](PROTOCOL.md) describes how devices connect and transfer files.
+Loka opens its page at `http://127.0.0.1`, an address that only works on
+your computer. The **?** button explains how Loka protects transfers.
+For connection and transfer details, see [PROTOCOL.md](PROTOCOL.md).
 
 Loka makes a certificate on its first run and keeps it in your settings
 directory. It uses `~/.config/sprytnyk.dev/Loka` on Linux,
@@ -212,46 +211,41 @@ Loka calculates a six-digit pairing code from both certificates and a
 random number from each side. Both devices show the code.
 
 > [!IMPORTANT]
-> The first time two devices talk, check that both show the same pairing code.
-> If another device sits between them and passes the transfer on, the codes
-> differ.
+> On the first transfer, accept only if both devices show the same pairing
+> code. A mismatch can mean another device is passing traffic between them.
 
-After the first transfer between computers running Loka, each remembers the
-other's certificate. Loka refuses a transfer if a remembered device shows a
-different certificate. A reinstalled copy shows up as a new device.
+Once you accept the first transfer, both computers remember each other's
+certificates. Loka refuses a transfer if a remembered device shows a
+different certificate. A copy of Loka with a fresh settings directory
+shows up as a new device.
 
 Loka keeps its browser certificate authority in the same directory. Installing
 it on a phone lets the browser check which computer answered. The certificate
 only covers local network addresses, so someone can't use it to pose as a
-website. Loka leaves the computer's trusted certificates alone.
+public website. Loka leaves the computer's trusted certificates alone.
 
-Loka uses plain HTTP for two steps.
-
-1. The page an `http://` link or QR code opens first. It moves the phone to
-   HTTPS.
-2. The certificate download that page offers.
-
-Someone on the same network could swap either one. Once the phone has the
-certificate, use `https://` links, which skip the first page.
+When a phone opens an `http://` link or QR code, it loads the first page
+over plain HTTP. That page sends the phone to HTTPS and offers the
+certificate over plain HTTP. Someone who can change network traffic could
+swap the page or the certificate. Once the phone trusts the certificate, use
+`https://` links to skip the first page.
 
 > [!IMPORTANT]
-> Check the certificate before you trust it. It downloads over plain HTTP, so
-> someone on the network could swap it for their own. Compare the SHA-256
-> fingerprint in the phone's settings with the one on the computer. It's in
-> the **?** help on Loka's page, and `loka receive` and `loka share` print it.
-> Don't use a fingerprint from Loka's page on the phone. That page came over
-> plain HTTP too, so whoever swapped the certificate could swap the page.
+> Before you trust the certificate, compare its SHA-256 fingerprint in the
+> phone's settings with the one on the computer. Open **?** on the computer's
+> Loka page or read the fingerprint printed by `loka receive` or `loka share`.
+> Someone who swaps the certificate could also swap the page on the phone.
 >
 > On Android, search Settings for "Trusted credentials" and open the **User**
 > tab. On iPhone, open **Settings › General › VPN & Device Management**, then
-> the Loka profile and **More Details**. Don't check the padlock in the
-> browser. It shows a different certificate, which Loka makes for each
-> address, so its fingerprint never matches.
+> the Loka profile and **More Details**. Use the fingerprint in the phone's
+> settings. The browser's padlock shows the certificate for the address
+> you're visiting, with its own fingerprint.
 
 > [!CAUTION]
-> Anyone who gets the link can download while you're sharing, so send it only
-> to people you mean to. When you're done, select **Stop sharing**, or press
-> Ctrl+C after `loka share`.
+> Anyone with the link can download while you're sharing. Send it only
+> to the people you want to share with. When you're done, select
+> **Stop sharing** or press Ctrl+C after `loka share`.
 
 ## How Loka compares
 
@@ -276,3 +270,7 @@ and needs at least that much free disk space.
 `make build` puts the executable for your computer in `dist/loka`.
 `make release` checks that the build for your computer runs and puts the
 release archives in `dist/`.
+
+`make screens` generates the English and Ukrainian screenshots in both
+themes. It needs Node.js and Chromium.
+`make gif` also records the README demos and needs ffmpeg.

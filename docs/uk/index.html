@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Loka: обмін файлами в локальній мережі</title>
-    <meta name="description" content="Діліться файлами без інтернету. Запустіть один файл на Linux, Windows або macOS. На телефоні надсилайте й отримуйте файли через браузер." />
+    <title>Loka: обмін файлами й текстом у локальній мережі</title>
+    <meta name="description" content="Діліться файлами, теками й текстом у локальній мережі. Користуйтеся браузером або терміналом. Loka працює в Linux, Windows і macOS." />
     <link rel="icon" href="../assets/icon.svg" type="image/svg+xml" />
     <link rel="canonical" href="https://sprytnyk.github.io/loka/uk/" />
     <link rel="alternate" hreflang="en" href="https://sprytnyk.github.io/loka/" />
@@ -12,12 +12,12 @@
     <link rel="alternate" hreflang="x-default" href="https://sprytnyk.github.io/loka/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Loka" />
-    <meta property="og:title" content="Loka: обмін файлами в локальній мережі" />
-    <meta property="og:description" content="Діліться файлами без інтернету. Запустіть один файл на Linux, Windows або macOS. На телефоні надсилайте й отримуйте файли через браузер." />
+    <meta property="og:title" content="Loka: обмін файлами й текстом у локальній мережі" />
+    <meta property="og:description" content="Діліться файлами, теками й текстом у локальній мережі. Користуйтеся браузером або терміналом. Loka працює в Linux, Windows і macOS." />
     <meta property="og:url" content="https://sprytnyk.github.io/loka/uk/" />
-    <meta property="og:image" content="https://sprytnyk.github.io/loka/loka.png" />
-    <meta property="og:image:width" content="1280" />
-    <meta property="og:image:height" content="1051" />
+    <meta property="og:image" content="https://sprytnyk.github.io/loka/loka-uk.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:locale" content="uk_UA" />
     <meta property="og:locale:alternate" content="en_GB" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -26,7 +26,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Loka",
-        "description": "Діліться файлами без інтернету. Запустіть один файл на Linux, Windows або macOS. На телефоні надсилайте й отримуйте файли через браузер.",
+        "description": "Діліться файлами, теками й текстом у локальній мережі. Користуйтеся браузером або терміналом. Loka працює в Linux, Windows і macOS.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "Linux, Windows, macOS",
         "url": "https://sprytnyk.github.io/loka/uk/",
@@ -34,7 +34,7 @@
         "codeRepository": "https://github.com/sprytnyk/loka",
         "license": "https://opensource.org/license/mit",
         "inLanguage": ["en", "uk"],
-        "screenshot": "https://sprytnyk.github.io/loka/loka.png",
+        "screenshot": "https://sprytnyk.github.io/loka/loka-uk.png",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
       }
     </script>
@@ -46,7 +46,7 @@
         // Use the system theme when storage is unavailable.
       }
     </script>
-    <link rel="stylesheet" href="../assets/site.css" />
+    <link rel="stylesheet" href="../assets/site.css?v=terminal-progress-1" />
   </head>
   <body>
     <header class="top">
@@ -63,8 +63,8 @@
           <a href="https://github.com/sprytnyk/loka">GitHub</a>
         </nav>
         <div class="langs" aria-label="Мова">
-          <a href="../" data-lang="en" hreflang="en" lang="en" title="In English">EN</a>
-          <span aria-current="page">УК</span>
+          <a href="../" data-lang="en" hreflang="en" lang="en" title="In English">ENG</a>
+          <span aria-current="page">UKR</span>
         </div>
         <button type="button" class="theme-toggle" data-theme-toggle="site" hidden>
           <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg><svg class="icon moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
@@ -74,12 +74,12 @@
 
     <main>
       <div class="hero wrap">
-        <h1>Діліться файлами в локальній мережі</h1>
+        <h1>Діліться файлами й текстом у локальній мережі</h1>
         <p class="lead">
-          Розпакуйте архів і запустіть один файл на Linux, Windows або macOS. Loka відкривається
-          в браузері й має команди для передавання файлів із термінала. На телефоні надсилайте
-          й отримуйте файли через браузер. Файли йдуть напряму між пристроями, навіть коли
-          інтернету немає. Обліковий запис не потрібен.
+          Запустіть один файл у Linux, Windows або macOS. Loka знаходить інші комп’ютери у
+          вашій мережі й передає файли, теки й текст напряму через зашифроване з’єднання.
+          Надсилайте й отримуйте через браузер телефона. На комп’ютері користуйтеся
+          браузером або терміналом. Передавання працює без інтернету й облікового запису.
         </p>
         <div data-downloads>
           <div class="downloads">
@@ -104,7 +104,7 @@
               <div class="m-controls">
                 <span class="m-badge">Цей пристрій: Studio Desktop</span>
                 <div class="m-segment m-langs" role="group" aria-label="Мова">
-                  <a href="../#demo" data-lang="en" hreflang="en" lang="en">EN</a><span aria-current="page">УКР</span>
+                  <a href="../#demo" data-lang="en" hreflang="en" lang="en">ENG</a><span aria-current="page">UKR</span>
                 </div>
                 <span class="m-theme-icon" aria-hidden="true">
                   <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg><svg class="icon moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
@@ -200,7 +200,7 @@
                   <button type="button" class="m-btn sec m-phone" data-phone aria-haspopup="dialog">Отримати з телефона</button>
                 </div>
                 <div data-transfers>
-                  <div class="m-item">
+                  <div class="m-item" data-transfer-finished="true">
                     <div class="m-row"><strong>До Studio Laptop</strong><span class="m-status">завершено · 100% · 312,4 Мбіт/с</span></div>
                     <p><small>meeting-notes.pdf</small></p>
                   </div>
@@ -211,6 +211,7 @@
                     <button type="button" class="m-btn sec">Скасувати</button>
                   </div>
                 </div>
+                <button type="button" class="m-btn sec m-clear" data-clear-transfers>Очистити завершені</button>
               </div>
             </div>
             <p class="m-foot"><a href="https://github.com/sprytnyk/loka">Код на GitHub</a></p>
@@ -281,7 +282,7 @@
               <h3>Надсилайте з телефона</h3>
               <p>
                 Виберіть <strong>Отримати з телефона</strong> та відскануйте QR-код, щоб
-                надіслати файли з браузера телефона. Комп’ютер попросить прийняти файли.
+                надіслати файли або текст із браузера телефона. Файли приймайте на комп’ютері.
               </p>
             </div>
             <div class="card">
@@ -342,19 +343,8 @@
               ></span>
               <h3>Браузер або термінал</h3>
               <p>
-                Та сама програма відкриває сторінку в браузері й виконує команди для
-                надсилання, отримання та поширення файлів із термінала.
-              </p>
-            </div>
-            <div class="card">
-              <span class="tile" style="--tint: var(--icon-green)"
-                ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3" /></svg
-              ></span>
-              <h3>Працює без інтернету</h3>
-              <p>
-                Пристрої передають файли напряму через вашу локальну мережу. Loka працює,
-                навіть коли зникає інтернет.
+                Та сама програма відкриває сторінку в браузері або працює в терміналі.
+                Надсилайте, отримуйте й поширюйте файли або надсилайте й отримуйте текст.
               </p>
             </div>
             <div class="card">
@@ -368,6 +358,11 @@
                 Loka використовує тему системи й мову браузера. Кнопками вгорі можна
                 перемикати світлу й темну теми та українську й англійську мови.
               </p>
+            </div>
+            <div class="card">
+              <span class="tile" style="--tint: var(--icon-green)"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13m-3-3 3 3-3 3M20 17H7m3-3-3 3 3 3" /></svg></span>
+              <h3>Працює без інтернету</h3>
+              <p>Пристрої передають файли напряму через вашу локальну мережу. Loka працює, навіть коли зникає інтернет.</p>
             </div>
           </div>
         </div>
@@ -387,11 +382,14 @@
               </li>
               <li>
                 <code>loka receive</code> питає, куди зберегти файли, і виводить отриманий текст.
+                Натисніть Enter, щоб першого разу зберегти файли в поточну теку, а далі — в останню вибрану теку.
+                Щоб відхилити файл, введіть <code>n</code>.
                 На телефоні відскануйте QR-код із термінала й виберіть <strong>Текст</strong>.
               </li>
               <li>
                 <code>loka share</code> виводить посилання та QR-код. Також ви отримаєте
                 команду <code>curl</code>, яка зупиниться, якщо відповість інший пристрій.
+                Посилання діє, доки ви не натиснете Ctrl+C.
               </li>
             </ul>
           </div>
@@ -537,8 +535,8 @@
                 вибрати теку.
               </p>
               <p>
-                Комп’ютер у кількох мережах показує QR-код для кожної. Виберіть той, що в мережі
-                телефона.
+                Щоб надіслати повідомлення, виберіть <strong>Текст</strong> і вставте його.
+                Якщо Loka показує кілька QR-кодів, виберіть код для мережі телефона.
               </p>
             </div>
           </details>
@@ -578,7 +576,9 @@
                 Деякі мережі Wi-Fi, часто гостьові, блокують з’єднання між пристроями.
                 Спробуйте іншу мережу або введіть адресу й порт іншого комп’ютера вручну. На
                 Windows дозвольте Loka доступ через брандмауер, коли він спитає. Якщо порт
-                за замовчуванням зайнятий, спробуйте <code>loka --port 45000</code>.
+                за замовчуванням зайнятий, запустіть <code>loka --port 0</code>, щоб Loka
+                сама вибрала вільний порт. Можна також вказати порт вручну, наприклад
+                <code>loka --port 45000</code>.
               </p>
             </div>
           </details>
@@ -639,6 +639,6 @@
       </div>
     </footer>
 
-    <script src="../assets/site.js"></script>
+    <script src="../assets/site.js?v=terminal-progress-1"></script>
   </body>
 </html>
