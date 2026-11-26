@@ -174,6 +174,39 @@ func TestHelpAndErrorColours(t *testing.T) {
 	}
 }
 
+func TestProgressLineColours(t *testing.T) {
+	for _, tc := range []struct {
+		name, noColor, forceColor string
+		wantColour                bool
+	}{
+		{name: "redirected"},
+		{name: "forced", forceColor: "1", wantColour: true},
+		{name: "disabled", noColor: "1", forceColor: "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("NO_COLOR", tc.noColor)
+			t.Setenv("FORCE_COLOR", tc.forceColor)
+			var out bytes.Buffer
+			line := progressLine{stdout: &out, color: colorFor(&out)}
+			speed := 312.4
+			line.show(transfer.View{Status: transfer.Sending, Progress: 89, SpeedMbps: &speed})
+			line.show(transfer.View{Status: transfer.Complete, Progress: 100})
+			line.end()
+
+			sending, complete := "sending: 89% at 312.4 Mbps", "complete: 100%"
+			padding := strings.Repeat(" ", len(sending)-len(complete))
+			if tc.wantColour {
+				sending = "\x1b[36m" + sending + "\x1b[0m"
+				complete = "\x1b[32m" + complete + "\x1b[0m"
+			}
+			want := "\r" + sending + "\r" + sending + "\r" + complete + padding + "\r" + complete + "\n"
+			if got := out.String(); got != want {
+				t.Errorf("progress output = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 // TestHelpGoesToStdout keeps help on standard output, where scripts and
 // pagers expect it, and usage errors on standard error.
 func TestHelpGoesToStdout(t *testing.T) {
@@ -262,7 +295,7 @@ func TestSendAndReceiveCommands(t *testing.T) {
 	go io.WriteString(answer, strings.Repeat("x", 1<<20)+"\n")
 	received.wait(t, `must be an existing directory\nDestination directory`)
 	io.WriteString(answer, filepath.Join(destination, "missing")+"\n")
-	received.wait(t, `must be an existing directory\nDestination directory \(empty to decline\): The destination must be an existing directory\nDestination directory`)
+	received.wait(t, `must be an existing directory\nDestination directory \[\.\] \(Enter to use, n to decline\): The destination must be an existing directory\nDestination directory`)
 	io.WriteString(answer, destination+"\n")
 	if c := <-sendCode; c != 0 || !strings.Contains(sent.String(), "complete: 100%") {
 		t.Fatalf("send exited %d, output %q", c, sent.String())
@@ -292,6 +325,83 @@ func TestPipedAnswerIsKept(t *testing.T) {
 	skipStaleAnswer(stdin, answers)
 	if got := <-answers; got != destination {
 		t.Fatalf("piped destination %q, want %q", got, destination)
+	}
+}
+
+func TestReceiveOffersLastDestination(t *testing.T) {
+	s := server.New("receiver", "test")
+	dir := t.TempDir()
+	first := transfer.New(transfer.Incoming, "sender", []string{"first"}, 1, transfer.Waiting)
+	if !s.Accept(first, dir) {
+		t.Fatal("first offer was not accepted")
+	}
+	second := transfer.New(transfer.Incoming, "sender", []string{"second"}, 1, transfer.Waiting)
+	answers := make(chan string, 1)
+	answers <- ""
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var out bytes.Buffer
+	done := make(chan bool, 1)
+	go func() { done <- answerOffer(ctx, s, second, answers, &out) }()
+	for second.Status() == transfer.Waiting && ctx.Err() == nil {
+		time.Sleep(time.Millisecond)
+	}
+	if second.Status() == transfer.Accepted {
+		second.Finish(nil)
+	}
+	<-done
+	if second.Destination() != dir {
+		t.Fatalf("destination = %q, want %q; output %q", second.Destination(), dir, out.String())
+	}
+	if !strings.Contains(out.String(), dir) {
+		t.Fatalf("prompt does not show previous directory: %q", out.String())
+	}
+}
+
+func TestReceiveDefaultsToCurrentDirectory(t *testing.T) {
+	s := server.New("receiver", "test")
+	current, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := transfer.New(transfer.Incoming, "sender", []string{"file"}, 1, transfer.Waiting)
+	answers := make(chan string, 1)
+	answers <- ""
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var out bytes.Buffer
+	done := make(chan bool, 1)
+	go func() { done <- answerOffer(ctx, s, tr, answers, &out) }()
+	for tr.Status() == transfer.Waiting && ctx.Err() == nil {
+		time.Sleep(time.Millisecond)
+	}
+	if tr.Status() == transfer.Accepted {
+		tr.Finish(nil)
+	}
+	<-done
+	if tr.Destination() != current {
+		t.Fatalf("destination = %q, want %q; output %q", tr.Destination(), current, out.String())
+	}
+}
+
+func TestReceiveDeclinesRememberedDestination(t *testing.T) {
+	for _, tc := range []struct{ remembered, closed bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
+		s := server.New("receiver", "test")
+		if tc.remembered {
+			first := transfer.New(transfer.Incoming, "sender", nil, 1, transfer.Waiting)
+			s.Accept(first, t.TempDir())
+		}
+		next := transfer.New(transfer.Incoming, "sender", nil, 1, transfer.Waiting)
+		answers := make(chan string, 1)
+		if tc.closed {
+			close(answers)
+		} else {
+			answers <- "n"
+		}
+		answerOffer(context.Background(), s, next, answers, io.Discard)
+		if next.Status() != transfer.Cancelled {
+			t.Fatalf("remembered=%v closed=%v: status %s", tc.remembered, tc.closed, next.Status())
+		}
 	}
 }
 

@@ -3,6 +3,8 @@ package main
 import (
 	"io"
 	"os"
+
+	"github.com/sprytnyk/loka/internal/transfer"
 )
 
 // The colours Python's argparse gives help and errors, as ANSI codes.
@@ -25,6 +27,21 @@ func (p painter) paint(code, s string) string {
 		return s
 	}
 	return "\x1b[" + code + "m" + s + "\x1b[0m"
+}
+
+func (p painter) transferStatus(status transfer.Status, label string) string {
+	switch status {
+	case transfer.Complete:
+		return p.paint("32", label)
+	case transfer.Accepted, transfer.Sending, transfer.Receiving:
+		return p.paint("36", label)
+	case transfer.Pairing, transfer.Waiting, transfer.Cancelled:
+		return p.paint("33", label)
+	case transfer.Failed:
+		return p.paint("31", label)
+	default:
+		return label
+	}
 }
 
 // colorFor decides whether text written to w gets colour, by the rules

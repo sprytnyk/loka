@@ -1,12 +1,33 @@
 package transfer
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestViewShowsElapsedTimeAfterTransferStarts(t *testing.T) {
+	tr := New(Outgoing, "receiver", nil, 10, Waiting)
+	tr.Move(Sending, Waiting)
+	tr.mu.Lock()
+	tr.started = time.Now().Add(-3 * time.Second)
+	tr.mu.Unlock()
+	tr.Finish(nil)
+	data, err := json.Marshal(tr.View())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var view map[string]any
+	if err := json.Unmarshal(data, &view); err != nil {
+		t.Fatal(err)
+	}
+	if seconds, ok := view["elapsed_seconds"].(float64); !ok || seconds < 3 || seconds >= 4 {
+		t.Fatalf("elapsed_seconds = %v, want about 3", view["elapsed_seconds"])
+	}
+}
 
 func TestSpeedometer(t *testing.T) {
 	var s speedometer

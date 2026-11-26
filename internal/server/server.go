@@ -154,6 +154,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/send", s.local(s.send))
 	mux.HandleFunc("POST /api/accept", s.local(s.accept))
 	mux.HandleFunc("POST /api/cancel", s.local(s.cancel))
+	mux.HandleFunc("POST /api/clear-transfers", s.local(s.clearTransfers))
 	mux.HandleFunc("POST /api/text", s.local(s.readText))
 	mux.HandleFunc("POST /api/dismiss", s.local(s.dismiss))
 	mux.HandleFunc("POST /api/share", s.local(s.share))
@@ -719,9 +720,7 @@ func (s *Server) state(w http.ResponseWriter, _ *http.Request) {
 	for _, t := range s.Transfers.All() {
 		st.Transfers = append(st.Transfers, t.View())
 	}
-	if d := s.destination.Load(); d != nil {
-		st.Destination = *d
-	}
+	st.Destination = s.LastDestination()
 	if st.Addresses == nil {
 		st.Addresses = []string{}
 	}
@@ -801,6 +800,14 @@ func (s *Server) accept(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// LastDestination returns the last accepted file destination for this run.
+func (s *Server) LastDestination() string {
+	if d := s.destination.Load(); d != nil {
+		return *d
+	}
+	return ""
+}
+
 // Accept accepts a waiting incoming transfer into destination and offers
 // that destination for the next one. Text has no destination, and must
 // then arrive in time. Accept remembers a sending Loka, so a later change
@@ -837,6 +844,11 @@ func (s *Server) cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.Stop()
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) clearTransfers(w http.ResponseWriter, _ *http.Request) {
+	s.Transfers.ClearEnded()
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

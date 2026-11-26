@@ -20,6 +20,22 @@ import (
 	"github.com/sprytnyk/loka/internal/transfer"
 )
 
+func TestClearTransfersKeepsActiveTransfers(t *testing.T) {
+	s, base := startServer(t)
+	done := transfer.New(transfer.Incoming, "sender", nil, 1, transfer.Waiting)
+	done.Move(transfer.Receiving, transfer.Waiting)
+	done.Finish(nil)
+	active := transfer.New(transfer.Outgoing, "receiver", nil, 1, transfer.Waiting)
+	s.Transfers.Add(done)
+	s.Transfers.Add(active)
+	if code := api(t, s, base, "/api/clear-transfers", map[string]any{}, nil); code != http.StatusOK {
+		t.Fatalf("clear answered %d", code)
+	}
+	if s.Transfers.Get(done.ID) != nil || s.Transfers.Get(active.ID) == nil {
+		t.Fatal("clear should remove completed transfers and keep active ones")
+	}
+}
+
 func TestPageCarriesKeyAndVersion(t *testing.T) {
 	s, base := startServer(t)
 	s.version = "1.2.3"

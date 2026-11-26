@@ -242,10 +242,10 @@ func (t *Transfer) Finish(err error) {
 	if t.status.Final() {
 		return
 	}
+	t.ended = time.Now()
 	switch {
 	case err == nil:
 		t.status = Complete
-		t.ended = time.Now()
 	case t.ctx.Err() != nil || errors.Is(err, context.Canceled):
 		t.status = Cancelled
 	default:
@@ -306,22 +306,23 @@ func (t *Transfer) Pair(code string) bool {
 
 // View is what the page sees of a transfer.
 type View struct {
-	ID        string    `json:"id"`
-	Direction Direction `json:"direction"`
-	Kind      Kind      `json:"kind,omitempty"`
-	Name      string    `json:"name"`
-	Items     []string  `json:"items"`
-	Size      int64     `json:"size"`
-	Status    Status    `json:"status"`
-	Progress  int       `json:"progress"`
-	Error     string    `json:"error,omitempty"`
-	Token     string    `json:"token,omitempty"`
-	SpeedMbps *float64  `json:"speed_mbps,omitempty"` // while bytes move, then the average once complete
-	Browser   bool      `json:"browser,omitempty"`
-	NewDevice bool      `json:"new_device,omitempty"`
-	Code      string    `json:"code,omitempty"`    // the pairing code, between Lokas
-	Unread    bool      `json:"unread,omitempty"`  // received text waits to be read
-	Preview   string    `json:"preview,omitempty"` // the start of text this device sends or serves
+	ID             string    `json:"id"`
+	Direction      Direction `json:"direction"`
+	Kind           Kind      `json:"kind,omitempty"`
+	Name           string    `json:"name"`
+	Items          []string  `json:"items"`
+	Size           int64     `json:"size"`
+	Status         Status    `json:"status"`
+	Progress       int       `json:"progress"`
+	Error          string    `json:"error,omitempty"`
+	Token          string    `json:"token,omitempty"`
+	SpeedMbps      *float64  `json:"speed_mbps,omitempty"` // while bytes move, then the average once complete
+	ElapsedSeconds *float64  `json:"elapsed_seconds,omitempty"`
+	Browser        bool      `json:"browser,omitempty"`
+	NewDevice      bool      `json:"new_device,omitempty"`
+	Code           string    `json:"code,omitempty"`    // the pairing code, between Lokas
+	Unread         bool      `json:"unread,omitempty"`  // received text waits to be read
+	Preview        string    `json:"preview,omitempty"` // the start of text this device sends or serves
 }
 
 // previewSize is how many bytes of outgoing text a view shows.
@@ -338,6 +339,15 @@ func (t *Transfer) View() View {
 		preview = cutToBytes(t.text, previewSize)
 	}
 	var speed *float64
+	var elapsed *float64
+	if !t.started.IsZero() {
+		end := t.ended
+		if end.IsZero() {
+			end = time.Now()
+		}
+		seconds := end.Sub(t.started).Seconds()
+		elapsed = &seconds
+	}
 	items := t.Items
 	if t.savedItems != nil {
 		items = t.savedItems
@@ -353,22 +363,23 @@ func (t *Transfer) View() View {
 	}
 	t.mu.Unlock()
 	return View{
-		ID:        t.ID,
-		Direction: t.Direction,
-		Kind:      t.Kind,
-		Name:      t.Peer,
-		Items:     items,
-		Size:      t.Size,
-		Status:    status,
-		Progress:  progress(t.Done.Load(), t.Size, status),
-		Error:     err,
-		Token:     t.Token,
-		SpeedMbps: speed,
-		Browser:   t.Browser,
-		NewDevice: newDevice,
-		Code:      code,
-		Unread:    unread,
-		Preview:   preview,
+		ID:             t.ID,
+		Direction:      t.Direction,
+		Kind:           t.Kind,
+		Name:           t.Peer,
+		Items:          items,
+		Size:           t.Size,
+		Status:         status,
+		Progress:       progress(t.Done.Load(), t.Size, status),
+		Error:          err,
+		Token:          t.Token,
+		SpeedMbps:      speed,
+		ElapsedSeconds: elapsed,
+		Browser:        t.Browser,
+		NewDevice:      newDevice,
+		Code:           code,
+		Unread:         unread,
+		Preview:        preview,
 	}
 }
 
@@ -491,6 +502,22 @@ func (r *Registry) All() []*Transfer {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return slices.Clone(r.ordered)
+}
+
+// ClearEnded removes finished transfers that hold no unread text.
+func (r *Registry) ClearEnded() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ordered = slices.DeleteFunc(r.ordered, func(t *Transfer) bool {
+		if !droppable(t) {
+			return false
+		}
+		delete(r.byID, t.ID)
+		if t.Token != "" {
+			delete(r.byToken, t.Token)
+		}
+		return true
+	})
 }
 
 // RandomToken returns n random bytes as URL-safe text.

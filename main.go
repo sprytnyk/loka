@@ -277,34 +277,67 @@ func readTextInput(stdin io.Reader) (string, error) {
 	return string(data), nil
 }
 
+type progressLine struct {
+	stdout io.Writer
+	color  painter
+	label  string
+}
+
+func (p *progressLine) show(v transfer.View) {
+	label := progressLabel(v)
+	if label == p.label {
+		return
+	}
+	shown := p.color.transferStatus(v.Status, label)
+	fmt.Fprintf(p.stdout, "\r%s%s\r%s", shown, strings.Repeat(" ", max(0, len(p.label)-len(label))), shown)
+	p.label = label
+}
+
+func (p *progressLine) end() {
+	if p.label != "" {
+		fmt.Fprintln(p.stdout)
+		p.label = ""
+	}
+}
+
+func progressLabel(v transfer.View) string {
+	label := fmt.Sprintf("%s: %d%%", v.Status, v.Progress)
+	if v.SpeedMbps != nil {
+		label += fmt.Sprintf(" at %.1f Mbps", *v.SpeedMbps)
+	}
+	if v.ElapsedSeconds != nil {
+		label += fmt.Sprintf(" in %s", (time.Duration(*v.ElapsedSeconds) * time.Second).String())
+	}
+	return label
+}
+
 // follow prints a transfer's progress until it ends.
 func follow(ctx context.Context, t *transfer.Transfer, stdout io.Writer) transfer.View {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
+	p := colorFor(stdout)
+	line := progressLine{stdout: stdout, color: p}
+	defer line.end()
 	warned, coded := false, false
 	for {
 		v := t.View()
 		// An incoming offer already said both when it was shown.
 		if t.Direction == transfer.Outgoing && v.NewDevice && !warned {
 			warned = true
-			fmt.Fprintf(stdout, "\r%s is a new device, not seen before. Make sure it's the one you meant.\n", v.Name)
+			line.end()
+			fmt.Fprintf(stdout, "%s is a new device, not seen before. Make sure it's the one you meant.\n", v.Name)
 		}
 		if t.Direction == transfer.Outgoing && v.Code != "" && !coded {
 			coded = true
-			fmt.Fprintf(stdout, "\rPairing code %s. Check that the receiver shows the same.\n", v.Code)
+			line.end()
+			fmt.Fprintf(stdout, "Pairing code %s. Check that the receiver shows the same.\n", p.paint("1", v.Code))
 		}
-		label := fmt.Sprintf("%s: %d%%", v.Status, v.Progress)
-		if v.SpeedMbps != nil {
-			label += fmt.Sprintf(" at %.1f Mbps", *v.SpeedMbps)
-		}
-		fmt.Fprintf(stdout, "\r%-40s", label) // pads over a longer earlier line
+		line.show(v)
 		if v.Status.Final() {
-			fmt.Fprintln(stdout)
 			return v
 		}
 		select {
 		case <-ctx.Done():
-			fmt.Fprintln(stdout)
 			return t.View()
 		case <-ticker.C:
 		}
@@ -387,7 +420,7 @@ func receiveCommand(ctx context.Context, o options, stdin io.Reader, stdout io.W
 			fmt.Fprintf(stdout, "\n%s wants to send: %s\n", sender(t), strings.Join(t.Items, ", "))
 		}
 		if v := t.View(); v.Code != "" {
-			fmt.Fprintf(stdout, "Pairing code %s. Check that the sender shows the same.\n", v.Code)
+			fmt.Fprintf(stdout, "Pairing code %s. Check that the sender shows the same.\n", p.paint("1", v.Code))
 		}
 		if !answerOffer(ctx, s, t, answers, stdout) {
 			return <-served
@@ -437,13 +470,18 @@ func readLine(r *bufio.Reader) (string, error) {
 // the transfer.
 func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, answers <-chan string, stdout io.Writer) bool {
 	textOffer := t.Kind == transfer.Text
-	prompt := "Destination directory (empty to decline): "
+	lastDestination := s.LastDestination()
+	if lastDestination == "" {
+		lastDestination = "."
+	}
+	prompt := fmt.Sprintf("Destination directory [%s] (Enter to use, n to decline): ", escapeTerminalControls(lastDestination))
 	if textOffer {
 		prompt = "Accept text? [y/N] "
 	}
 	for {
 		fmt.Fprint(stdout, prompt)
 		var answer string
+		var ok bool
 		select {
 		case <-ctx.Done():
 			t.Stop()
@@ -452,9 +490,22 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 			fmt.Fprintln(stdout)
 			fmt.Fprintln(stdout, offerEnded(t))
 			return true
-		case answer = <-answers:
+		case answer, ok = <-answers:
+		}
+		if !ok {
+			t.Stop()
+			fmt.Fprintln(stdout, "Declined.")
+			return true
 		}
 		answer = strings.TrimSpace(answer)
+		if !textOffer {
+			switch strings.ToLower(answer) {
+			case "":
+				answer = lastDestination
+			case "n":
+				answer = ""
+			}
+		}
 		if textOffer {
 			switch strings.ToLower(answer) {
 			case "n", "no":
@@ -485,7 +536,10 @@ func answerOffer(ctx context.Context, s *server.Server, t *transfer.Transfer, an
 		}
 		stop := context.AfterFunc(ctx, t.Stop)
 		defer stop()
-		follow(ctx, t, stdout)
+		v := follow(ctx, t, stdout)
+		if !textOffer && v.Status == transfer.Complete {
+			fmt.Fprintf(stdout, "Saved: %s\n", escapeTerminalControls(strings.Join(v.Items, ", ")))
+		}
 		return ctx.Err() == nil
 	}
 }
@@ -676,7 +730,9 @@ func printLinks(stdout io.Writer, store *trust.Store, addresses []string, port i
 	for _, address := range addresses {
 		fmt.Fprintln(stdout, hostURL("https", address, port, path))
 	}
-	fmt.Fprintf(stdout, "Loka's certificate fingerprint (SHA-256): %s\n", store.FingerprintText())
+	fingerprint := strings.Fields(store.FingerprintText())
+	fmt.Fprintf(stdout, "Loka's certificate fingerprint (SHA-256):\n%s\n%s\n",
+		strings.Join(fingerprint[:16], " "), strings.Join(fingerprint[16:], " "))
 	for _, problem := range store.AddressProblems(addresses) {
 		fmt.Fprintln(stdout, problem)
 	}
