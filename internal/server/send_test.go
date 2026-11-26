@@ -94,6 +94,9 @@ func TestSendBetweenTwoServers(t *testing.T) {
 	if v := waitForEnd(t, in); v.Status != transfer.Complete || v.Progress != 100 {
 		t.Fatalf("receiver ended %+v", v)
 	}
+	if got := in.View().Items; strings.Join(got, ",") != "album,file (1).txt" {
+		t.Errorf("saved names = %v, want album and file (1).txt", got)
+	}
 
 	want := treetest.Read(t, source)
 	want["file (1).txt"] = want["file.txt"]

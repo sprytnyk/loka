@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -429,6 +430,66 @@ func TestReceiveStopsAfterAccepting(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("receive kept running after it was stopped, output %q", received.String())
+	}
+}
+
+func TestReceiveStreamsPhoneUpload(t *testing.T) {
+	destination := t.TempDir()
+	received, stop, code := runLoka(t, strings.NewReader(destination+"\n"), "receive", "--port", "0")
+	port := received.wait(t, `on port (\d+)`)[1]
+	base := "https://127.0.0.1:" + port
+	client := browser(t)
+	t.Cleanup(client.CloseIdleConnections)
+	// An older browser tab can still send its old offer and use streaming.
+	offer := `{"items":["file.bin"],"size":2048,"resume":true,"token":"` + receiveToken(t, port) + `"}`
+	resp, err := client.Post(base+"/peer/offer", "application/json", strings.NewReader(offer))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offered struct {
+		ID, Secret string
+		ChunkBytes *int `json:"chunk_bytes"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&offered)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || err != nil || offered.ID == "" || offered.Secret == "" || offered.ChunkBytes != nil {
+		t.Fatalf("expected a streaming offer reply: HTTP %d, %v", resp.StatusCode, err)
+	}
+	received.wait(t, `accepted: 0%`)
+
+	payload := bytes.Repeat([]byte("x"), 2048)
+	var archive bytes.Buffer
+	w := tar.NewWriter(&archive)
+	if err := w.WriteHeader(&tar.Header{Name: "file.bin", Size: int64(len(payload)), Mode: 0o600}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, base+"/peer/upload/"+offered.ID, &archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Transfer-Secret", offered.Secret)
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("upload: HTTP %d", resp.StatusCode)
+	}
+	received.wait(t, `complete: 100%`)
+	got, err := os.ReadFile(filepath.Join(destination, "file.bin"))
+	if err != nil || !bytes.Equal(got, payload) {
+		t.Fatalf("saved file: %d bytes, %v", len(got), err)
+	}
+	stop()
+	if c := <-code; c != 0 {
+		t.Fatalf("receive exited %d", c)
 	}
 }
 

@@ -1,28 +1,28 @@
 # How Loka devices talk
 
-This is how Loka finds other devices, proves who they are and moves
-files. Everything is HTTP, TLS and JSON, so you can check it with curl.
-The README covers using Loka.
+Loka shares files, directories and text on your local network. It finds
+devices with UDP multicast and sends transfers directly over HTTPS. You can
+inspect the HTTP requests with `curl`. For setup and commands, see the
+[README](README.md).
 
 ## Finding devices
 
-Every Loka sends a small JSON message to the multicast address
-`239.255.45.87`, UDP port `45873`, every 3 seconds:
+Every 3 seconds, Loka announces itself in a JSON message to
+`239.255.45.87` on UDP port `45873`.
 
 ```json
 {"service": "loka", "id": "…", "name": "my-laptop", "port": 45873}
 ```
 
-`id` is the device's ID (see below), `name` its host name and `port` the
-TCP port it listens on. A device that stays quiet for 12 seconds drops
-off the list. Anyone on the network can send these messages, so Loka
-uses them only to find addresses. It never trusts a device because of
-them.
+`id` is the device ID, `name` is the device's host name and `port` is
+the TCP port it listens on. Loka removes a device from the list after
+12 seconds without an announcement. Anyone on the network can send
+these messages, so Loka uses them only to find addresses.
 
 ## One port, two kinds of connection
 
-Loka listens on one TCP port, `45873` by default. It reads the first
-byte of each connection to tell TLS from plain HTTP:
+Loka listens on one TCP port, `45873` by default. It reads the first byte
+of each connection to tell TLS from plain HTTP.
 
 ```mermaid
 flowchart TD
@@ -36,64 +36,56 @@ flowchart TD
     H -- no --> O["The check page and<br>the certificate only"]
 ```
 
-A connection has 10 seconds to send its first byte. Loka keeps at most 128
-connections from other devices that aren't part of a transfer, whether
-new, idle or busy with another request. Past that, it closes the oldest, so
-connections that send nothing can't use up the file handles a transfer
-needs. A connection stops counting once it sends an upload with the right
-secret or a download with a working link.
+A connection has 10 seconds to send its first byte. Loka counts all
+connections from other devices except those handling an upload with
+the right secret or a download with a valid link. If the count goes
+over 128, Loka closes the oldest counted connection. Loka counts a
+transfer connection again if it goes idle.
 
 ## Who is who
 
 Each Loka makes two certificates on its first run and keeps them in its
-settings directory, `~/.config/sprytnyk.dev/Loka` on Linux:
+settings directory, `~/.config/sprytnyk.dev/Loka` on Linux.
 
-| File | What | Lasts |
+| File | Purpose | Lasts |
 | --- | --- | --- |
-| `identity.pem` | The device certificate. Its common name is a random ID. | Forever |
+| `identity.pem` | The device certificate. Its common name is a random ID. | Until the end of 9999 |
 | `ca.pem` | A certificate authority for browsers. Phones install its certificate as `loka-ca.crt`. | 10 years |
-| `devices.json` | The devices it remembers: ID, name and SHA-256 of their certificate | |
-| `devices.lock` | A Loka locks it while it changes `devices.json`, so two Lokas running at once don't lose each other's changes | |
+| `devices.json` | The ID, name and certificate fingerprint for each remembered device | |
+| `devices.lock` | Keeps two Loka processes from writing to `devices.json` at the same time | |
 
-`identity.pem` and `ca.pem` each hold a private key and its certificate,
-like an SSH key pair. A certificate is the public key with a name and
-dates. The private key never leaves the computer. Others get only the
-public certificate.
+`identity.pem` and `ca.pem` each hold a private key and its certificate.
+A certificate contains a public key, a name and the dates it is valid.
+Loka shares the certificate and keeps the private key on the computer.
 
-Two Lokas work like SSH and its `known_hosts` file. The first time, each
-remembers the other's certificate. Later, it refuses a device that shows a
-different one:
+Loka uses remembered certificates much like SSH uses `known_hosts`.
 
 ```mermaid
 sequenceDiagram
     participant A as Loka A<br>keeps its private key
     participant B as Loka B<br>keeps its private key
-    A->>B: Its public certificate, and proof it holds the private key
-    B->>A: Its public certificate, and proof it holds the private key
+    A->>B: Its certificate and proof it holds the private key
+    B->>A: Its certificate and proof it holds the private key
     Note over A,B: Each compares the certificate with the one it remembers
 ```
 
-What Loka does depends on whether it remembers the other device:
-
 | The other device's ID is | And its certificate | Loka |
 | --- | --- | --- |
-| Not remembered | | Trusts it and shows it as new |
-| Remembered | The same | Goes on |
-| Remembered | Different | Refuses it, since another device may be posing as it |
+| Not remembered | | Shows it as new and asks for approval |
+| Remembered | The same | Proceeds with the transfer |
+| Remembered | Different | Refuses the transfer |
 
 Both devices remember each other once the receiver accepts a transfer.
-A Loka's certificate never changes, and a Loka with a new settings
-directory makes a new ID. So when a remembered ID shows a different
-certificate, another device copied that ID from the announcements. Loka
-refuses it, shows the refusal once per device, and never suggests
-forgetting the device. `loka forget NAME` or `loka forget ID` drops a
-remembered device. The first time two devices meet, there is nothing to
-compare yet, which is what the pairing code below is for.
+A new settings directory gets a new certificate and ID. A different
+certificate with the same ID can mean another device copied the ID from
+discovery messages. Loka shows the refusal once per device and keeps the
+saved certificate. You can remove a remembered device with
+`loka forget NAME` or `loka forget ID`. On the first transfer, check
+that both devices show the same pairing code before you accept.
 
-A phone can't remember certificates that way. Instead, you install the
-certificate from `ca.pem` on it once, as `loka-ca.crt`. Loka signs a
-certificate for each of its addresses with the private key from `ca.pem`,
-and the phone checks the signature with `loka-ca.crt`:
+Install `loka-ca.crt` on the phone once. It contains the public certificate
+from `ca.pem`. Loka uses the private key in `ca.pem` to sign a certificate
+for each address. The phone checks the signature against `loka-ca.crt`.
 
 ```mermaid
 sequenceDiagram
@@ -108,17 +100,17 @@ sequenceDiagram
     Note over P: Checks the signature with loka-ca.crt
 ```
 
-The certificate authority may only vouch for local addresses: `10/8`,
-`172.16/12`, `192.168/16`, `100.64/10`, `169.254/16`, `127/8`, `fc00::/7`,
-`fe80::/10` and `::1`. Browsers reject anything else it signs, so someone
-who copied `ca.pem`, private key included, still couldn't pose as a web
-site. Carrier NAT and Tailscale use `100.64/10`. If the computer has an
-address outside these ranges, Loka warns about it. The page at that address
-doesn't offer `loka-ca.crt`.
+For IP addresses, the authority is limited to `10.0.0.0/8`,
+`172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `169.254.0.0/16`,
+`127.0.0.0/8`, `fc00::/7`, `fe80::/10` and `::1/128`. Carrier NAT
+and Tailscale use `100.64.0.0/10`. For domain names, the authority is
+limited to `.invalid`. These limits still apply if someone copies the
+private key from `ca.pem`. Loka warns about addresses the authority
+doesn't cover and hides the `loka-ca.crt` download at those addresses.
 
-`ca.pem` lasts 10 years. Each address's certificate lasts 397 days, the
-most phones accept. Loka keeps those only in memory and makes them again
-when needed. For example:
+Each address's certificate lasts up to 397 days for compatibility with
+phone browsers. Loka keeps those certificates in memory and creates
+them as needed.
 
 | What happens | Certificate the browser gets |
 | --- | --- |
@@ -126,22 +118,22 @@ when needed. For example:
 | The phone connects again | The same one |
 | The computer's address changes to `192.168.1.21`, and the phone opens the new link | A new one for `192.168.1.21` |
 | Loka restarts | A new one on the next connection |
-| Loka keeps running for 396 days, so the one in use would run out the next day | A new one, so it never runs out |
+| The phone connects when the certificate has a day or less left | A new one |
 
-The link for `192.168.1.20` stops working once the computer leaves that
-address.
+The link for `192.168.1.20` stops working when the computer no longer
+uses that address.
 
 ## Sending
 
-The sender offers the files. After pairing, it waits for the receiver to
-accept.
+The sender offers the files, then both devices show a pairing code.
+The sender waits for someone at the receiver to accept.
 
 ```mermaid
 sequenceDiagram
     participant S as Sender
     participant R as Receiver
-    S->>R: POST /peer/offer {name, items, size, commitment, resume: true}
-    R-->>S: {id, secret, name, nonce, chunk_bytes}
+    S->>R: POST /peer/offer {name, items, size, commitment}
+    R-->>S: {id, secret, name, nonce}
     S->>R: POST /peer/reveal/{id} {nonce}
     Note over S,R: Both show the pairing code
     Note over R: The person accepts or declines
@@ -149,181 +141,152 @@ sequenceDiagram
         S->>R: GET /peer/status/{id}
         R-->>S: {status: waiting / accepted / ..., error}
     end
-    S->>R: GET /peer/upload/{id}
-    R-->>S: {offset, status, prefix_sha256, ready_to_save}
-    loop until the archive has arrived
-        S->>R: PATCH /peer/upload/{id} (archive chunk)
-        R-->>S: {offset, status}
-    end
-    S->>R: PATCH /peer/upload/{id} (empty)
-    R-->>S: {offset, status: complete, speed_mbps}
+    S->>R: POST /peer/upload/{id} (tar stream)
+    R-->>S: {status: complete, speed_mbps}
 ```
 
-- The offer lists up to 100 top-level names and the total size of the
-  files. Up to 16 offers can wait at once, and more get `503`. Browsers
-  and new devices may take only 12 of those places, so 4 are always left
-  for remembered devices. An offer that nobody answers within a minute
-  fails, and `/peer/status` then gives the reason in `error`.
-- Every later request carries the `secret` in an `X-Transfer-Secret`
-  header.
-- If the offer has `resume: true` and the receiver supports it, the reply
-  gives the largest chunk size in `chunk_bytes`. Each `PATCH` carries the
-  chunk's starting offset in `X-Upload-Offset` and its size in
-  `Content-Length`. The receiver writes the chunk to disk, then replies
-  with the next offset. If the sender retries bytes the receiver already
-  saved, the receiver replies with its current offset.
-- A chunk times out after 15 seconds without progress. The sender can
-  retry the same offset with a smaller chunk.
-- An empty `PATCH` tells the receiver to check and unpack the tar archive.
-  If a temporary write error stops the save, the receiver keeps the archive
-  and replies with `507` so the sender can retry. It records where each
-  top-level file or directory will go before moving it. On restart, it
-  picks up with the remaining moves.
-- The receiver keeps the offset and the final reply for 24 hours after the
-  last update. When Loka resumes an upload that still needs bytes, it asks
-  for the saved offset and checks the SHA-256 of the bytes up to that point.
-  If the receiver has accepted the empty `PATCH`, its progress reply has
-  `ready_to_save: true`. The sender repeats only the empty `PATCH` at the
-  saved offset and waits for completion.
-- If the offer reply omits `chunk_bytes`, the sender streams the archive in
-  one `POST /peer/upload/{id}` request. It stops after a minute without
-  progress.
-- The receiver refuses paths that leave the destination and checks the
-  extracted size against the offer before saving any files.
-- When the upload completes, the receiver's answer includes the average
-  speed in `speed_mbps`, in megabits a second. The receiver measures it
-  from when the upload starts until it completes. A Loka that sends
-  ignores it. The phone page shows it.
+- The offer lists up to 100 top-level names and the total file size.
+  The receiver allows 16 waiting offers. Browsers and new devices can
+  take up to 12 of those places. The receiver returns `503` when it has
+  no place for another offer. If nobody answers within a minute,
+  `/peer/status` reports the failure in `error`.
+- After the offer, the sender includes the `secret` in the
+  `X-Transfer-Secret` header of each request for that transfer.
+- The sender uploads the archive in one `POST /peer/upload/{id}`. The
+  receiver writes files as they arrive and stops the upload after a
+  minute without progress.
+- The receiver refuses paths outside the destination. Before it moves
+  the files into place, it checks their total size against the offer.
+- The final reply reports the upload's average speed in `speed_mbps`.
+  The phone displays that value in megabits per second. Loka senders
+  ignore it.
 - The sender cancels with `POST /peer/cancel/{id}`. If the receiver cancels,
-  the sender's next request fails. Once the receiver starts moving files
-  into place, it finishes those moves.
-- A Loka that sends checks the receiver's certificate on every
-  connection of the transfer, and stops if it changes. When the device
-  was picked from the list, the receiver's certificate must also have
-  that device's ID.
+  the sender's next request fails.
+- The sender checks the receiver's certificate on every connection and
+  stops if it changes. If you picked a device from the list, the sender
+  also checks that the certificate has that device's ID.
 
-A phone sends from its browser, which differs from a Loka in three ways:
+### Browser uploads
 
-- It has no certificate, so the receiver can't remember it. The receiver
-  shows the transfer as "From a browser at 192.168.1.30", with the phone's
-  address.
-- There's no pairing code, since it needs both devices' certificates. The
-  offer goes straight to the person at the receiver, who accepts or
-  declines it.
-- The page on the phone packs the files into the tar stream itself.
+- The browser has no Loka device certificate. The receiver labels the
+  transfer with the browser's IP address.
+- Pairing requires two device certificates. The receiver asks the person
+  to accept or decline the offer without showing a pairing code.
+- The page on the phone packs the files into the tar stream.
 
-A browser shows no pairing code, so a device between two Lokas could pose
-as one to the receiver. To stop that, a browser's offer must carry
-`token`, the receive token. It is in the phone link,
-`http://192.168.1.20:45873/#r=TOKEN`, which the receiver's page and
-`loka receive` show. Browsers never send the part after `#`, and the page
-sends the token only over HTTPS. Loka makes a new token on each start.
-Offers without it get `403`.
+A browser's offer must include the `token` from the phone link. This
+keeps a device without the link from posing as a browser to skip
+pairing. The receiver's page and `loka receive` show the phone link.
+In `http://192.168.1.20:45873/#r=TOKEN`, the browser keeps the part
+after `#` on the phone and the page sends the token over HTTPS. Loka
+makes a new token each time it starts and returns `403` if the browser
+omits it or sends the wrong one.
 
-Treat the phone link as a secret. The page an `http://` link opens comes
-over plain HTTP, so someone who can change traffic could swap it for one
-that reads the token. Over the `https://` link, on a phone with the right
-`loka-ca.crt`, they can't read it.
+Treat the phone link as a secret. An `http://` link loads the first page
+over plain HTTP. Someone who can change traffic could swap in a page
+that reads the token. The `https://` link protects the token on a phone
+with the right `loka-ca.crt`.
 
 ### Text
 
-Text goes the same way as files, with these differences:
+Text uses `/peer/offer` and `POST /peer/upload/{id}`.
 
-- The offer has `"kind": "text"` and no `items`. `size` is the text's length
-  in bytes, at most 1 MB (1,048,576).
-- The upload is the text itself in UTF-8, not a tar stream. The receiver
-  refuses text that isn't valid UTF-8 or isn't the size offered.
-- Text from a browser with the receive token moves straight to `accepted`.
-  A Loka that remembers the receiver sends `"receiver_known": true` with
-  its nonce in `/peer/reveal`. The receiver skips the prompt only if it
-  also remembers the sender. Otherwise, it shows the code and waits for
-  the person's answer. Accepted text must arrive within a minute.
+- The offer has `"kind": "text"` and an empty or omitted `items` list.
+  `size` is the text's length in bytes, from 1 to 1,048,576.
+- The upload body is the text in UTF-8. The receiver rejects invalid
+  UTF-8 and checks that the byte count matches the offer.
+- The receiver automatically accepts text offers from browsers with the
+  receive token. A Loka sender that remembers the receiver sends
+  `"receiver_known": true` with its nonce in `/peer/reveal/{id}`. If
+  both Loka devices remember each other, the receiver also accepts
+  automatically. Otherwise, it shows the pairing code and asks for
+  approval. The text must arrive within a minute of acceptance.
 - The receiver keeps text in memory until the person closes it in the browser
   or `loka receive` prints it. Each unread message takes one of the 16 places
   for waiting offers.
 
-A Loka from before text answers a text offer with `400` and `Invalid offer`.
+Older versions without text support return `400` with `Invalid offer`.
 
 ## The pairing code
 
-The code lets two people check that their Lokas talk to each other, and
-not to another device that sits between them and passes everything on.
-Each side picks a nonce, a random 32-byte number written in hex.
+Compare the codes to check that each device is talking to the other.
+Each side generates 32 random bytes called a nonce and encodes them as
+64 hex digits.
 
-1. The offer carries `commitment`, the SHA-256 of `loka commit\0`
-   followed by the sender's nonce, written as 64 hex digits. An offer with
-   any other length gets `400`.
+1. The sender hashes `loka commit`, a zero byte and the sender's
+   hex-encoded nonce with SHA-256. The offer includes the resulting hash
+   as a 64-character lowercase hex string in `commitment`. The receiver
+   returns `400` if the commitment has a different length.
 2. The receiver answers with its own nonce.
-3. The sender reveals its nonce. If it doesn't match the commitment, the
-   receiver stops the transfer.
+3. The sender reveals its nonce. The receiver hashes it the same way
+   and stops the transfer if the result differs from the commitment.
 
-Each side then makes the code. It joins five parts with a zero byte
-between each: `loka code`, the sender's certificate fingerprint, the
-receiver's, the sender's nonce and the receiver's. A fingerprint is the
-SHA-256 of the certificate in lowercase hex. Loka takes the SHA-256 of
-the result and reads its first 8 bytes as one number, most significant
-byte first. The remainder after dividing that by 1,000,000 is the code,
-shown as `123 456`.
+Each side joins `loka code`, the sender's certificate fingerprint, the
+receiver's certificate fingerprint, the sender's hex-encoded nonce and
+the receiver's hex-encoded nonce. It inserts one zero byte between
+adjacent parts. A fingerprint is the SHA-256 of the certificate in
+lowercase hex. Loka hashes the joined bytes with SHA-256 and reads the
+first eight bytes as an unsigned integer, most significant byte first.
+It divides that number by 1,000,000 and shows the remainder as six
+digits in two groups of three, for example `123 456`.
 
-A device in between shows its own certificate to each side, so the two
-codes start from different fingerprints. To make them match anyway, it
-would need to choose one nonce after seeing the other. It can't. The
-sender commits to its nonce before it sees the receiver's, and the
-receiver sends its nonce before it sees the sender's. That leaves the
-device in between one chance in a million per offer.
+A device passing traffic between the sender and receiver shows its own
+certificate to each side, so the two codes start from different
+fingerprints. The sender commits to its nonce before seeing the
+receiver's nonce. The receiver sends its nonce before seeing the
+sender's nonce. This leaves the device passing traffic one chance in a
+million per offer to make the codes match.
 
-The device in between could still offer to the receiver again and again,
-work out the receiver's code from each answer, and reveal only the offer
-whose code matches. So each offer from a Loka spends one of 10 tries. A try
-comes back when the person accepts, and one more every 30 seconds. All new
-devices share one set of tries, since anyone can make a new device ID. Each
-remembered device has its own set, so it can still send when the others run
-out. A remembered device, such as a guest's laptop, could also be the device
-in between, so its own tries run out too. With no tries left, offers get
-`429` and the receiver warns the person. An offer fails if its sender
-doesn't reveal within 10 seconds.
+A device in between could make repeated offers and reveal its nonce
+only when the receiver's code matches. To limit those attempts, each
+offer from a Loka uses one of 10 tries. Accepting an offer restores its
+try. The receiver also restores one try every 30 seconds. All new
+devices share the same 10 tries because anyone can make a new device ID.
+Each remembered device has its own 10 tries and can still send when
+others run out. When a device has no tries left, the receiver returns
+`429` and shows a warning. An offer expires if the sender takes more
+than 10 seconds to reveal its nonce.
 
-On both sides a transfer between Lokas starts as `pairing` and moves to
-`waiting` once that side knows the code. The receiver asks the person only
-then, and both sides show the code while they wait.
+Each Loka starts the transfer in `pairing` and moves it to `waiting`
+when it has the code. The receiver then asks the person to accept or
+decline. Both devices show the code while they wait.
 
 ## Download links
 
-A link looks like `http://192.168.1.20:45873/#d=TOKEN`. Browsers never send
-the part after `#`, so the token doesn't cross the network in plain text.
-The page reads the token and opens
+A link looks like `http://192.168.1.20:45873/#d=TOKEN`. The browser keeps
+the part after `#` on the phone. The page reads the token and opens
 `https://192.168.1.20:45873/download/TOKEN`. A phone with `loka-ca.crt` can
 open `https://192.168.1.20:45873/#d=TOKEN` and skip the plain page.
 
-`loka share` prints a curl command with `--pinnedpubkey`, the SHA-256 of the
-public key in the per-address certificates. They all share one key, which
-Loka makes on each start, so the command works only until Loka restarts.
+`loka share` prints a `curl` command that checks the SHA-256 of the
+server's public key with `--pinnedpubkey`. Loka uses the same key for
+every address until it restarts.
 
-One shared file downloads as it is. Several download as one zip file,
-without compression.
+Loka sends a single shared file in its original format. For a directory
+or multiple files, Loka builds an uncompressed ZIP archive during the
+download.
 
-A text link looks like `http://192.168.1.20:45873/#t=TOKEN`. The page moves
-to HTTPS the same way, reads
-`https://192.168.1.20:45873/download/TOKEN`, which serves the text as
-`text/plain`, and shows it with a button to copy it. `loka share` serves only the page, the certificate
-and the links.
+A text link looks like `http://192.168.1.20:45873/#t=TOKEN`. The page
+switches to HTTPS the same way and fetches the text from
+`https://192.168.1.20:45873/download/TOKEN`. The response is `text/plain`.
+The page shows the text with a **Copy** button. `loka share` serves only
+the page, the certificate and the links.
 
 ## What it doesn't protect
 
-- **A first contact without checking the code.** Loka trusts a new
-  device as it is. Someone on the same network could sit between two
-  devices that first time. The pairing code shows it only if you compare
-  it.
+- **A first transfer without a code check.** Someone on the same network
+  could pass traffic between the devices. Accept only if both devices
+  show the same code.
 - **`http://` addresses and the download of `loka-ca.crt`.** Both go over
   plain HTTP. Someone who can change traffic could swap the first page and
   steal a link or the files a phone sends. They could also swap
-  `loka-ca.crt` for their own. To catch that, compare the SHA-256
-  fingerprint in the phone's settings with the one on the computer, on
-  Loka's page there or in the terminal. Loka's page on the phone came over
-  plain HTTP too, so don't use a fingerprint from it. Use `https://` once
-  the phone has the right `loka-ca.crt`.
+  `loka-ca.crt` for their own. Compare the SHA-256 fingerprint in
+  the phone's settings with the one shown on the computer, under
+  **?** in Loka or in the terminal. Someone who swaps the certificate
+  could also change the fingerprint shown on the phone's web page.
+  Use `https://` once the phone trusts the correct certificate.
 - **Who uses a browser.** Anyone with the phone link can offer files and
-  send text, and anyone who gets a link can download while it's shared. The
-  person at the receiver still accepts each offer of files. Text shows at
-  once, but never touches the disk.
+  send text. The person at the receiver still accepts each file offer.
+  Loka shows text immediately and keeps it in memory. Anyone with a
+  download link can use it while it's shared.
 - **Device names.** Anyone can announce any name.

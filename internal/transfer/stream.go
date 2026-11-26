@@ -105,22 +105,13 @@ func (p progressReader) Read(b []byte) (int, error) {
 // each top-level item into destination under a name nothing else uses. So
 // nothing that exists is overwritten, and a failed transfer leaves nothing
 // behind. nameFor adapts each name to this system.
-func Receive(ctx context.Context, r io.Reader, destination string, size int64, done *atomic.Int64, nameFor func(string) string) error {
+func Receive(ctx context.Context, r io.Reader, destination string, size int64, done *atomic.Int64, nameFor func(string) string, saved ...func([]string)) error {
 	staging, err := os.MkdirTemp(destination, ".loka-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(staging)
-	staged, roots, err := Stage(ctx, r, staging, size, done, nameFor)
-	if err != nil {
-		return err
-	}
-	return publish(staged, roots, destination)
-}
 
-// Stage extracts into an empty directory and returns the staged paths and
-// top-level names in the order in which they arrived.
-func Stage(ctx context.Context, r io.Reader, staging string, size int64, done *atomic.Int64, nameFor func(string) string) (map[string]string, []string, error) {
 	u := unpacker{root: staging, localName: nameFor, staged: map[string]string{}}
 	tr := tar.NewReader(r)
 	var roots []string
@@ -131,49 +122,53 @@ func Stage(ctx context.Context, r io.Reader, staging string, size int64, done *a
 			break
 		}
 		if err != nil {
-			return nil, nil, transferError(ctx, err)
+			return transferError(ctx, err)
 		}
 		parts, err := SplitName(hdr.Name)
 		if err != nil {
-			return nil, nil, err
+			return err
 		}
 		if _, seen := u.staged[parts[0]]; !seen {
 			roots = append(roots, parts[0])
 		}
 		target, err := u.path(parts)
 		if err != nil {
-			return nil, nil, err
+			return err
 		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0o755); err != nil {
-				return nil, nil, err
+				return err
 			}
 		case tar.TypeReg:
 			if received += hdr.Size; hdr.Size < 0 || received > size {
-				return nil, nil, errors.New("The sender sent more than it offered")
+				return errors.New("The sender sent more than it offered")
 			}
 			if err := writeFile(ctx, target, tr, done); err != nil {
-				return nil, nil, transferError(ctx, err)
+				return transferError(ctx, err)
 			}
 		default:
-			return nil, nil, fmt.Errorf("%s: only files and directories can be received", hdr.Name)
+			return fmt.Errorf("%s: only files and directories can be received", hdr.Name)
 		}
 	}
 	if received != size {
-		return nil, nil, errors.New("The transfer ended early")
+		return errors.New("The transfer ended early")
 	}
 	// A cancel that arrives with the last bytes still wins.
 	if err := ctx.Err(); err != nil {
-		return nil, nil, err
+		return err
 	}
-	return u.staged, roots, nil
+	return publishNames(u.staged, roots, destination, saved)
 }
 
 // publish moves each staged top-level item into destination. When one
 // cannot move, it moves back the ones already moved, so a failed transfer
 // still leaves nothing behind.
 func publish(staged map[string]string, roots []string, destination string) error {
+	return publishNames(staged, roots, destination, nil)
+}
+
+func publishNames(staged map[string]string, roots []string, destination string, saved []func([]string)) error {
 	type move struct{ from, to string }
 	var moved []move
 	for _, root := range roots {
@@ -186,6 +181,13 @@ func publish(staged map[string]string, roots []string, destination string) error
 			return err
 		}
 		moved = append(moved, move{from: from, to: to})
+	}
+	if len(saved) > 0 {
+		names := make([]string, 0, len(moved))
+		for _, m := range moved {
+			names = append(names, filepath.Base(m.to))
+		}
+		saved[0](names)
 	}
 	return nil
 }
@@ -319,19 +321,14 @@ func freePath(dir, name string) (string, error) {
 func moveNoReplace(from, dir, name string) (string, error) {
 	for i := 0; ; i++ {
 		to := filepath.Join(dir, numbered(name, i))
-		err := renameNoReplace(from, to)
+		err := filemove.NoReplace(from, to)
+		if errors.Is(err, filemove.ErrUnsupported) {
+			err = renameIfFree(from, to)
+		}
 		if !errors.Is(err, fs.ErrExist) {
 			return to, err
 		}
 	}
-}
-
-func renameNoReplace(from, to string) error {
-	err := filemove.NoReplace(from, to)
-	if errors.Is(err, filemove.ErrUnsupported) {
-		return renameIfFree(from, to)
-	}
-	return err
 }
 
 // renameIfFree is the fallback for file systems that cannot refuse to
